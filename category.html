@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Categoría</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 86% 8%, rgba(255, 107, 107, 0.13), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      function formatEuro(value) {
+        if (value === null || value === undefined || value === "") return "—";
+        return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
+      }
+
+      function getDiscountPercent(basePrice, reducedPrice) {
+        const base = Number(basePrice);
+        const reduced = Number(reducedPrice);
+        if (!base || !Number.isFinite(base) || !Number.isFinite(reduced) || reduced >= base) return null;
+        return Math.round(((base - reduced) / base) * 100);
+      }
+
+      function matchesSearch(offer, query) {
+        const cleanQuery = query.trim().toLowerCase();
+        if (!cleanQuery) return true;
+
+        return [
+          offer.title,
+          offer.address,
+          offer.author,
+          offer.description,
+          offer.categories?.join(" "),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(cleanQuery);
+      }
+
+      function OfferCard({ offer }) {
+        const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
+        return (
+          <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
+            <button className="block w-full text-left" onClick={() => window.location.href = `offer-detail.html?id=${offer.id}`}>
+              <div className="relative min-h-[190px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
+                {offer.cover_photo_data_url ? (
+                  <img className="absolute inset-0 h-full w-full object-cover" src={offer.cover_photo_data_url} alt="" />
+                ) : (
+                  <div className="absolute bottom-4 right-5 text-7xl">📚</div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"></div>
+                <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
+                    <h2 className="mt-1 text-2xl font-black text-white">{offer.title || "Oferta sin título"}</h2>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    {discountPercent !== null && (
+                      <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discountPercent}%</span>
+                    )}
+                    <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.required_points || 0} pts</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-semibold leading-5 text-slate-400">{offer.address || "Donostia"}</p>
+                  <div className="text-right">
+                    {offer.base_price !== null && <p className="text-xl font-black text-slate-400 line-through">{formatEuro(offer.base_price)}</p>}
+                  </div>
+                </div>
+                <div className="mt-4 h-11 rounded-2xl bg-white/[0.08] py-3 text-center text-sm font-black text-white ring-1 ring-white/10">Ver detalles</div>
+              </div>
+            </button>
+          </article>
+        );
+      }
+
+      function App() {
+        const params = new URLSearchParams(window.location.search);
+        const category = params.get("category") || "Libros";
+        const [offers, setOffers] = React.useState([]);
+        const [search, setSearch] = React.useState("");
+        const [status, setStatus] = React.useState("Cargando ofertas...");
+        const filteredOffers = offers.filter((offer) => matchesSearch(offer, search));
+
+        React.useEffect(() => {
+          async function loadOffers() {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("*")
+              .contains("categories", [category])
+              .order("created_at", { ascending: false });
+
+            if (error) {
+              setStatus("No se han podido cargar las ofertas.");
+              return;
+            }
+
+            setOffers(data || []);
+            setStatus(data?.length ? "" : `Todavía no hay ofertas en ${category}.`);
+          }
+
+          loadOffers();
+        }, [category]);
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+            <header className="flex items-center justify-between">
+              <a href="home.html?type=user" className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
+                <div>
+                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-xs font-semibold text-slate-400">Categorías</p>
+                </div>
+              </a>
+              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200" href="home.html?type=user">Volver</a>
+            </header>
+
+            <section className="mt-8">
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">Explorar</p>
+              <h1 className="mt-2 text-4xl font-black tracking-normal text-white">{category}</h1>
+            </section>
+
+            <section className="mt-6">
+              <div className="mb-4 rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                <label className="flex items-center gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                  <input
+                    className="h-11 min-w-0 flex-1 bg-transparent text-base font-bold text-white outline-none placeholder:text-slate-500"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder={`Buscar en ${category}...`}
+                  />
+                </label>
+              </div>
+
+              {status ? (
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+              ) : filteredOffers.length === 0 ? (
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                  No hay resultados para esta búsqueda.
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {filteredOffers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                </div>
+              )}
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

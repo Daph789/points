@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Perfil</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: {
+              glow: "0 24px 80px rgba(66, 242, 179, 0.16)",
+              nav: "0 20px 70px rgba(0, 0, 0, 0.42)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 10%, rgba(255, 209, 102, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      const navItems = [
+        { label: "Inicio", icon: "home", href: "home.html" },
+        { label: "Explorar", icon: "search", href: "home.html#explorar" },
+        { label: "Vender", icon: "plus", href: "admin-offer.html" },
+        { label: "Transf.", icon: "transfer", href: "transfer.html" },
+        { label: "Perfil", icon: "user", active: true, href: "profile.html" },
+      ];
+
+      function NavIcon({ name }) {
+        const paths = {
+          home: <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5Z" />,
+          search: <path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" />,
+          plus: <path d="M12 5v14M5 12h14" />,
+          transfer: <path d="M7 7h12m0 0-4-4m4 4-4 4M17 17H5m0 0 4 4m-4-4 4-4" />,
+          user: <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />,
+        };
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.3">
+            {paths[name]}
+          </svg>
+        );
+      }
+
+      function formatDonosId(value) {
+        const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
+      }
+
+      function formatNumber(value) {
+        return Number(value || 0).toLocaleString("es-ES");
+      }
+
+      function InfoCard({ label, value }) {
+        return (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+            <p className="mt-2 break-words text-base font-black text-white">{value || "No indicado"}</p>
+          </div>
+        );
+      }
+
+      function App() {
+        const [profile, setProfile] = React.useState(null);
+        const [status, setStatus] = React.useState("Cargando perfil...");
+        const [copyStatus, setCopyStatus] = React.useState("");
+
+        React.useEffect(() => {
+          async function loadProfile() {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+
+            if (!userId) {
+              setStatus("Inicia sesión para ver tu perfil.");
+              return;
+            }
+
+            const columns = "id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points";
+            let { data, error } = await supabaseClient
+              .from("profiles")
+              .select(columns)
+              .eq("id", userId)
+              .maybeSingle();
+
+            if (error) {
+              const fallback = await supabaseClient
+                .from("profiles")
+                .select("id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id")
+                .eq("id", userId)
+                .maybeSingle();
+
+              data = fallback.data;
+              error = fallback.error;
+            }
+
+            if (!data) {
+              const metadata = userData.user.user_metadata || {};
+              data = {
+                id: userId,
+                display_name: metadata.display_name || userData.user.email?.split("@")[0] || "Tu cuenta",
+                email: userData.user.email || "",
+                phone: metadata.phone || "",
+                neighborhood: metadata.neighborhood || "",
+                account_type: metadata.account_type || "user",
+                business_categories: metadata.business_categories || [],
+                tax_id: metadata.tax_id || "",
+                address: metadata.address || "",
+                transaction_id: metadata.transaction_id || localStorage.getItem("donosTransactionId") || "",
+                points: 0,
+              };
+            }
+
+            setProfile({ points: 0, ...data });
+            setStatus("");
+          }
+
+          loadProfile();
+        }, []);
+
+        async function copyId() {
+          const clean = String(profile?.transaction_id || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+          if (!clean) return;
+          await navigator.clipboard.writeText(clean);
+          setCopyStatus("Copiado");
+          setTimeout(() => setCopyStatus(""), 1400);
+        }
+
+        if (status) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+            </main>
+          );
+        }
+
+        const isBusiness = profile.account_type === "business";
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-4xl px-4 pb-28 pt-5 sm:px-6">
+            <header className="flex items-center justify-between gap-3">
+              <a href={`home.html?type=${profile.account_type || "user"}`} className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
+                <div>
+                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-xs font-semibold text-slate-400">Perfil</p>
+                </div>
+              </a>
+              <span className="rounded-full bg-mint/10 px-4 py-2 text-sm font-black text-mint ring-1 ring-mint/20">
+                {isBusiness ? "Empresa" : "Usuario"}
+              </span>
+            </header>
+
+            <section className="mt-7 rounded-[38px] border border-white/10 bg-white/[0.055] p-6 shadow-glow sm:p-8">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Cuenta Donos</p>
+              <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
+                <div>
+                  <h1 className="text-4xl font-black leading-tight text-white">{profile.display_name || "Tu cuenta"}</h1>
+                  <p className="mt-2 text-sm font-bold text-slate-400">{profile.email || "Correo no indicado"}</p>
+                </div>
+                <div className="rounded-3xl border border-mint/20 bg-mint/10 px-5 py-4">
+                  <p className="text-xs font-semibold text-mint">Puntos</p>
+                  <p className="mt-1 text-3xl font-black text-white">{formatNumber(profile.points)}</p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-black/20 p-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">ID Donos</p>
+                  <p className="mt-1 truncate font-mono text-lg font-black text-white">{formatDonosId(profile.transaction_id)}</p>
+                </div>
+                <button className="shrink-0 rounded-full bg-mint px-4 py-2 text-xs font-black text-ink shadow-glow" onClick={copyId}>
+                  {copyStatus || "Copiar"}
+                </button>
+              </div>
+            </section>
+
+            <section className="mt-5 grid gap-3 sm:grid-cols-2">
+              <InfoCard label="Tipo de cuenta" value={isBusiness ? "Comercio / Empresa" : "Usuario"} />
+              <InfoCard label="Teléfono" value={profile.phone} />
+              <InfoCard label="Barrio" value={profile.neighborhood} />
+              <InfoCard label="Dirección" value={profile.address} />
+              {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
+              {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}
+            </section>
+
+            <nav className="fixed inset-x-0 bottom-4 z-40 mx-auto w-[min(calc(100%-24px),520px)] rounded-[28px] border border-white/10 bg-[#101522]/88 p-2 shadow-nav backdrop-blur-2xl">
+              <div className="grid grid-cols-5 gap-1">
+                {navItems.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className={`flex h-14 flex-col items-center justify-center rounded-3xl text-xs font-black transition ${
+                      item.active
+                        ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]"
+                        : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    <NavIcon name={item.icon} />
+                    <span className="mt-1">{item.label}</span>
+                  </a>
+                ))}
+              </div>
+            </nav>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

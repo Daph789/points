@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Detalle</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
+      }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      function formatEuro(value) {
+        if (value === null || value === undefined || value === "") return "—";
+        return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
+      }
+
+      function getDiscountPercent(basePrice, reducedPrice) {
+        const base = Number(basePrice);
+        const reduced = Number(reducedPrice);
+        if (!base || !Number.isFinite(base) || !Number.isFinite(reduced) || reduced >= base) return null;
+        return Math.round(((base - reduced) / base) * 100);
+      }
+
+      function App() {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get("id");
+        const [offer, setOffer] = React.useState(null);
+        const [status, setStatus] = React.useState("Cargando detalle...");
+        const [canEdit, setCanEdit] = React.useState(false);
+        const [activeImageIndex, setActiveImageIndex] = React.useState(null);
+        const [deliveryChoice, setDeliveryChoice] = React.useState("");
+        const [touchStartX, setTouchStartX] = React.useState(null);
+        const [dragDelta, setDragDelta] = React.useState(0);
+
+        React.useEffect(() => {
+          async function loadOffer() {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("*")
+              .eq("id", id)
+              .maybeSingle();
+
+            if (error || !data) {
+              setStatus("No hemos encontrado esta oferta.");
+              return;
+            }
+
+            setOffer(data);
+            setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "");
+            const { data: userData } = await supabaseClient.auth.getUser();
+            setCanEdit(Boolean(userData.user?.id && userData.user.id === data.business_id));
+            setStatus("");
+          }
+
+          loadOffer();
+        }, [id]);
+
+        if (status) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+            </main>
+          );
+        }
+
+        const gallery = offer.presentation_image_data_urls || [];
+        const allImages = [offer.cover_photo_data_url, ...gallery].filter(Boolean);
+        const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const activeImage = activeImageIndex !== null ? allImages[activeImageIndex] : null;
+        const mapsUrl = offer.address
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${offer.address} Donostia`)}`
+          : "";
+        const dateRange = [offer.start_date, offer.end_date].filter(Boolean).join(" - ");
+        const basePoints = Number(offer.required_points || 0);
+        const deliveryExtraPoints = deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0;
+        const totalPoints = basePoints + deliveryExtraPoints;
+        const canBuy = Boolean(deliveryChoice && totalPoints > 0);
+        const goToCheckout = () => {
+          if (!canBuy) return;
+          window.location.href = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
+        };
+        const resetDrag = () => {
+          setTouchStartX(null);
+          setDragDelta(0);
+        };
+        const openImage = (index) => {
+          resetDrag();
+          setActiveImageIndex(index);
+        };
+        const closeImage = () => {
+          resetDrag();
+          setActiveImageIndex(null);
+        };
+        const showPreviousImage = () => {
+          resetDrag();
+          setActiveImageIndex((current) => (current === 0 ? allImages.length - 1 : current - 1));
+        };
+        const showNextImage = () => {
+          resetDrag();
+          setActiveImageIndex((current) => (current === allImages.length - 1 ? 0 : current + 1));
+        };
+        const handleTouchStart = (event) => {
+          if (allImages.length < 2) return;
+          setTouchStartX(event.touches[0].clientX);
+          setDragDelta(0);
+        };
+        const handleTouchMove = (event) => {
+          if (touchStartX === null) return;
+          setDragDelta(event.touches[0].clientX - touchStartX);
+        };
+        const handleTouchEnd = () => {
+          if (touchStartX === null) return;
+          if (dragDelta > 70) {
+            showPreviousImage();
+          } else if (dragDelta < -70) {
+            showNextImage();
+          } else {
+            resetDrag();
+          }
+        };
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-5xl pb-28">
+            <section className="relative min-h-[420px] overflow-hidden rounded-b-[36px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
+              {offer.cover_photo_data_url ? (
+                <button className="absolute inset-0 block h-full w-full cursor-zoom-in" onClick={() => openImage(0)}>
+                  <img className="h-full w-full object-cover" src={offer.cover_photo_data_url} alt="" />
+                </button>
+              ) : (
+                <div className="absolute bottom-16 right-8 text-8xl">📚</div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-[#060914] via-black/25 to-black/20"></div>
+              <header className="relative z-10 flex items-center justify-between px-4 pt-5 sm:px-6 lg:px-8">
+                <button className="rounded-full bg-black/30 px-4 py-2 text-sm font-black text-white backdrop-blur" onClick={() => history.back()}>
+                  Volver
+                </button>
+                <div className="flex items-center gap-2">
+                  {canEdit && (
+                    <a
+                      className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-white/15"
+                      href={`admin-offer.html?id=${offer.id}`}
+                    >
+                      Editar
+                    </a>
+                  )}
+                  {discountPercent !== null && (
+                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">-{discountPercent}%</span>
+                  )}
+                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} pts</span>
+                </div>
+              </header>
+              <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
+                <h1 className="mt-2 max-w-3xl text-4xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
+                {offer.author && (
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
+                    <span className="grid h-7 w-7 place-items-center rounded-full bg-white/10 text-xs">✦</span>
+                    <span>Por {offer.author}</span>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="px-4 pt-6 sm:px-6 lg:px-8">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                  <p className="text-xs font-semibold text-slate-400">Precio base</p>
+                  <p className="mt-1 text-3xl font-black line-through decoration-slate-500">{formatEuro(offer.base_price)}</p>
+                </div>
+                <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-xs font-semibold text-mint">Puntos</p>
+                  <p className="mt-1 text-3xl font-black">{offer.required_points || 0}</p>
+                </div>
+                {discountPercent !== null && (
+                  <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:col-span-2">
+                    <p className="text-xs font-semibold text-coral">Descuento</p>
+                    <p className="mt-1 text-3xl font-black">-{discountPercent}%</p>
+                  </div>
+                )}
+              </div>
+
+              {allImages.length > 0 && (
+                <div className="no-scrollbar -mx-4 mt-6 flex gap-3 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+                  {allImages.map((src, index) => (
+                    <button
+                      key={index}
+                      className="group relative h-40 min-w-[220px] overflow-hidden rounded-3xl border border-white/10 bg-white/[0.055]"
+                      onClick={() => openImage(index)}
+                    >
+                      <img className="h-full w-full object-cover transition duration-300 group-hover:scale-105" src={src} alt="" />
+                      <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20"></div>
+                      <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-3 py-1 text-xs font-black text-white backdrop-blur">Ver</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {offer.description && (
+                <section className="mt-7">
+                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Descripción</p>
+                  <p className="mt-3 text-base leading-7 text-slate-300">{offer.description}</p>
+                </section>
+              )}
+
+              <section className="mt-8 space-y-5">
+                {offer.categories?.length > 0 && (
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Categoría</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {offer.categories.map((category) => (
+                        <span key={category} className="rounded-full border border-mint/20 bg-mint/10 px-4 py-2 text-sm font-black text-mint">
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {offer.hours && (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                      <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-mint/10 text-xl ring-1 ring-mint/20">⏱</div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Horarios</p>
+                      <p className="mt-2 text-base font-black leading-snug text-white">{offer.hours}</p>
+                    </div>
+                  )}
+                  {dateRange && (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                      <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-xl ring-1 ring-coral/20">⌁</div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Fechas</p>
+                      <p className="mt-2 text-base font-black leading-snug text-white">{dateRange}</p>
+                    </div>
+                  )}
+                  {offer.age && (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                      <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">16+</div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Edad</p>
+                      <p className="mt-2 text-base font-black leading-snug text-white">{offer.age}</p>
+                    </div>
+                  )}
+                </div>
+
+                {offer.address ? (
+                  <a
+                    className="group flex items-center justify-between gap-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4 transition hover:border-mint/30 hover:bg-mint/10"
+                    href={mapsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint/10 text-xl ring-1 ring-mint/20">⌖</div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Dirección</p>
+                        <p className="mt-1 truncate text-base font-black text-white">{offer.address}</p>
+                      </div>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white transition group-hover:bg-mint group-hover:text-ink">Abrir mapa</span>
+                  </a>
+                ) : (
+                  <div className="flex items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.045] p-4">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⌖</div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Dirección</p>
+                      <p className="mt-1 text-base font-black text-slate-300">Dirección no indicada</p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Elige la entrega</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <button
+                      className={`rounded-3xl border p-4 text-left transition ${
+                        deliveryChoice === "pickup"
+                          ? "border-mint bg-mint/10 shadow-glow"
+                          : offer.delivery_pickup_enabled
+                            ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
+                            : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
+                      }`}
+                      disabled={!offer.delivery_pickup_enabled}
+                      onClick={() => setDeliveryChoice("pickup")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⌂</div>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">0 pts extra</span>
+                      </div>
+                      <p className="mt-4 text-base font-black text-white">Recogida en tienda</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-400">Vienes a recogerlo en la dirección indicada.</p>
+                    </button>
+
+                    <button
+                      className={`rounded-3xl border p-4 text-left transition ${
+                        deliveryChoice === "home"
+                          ? "border-mint bg-mint/10 shadow-glow"
+                          : offer.delivery_home_enabled
+                            ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
+                            : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
+                      }`}
+                      disabled={!offer.delivery_home_enabled}
+                      onClick={() => setDeliveryChoice("home")}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⇥</div>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.delivery_home_points || 0} pts extra</span>
+                      </div>
+                      <p className="mt-4 text-base font-black text-white">Entrega a domicilio</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-400">Se suma al total de puntos al comprar.</p>
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </section>
+
+            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl">
+              <div className="mx-auto flex max-w-5xl items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</p>
+                  <p className="truncate text-2xl font-black text-white">{totalPoints} pts</p>
+                </div>
+                <button
+                  className={`h-14 rounded-2xl px-6 text-base font-black transition ${
+                    canBuy ? "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]" : "bg-white/10 text-slate-500"
+                  }`}
+                  disabled={!canBuy}
+                  onClick={goToCheckout}
+                >
+                  Comprar
+                </button>
+              </div>
+            </div>
+
+            {activeImage && (
+              <div className="fixed inset-0 z-50 flex flex-col bg-[#03050B]/95 px-4 py-5 backdrop-blur-2xl">
+                <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Galería</p>
+                    <p className="mt-1 text-sm font-bold text-slate-300">{activeImageIndex + 1} / {allImages.length}</p>
+                  </div>
+                  <button className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-2xl font-black text-white ring-1 ring-white/10" onClick={closeImage}>
+                    ×
+                  </button>
+                </div>
+
+                <div
+                  className="relative mx-auto mt-5 flex min-h-0 w-full max-w-6xl flex-1 touch-pan-y items-center justify-center overflow-hidden"
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                >
+                  {allImages.length > 1 && (
+                    <button
+                      className="absolute left-0 z-10 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-3xl font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-white/20"
+                      onClick={showPreviousImage}
+                    >
+                      ‹
+                    </button>
+                  )}
+                  <div
+                    className={`flex h-full w-full ${touchStartX === null ? "transition-transform duration-300 ease-out" : ""}`}
+                    style={{ transform: `translateX(calc(${-activeImageIndex * 100}% + ${dragDelta}px))` }}
+                  >
+                    {allImages.map((src, index) => (
+                      <div key={index} className="flex h-full min-w-full items-center justify-center px-2 sm:px-14">
+                        <img
+                          className="max-h-full max-w-full rounded-[28px] object-contain shadow-2xl shadow-black/50"
+                          src={src}
+                          alt=""
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {allImages.length > 1 && (
+                    <button
+                      className="absolute right-0 z-10 grid h-12 w-12 place-items-center rounded-full bg-white/10 text-3xl font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-white/20"
+                      onClick={showNextImage}
+                    >
+                      ›
+                    </button>
+                  )}
+                </div>
+
+                {allImages.length > 1 && (
+                  <div className="no-scrollbar mx-auto mt-5 flex w-full max-w-6xl gap-3 overflow-x-auto pb-1">
+                    {allImages.map((src, index) => (
+                      <button
+                        key={index}
+                        className={`h-16 min-w-20 overflow-hidden rounded-2xl border transition ${
+                          index === activeImageIndex ? "border-mint opacity-100" : "border-white/10 opacity-55"
+                        }`}
+                        onClick={() => openImage(index)}
+                      >
+                        <img className="h-full w-full object-cover" src={src} alt="" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

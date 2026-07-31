@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Transferencias</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: {
+              glow: "0 24px 80px rgba(66, 242, 179, 0.18)",
+              nav: "0 20px 70px rgba(0, 0, 0, 0.42)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 20% -8%, rgba(66, 242, 179, 0.20), transparent 30%),
+          radial-gradient(circle at 88% 8%, rgba(255, 107, 107, 0.13), transparent 32%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      const navItems = [
+        { label: "Inicio", icon: "home", href: "home.html" },
+        { label: "Explorar", icon: "search", href: "home.html#explorar" },
+        { label: "Vender", icon: "plus", href: "admin-offer.html" },
+        { label: "Transf.", icon: "transfer", active: true, href: "transfer.html" },
+        { label: "Perfil", icon: "user", href: "profile.html" },
+      ];
+
+      function NavIcon({ name }) {
+        const paths = {
+          home: <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5Z" />,
+          search: <path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" />,
+          plus: <path d="M12 5v14M5 12h14" />,
+          transfer: <path d="M7 7h12m0 0-4-4m4 4-4 4M17 17H5m0 0 4 4m-4-4 4-4" />,
+          user: <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />,
+          card: <path d="M4 7h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Zm-2 5h20" />,
+          send: <path d="M22 2 11 13m11-11-7 20-4-9-9-4 20-7Z" />,
+          request: <path d="M12 5v14M5 12h14M20 12a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />,
+        };
+        return (
+          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.3">
+            {paths[name]}
+          </svg>
+        );
+      }
+
+      function formatNumber(value) {
+        return Number(value || 0).toLocaleString("es-ES");
+      }
+
+      function formatDonosId(value) {
+        const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
+      }
+
+      function ActionButton({ icon, title, detail, primary, onClick }) {
+        return (
+          <button
+            type="button"
+            onClick={onClick}
+            className={`group flex min-h-[92px] items-center gap-4 rounded-[28px] border p-4 text-left transition hover:translate-y-[-2px] ${
+              primary
+                ? "border-mint/30 bg-mint text-ink shadow-glow"
+                : "border-white/10 bg-white/[0.055] text-white hover:bg-white/[0.08]"
+            }`}
+          >
+            <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${primary ? "bg-ink/10" : "bg-mint/10 text-mint ring-1 ring-mint/20"}`}>
+              <NavIcon name={icon} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-base font-black">{title}</span>
+              <span className={`mt-1 block text-xs font-bold leading-5 ${primary ? "text-ink/60" : "text-slate-400"}`}>{detail}</span>
+            </span>
+          </button>
+        );
+      }
+
+      function App() {
+        const [points, setPoints] = React.useState(0);
+        const [displayName, setDisplayName] = React.useState(localStorage.getItem("donosDisplayName") || "Tu cuenta");
+        const [transactionId, setTransactionId] = React.useState(localStorage.getItem("donosTransactionId") || "");
+        const [userId, setUserId] = React.useState("");
+        const [showRecharge, setShowRecharge] = React.useState(false);
+        const [isRedirecting, setIsRedirecting] = React.useState(false);
+        const [status, setStatus] = React.useState("");
+        const euros = points / 10;
+        const pointPacks = [
+          { points: 50, price: "5€" },
+          { points: 100, price: "10€" },
+          { points: 250, price: "25€" },
+          { points: 500, price: "50€" },
+        ];
+
+        React.useEffect(() => {
+          async function loadProfile() {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+
+            if (!userId) {
+              setStatus("Inicia sesión para ver y mover tus puntos.");
+              return;
+            }
+            setUserId(userId);
+
+            const { data } = await supabaseClient
+              .from("profiles")
+              .select("display_name, points, transaction_id")
+              .eq("id", userId)
+              .maybeSingle();
+
+            if (data?.display_name) setDisplayName(data.display_name);
+            if (data?.transaction_id) {
+              setTransactionId(data.transaction_id);
+              localStorage.setItem("donosTransactionId", data.transaction_id);
+            }
+            setPoints(Number(data?.points || 0));
+          }
+
+          loadProfile();
+        }, []);
+
+        React.useEffect(() => {
+          const stripeStatus = new URLSearchParams(window.location.search).get("stripe");
+          if (stripeStatus === "success") {
+            setStatus("Pago recibido. Tus puntos se actualizarán automáticamente en unos segundos.");
+          }
+          if (stripeStatus === "cancelled") {
+            setStatus("Recarga cancelada. No se ha cobrado nada.");
+          }
+        }, []);
+
+        async function startRecharge(pack) {
+          if (!userId) {
+            setStatus("Inicia sesión para recargar puntos.");
+            return;
+          }
+
+          setIsRedirecting(true);
+          setStatus("");
+
+          try {
+            const response = await fetch("/api/stripe/create-checkout-session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ userId, pack: pack.points }),
+            });
+            const data = await response.json();
+
+            if (!response.ok || !data.url) {
+              throw new Error(data.error || "No se ha podido abrir Stripe.");
+            }
+
+            window.location.href = data.url;
+          } catch (error) {
+            setStatus(error.message || "No se ha podido iniciar la recarga.");
+            setIsRedirecting(false);
+          }
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-28 pt-5 sm:px-6">
+            <header className="flex items-center justify-between gap-3">
+              <a href="home.html" className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
+                <div>
+                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-xs font-semibold text-slate-400">Transferencias</p>
+                </div>
+              </a>
+              <span className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">Transf.</span>
+            </header>
+
+            <section className="mt-7 overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30">
+              <div className="relative p-6 sm:p-8">
+                <div className="relative">
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Saldo disponible</p>
+                  <h1 className="mt-3 text-2xl font-black text-white">{displayName}</h1>
+                  <div className="mt-7 flex flex-wrap items-end justify-between gap-5">
+                    <div>
+                      <p className="text-[62px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(points)}</p>
+                      <p className="mt-1 text-base font-bold text-slate-300">puntos</p>
+                    </div>
+                    <div className="rounded-3xl border border-mint/20 bg-mint/10 px-4 py-3 text-right">
+                      <p className="text-xs font-semibold text-mint">ID Donos</p>
+                      <p className="mt-1 font-mono text-base font-black text-white">{formatDonosId(transactionId)}</p>
+                    </div>
+                  </div>
+                  <p className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs font-bold text-slate-400">
+                    Equivale aprox. a {euros.toLocaleString("es-ES", { maximumFractionDigits: 2 })}€ · 1€ = 10 pts
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {status && (
+              <div className="mt-5 rounded-3xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">
+                {status}
+              </div>
+            )}
+
+            <section className="mt-5 grid gap-3">
+              <ActionButton
+                icon="card"
+                title="Recargar puntos"
+                detail="Añade puntos a tu saldo Donos con Stripe."
+                primary
+                onClick={() => setShowRecharge((current) => !current)}
+              />
+              {showRecharge && (
+                <div className="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-white">Elige una recarga</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">Pago seguro con Stripe Checkout.</p>
+                    </div>
+                    <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">1€ = 10 pts</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {pointPacks.map((pack) => (
+                      <button
+                        key={pack.points}
+                        className="rounded-3xl border border-white/10 bg-[#0D111D] p-4 text-left transition hover:border-mint/40 hover:bg-mint/10 disabled:opacity-60"
+                        disabled={isRedirecting}
+                        onClick={() => startRecharge(pack)}
+                      >
+                        <p className="text-2xl font-black text-white">{pack.points} pts</p>
+                        <p className="mt-1 text-sm font-bold text-slate-400">{pack.price}</p>
+                      </button>
+                    ))}
+                  </div>
+                  {isRedirecting && <p className="mt-3 text-sm font-bold text-mint">Abriendo Stripe...</p>}
+                </div>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ActionButton icon="send" title="Enviar puntos" detail="Transfiere puntos a otro ID Donos." />
+                <ActionButton icon="request" title="Pedir puntos" detail="Solicita puntos a una persona o comercio." />
+              </div>
+            </section>
+
+            <nav className="fixed inset-x-0 bottom-4 z-40 mx-auto w-[min(calc(100%-24px),520px)] rounded-[28px] border border-white/10 bg-[#101522]/88 p-2 shadow-nav backdrop-blur-2xl">
+              <div className="grid grid-cols-5 gap-1">
+                {navItems.map((item) => (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    className={`flex h-14 flex-col items-center justify-center rounded-3xl text-xs font-black transition ${
+                      item.active
+                        ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]"
+                        : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+                    }`}
+                  >
+                    <NavIcon name={item.icon} />
+                    <span className="mt-1">{item.label}</span>
+                  </a>
+                ))}
+              </div>
+            </nav>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

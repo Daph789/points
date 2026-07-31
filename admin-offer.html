@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Editar oferta</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            colors: {
+              ink: "#060914",
+              panel: "#0D111D",
+              line: "#20273A",
+              mint: "#42F2B3",
+              coral: "#FF6B6B",
+              sun: "#FFD166",
+              violet: "#A78BFA",
+            },
+            boxShadow: {
+              glow: "0 24px 80px rgba(66, 242, 179, 0.16)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+
+      html {
+        background: #060914;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 10%, rgba(255, 209, 102, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+
+      .glass {
+        background: rgba(13, 17, 29, 0.78);
+        backdrop-filter: blur(24px);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      const categories = ["Cine", "Libros", "Festivales", "Conciertos", "Museos", "Gaming", "Música"];
+      const draftKey = "donosBusinessOfferDraft";
+
+      const inputClass =
+        "h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
+
+      const textareaClass =
+        "min-h-28 w-full rounded-2xl border border-line bg-white/[0.055] px-4 py-3 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
+
+      function Field({ label, children }) {
+        return (
+          <label className="block">
+            <span className="mb-2 block text-sm font-medium text-slate-300">{label}</span>
+            {children}
+          </label>
+        );
+      }
+
+      function cleanDonosId(value) {
+        return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
+      }
+
+      function formatDonosId(value) {
+        const clean = cleanDonosId(value);
+        return clean.replace(/(.{4})(.{4})(.{0,4})/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
+      }
+
+      function fileToDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function FileDrop({ label, multiple, files, existingImages = [], onChange, onRemoveExisting }) {
+        return (
+          <div>
+            <p className="mb-2 text-sm font-medium text-slate-300">{label}</p>
+            <label className="grid min-h-32 cursor-pointer place-items-center rounded-[24px] border border-dashed border-white/15 bg-white/[0.045] p-4 text-center transition hover:bg-white/[0.07]">
+              <input
+                className="hidden"
+                type="file"
+                accept="image/*"
+                multiple={multiple}
+                onChange={(event) => onChange(Array.from(event.target.files || []))}
+              />
+              <div>
+                <p className="text-3xl">＋</p>
+                <p className="mt-2 text-sm font-black text-white">Subir imagen</p>
+                <p className="mt-1 text-xs text-slate-500">Opcional</p>
+              </div>
+            </label>
+            {(existingImages.length > 0 || files.length > 0) && (
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {existingImages.map((src, index) => (
+                  <div key={`existing-${index}`} className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                    <img className="h-20 w-full object-cover" src={src} alt="" />
+                    {onRemoveExisting && (
+                      <button
+                        type="button"
+                        className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-sm font-black text-white"
+                        onClick={() => onRemoveExisting(index)}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {files.map((file) => (
+                  <div key={`${file.name}-${file.size}`} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20">
+                    <img className="h-20 w-full object-cover" src={URL.createObjectURL(file)} alt="" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function App() {
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get("id");
+        const [coverFiles, setCoverFiles] = React.useState([]);
+        const [presentationFiles, setPresentationFiles] = React.useState([]);
+        const [existingCoverImage, setExistingCoverImage] = React.useState("");
+        const [existingPresentationImages, setExistingPresentationImages] = React.useState([]);
+        const [title, setTitle] = React.useState("");
+        const [address, setAddress] = React.useState("");
+        const [selectedCategories, setSelectedCategories] = React.useState([]);
+        const [basePrice, setBasePrice] = React.useState("");
+        const [reducedPrice, setReducedPrice] = React.useState("");
+        const [hours, setHours] = React.useState("");
+        const [startDate, setStartDate] = React.useState("");
+        const [endDate, setEndDate] = React.useState("");
+        const [age, setAge] = React.useState("");
+        const [author, setAuthor] = React.useState("");
+        const [description, setDescription] = React.useState("");
+        const [cartButtonText, setCartButtonText] = React.useState("Poner en la cesta");
+        const [receiverMode, setReceiverMode] = React.useState("business");
+        const [businessProfile, setBusinessProfile] = React.useState(null);
+        const [isProfileLoading, setIsProfileLoading] = React.useState(true);
+        const [receiverId, setReceiverId] = React.useState("");
+        const [receiverName, setReceiverName] = React.useState("");
+        const [receiverStatus, setReceiverStatus] = React.useState("");
+        const [homeDeliveryEnabled, setHomeDeliveryEnabled] = React.useState(false);
+        const [homeDeliveryPrice, setHomeDeliveryPrice] = React.useState("");
+        const [pickupEnabled, setPickupEnabled] = React.useState(true);
+        const [status, setStatus] = React.useState({ type: "", message: "" });
+        const [isSaving, setIsSaving] = React.useState(false);
+        const [isDeleting, setIsDeleting] = React.useState(false);
+        const [isOfferLoading, setIsOfferLoading] = React.useState(Boolean(editId));
+        const [isDraftRestored, setIsDraftRestored] = React.useState(false);
+        const [lastDraftSavedAt, setLastDraftSavedAt] = React.useState("");
+
+        const base = Number.parseFloat(basePrice.replace(",", "."));
+        const reduced = Number.parseFloat(reducedPrice.replace(",", "."));
+        const requiredPoints = Number.isFinite(reduced) ? Math.max(Math.round(reduced * 10), 0) : 0;
+        const deliveryPrice = Number.parseFloat(homeDeliveryPrice.replace(",", "."));
+        const deliveryPoints = Number.isFinite(deliveryPrice) ? Math.round(deliveryPrice * 10) : 0;
+
+        React.useEffect(() => {
+          if (editId) {
+            setIsDraftRestored(true);
+            return;
+          }
+
+          const savedDraft = localStorage.getItem(draftKey);
+
+          if (!savedDraft) {
+            setIsDraftRestored(true);
+            return;
+          }
+
+          try {
+            const draft = JSON.parse(savedDraft);
+            setTitle(draft.title || "");
+            setAddress(draft.address || "");
+            setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories : []);
+            setBasePrice(draft.basePrice || "");
+            setReducedPrice(draft.reducedPrice || "");
+            setHours(draft.hours || "");
+            setStartDate(draft.startDate || "");
+            setEndDate(draft.endDate || "");
+            setAge(draft.age || "");
+            setAuthor(draft.author || "");
+            setDescription(draft.description || "");
+            setCartButtonText(draft.cartButtonText || "Poner en la cesta");
+            setReceiverMode(draft.receiverMode || "business");
+            setReceiverId(draft.receiverId || "");
+            setReceiverName(draft.receiverName || "");
+            setReceiverStatus(draft.receiverStatus || "");
+            setHomeDeliveryEnabled(Boolean(draft.homeDeliveryEnabled));
+            setHomeDeliveryPrice(draft.homeDeliveryPrice || "");
+            setPickupEnabled(draft.pickupEnabled !== false);
+            setLastDraftSavedAt(draft.savedAt || "");
+          } catch (error) {
+            localStorage.removeItem(draftKey);
+          } finally {
+            setIsDraftRestored(true);
+          }
+        }, []);
+
+        React.useEffect(() => {
+          if (!editId) return;
+
+          async function loadOfferForEdit() {
+            setIsOfferLoading(true);
+            setStatus({ type: "", message: "" });
+
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("*")
+              .eq("id", editId)
+              .maybeSingle();
+
+            if (error || !data) {
+              setStatus({ type: "error", message: "No hemos encontrado esta oferta para editar." });
+              setIsOfferLoading(false);
+              return;
+            }
+
+            setExistingCoverImage(data.cover_photo_data_url || "");
+            setExistingPresentationImages(Array.isArray(data.presentation_image_data_urls) ? data.presentation_image_data_urls.filter(Boolean) : []);
+            setTitle(data.title || "");
+            setAddress(data.address || "");
+            setSelectedCategories(Array.isArray(data.categories) ? data.categories : []);
+            setBasePrice(data.base_price === null || data.base_price === undefined ? "" : String(data.base_price));
+            setReducedPrice(data.reduced_price === null || data.reduced_price === undefined ? "" : String(data.reduced_price));
+            setHours(data.hours || "");
+            setStartDate(data.start_date || "");
+            setEndDate(data.end_date || "");
+            setAge(data.age || "");
+            setAuthor(data.author || "");
+            setDescription(data.description || "");
+            setCartButtonText(data.cart_button_text || "Poner en la cesta");
+            setReceiverId(data.receiver_transaction_id || "");
+            setReceiverName(data.receiver_display_name || "");
+            setReceiverMode("custom");
+            setReceiverStatus(data.receiver_display_name ? "Cuenta encontrada." : "");
+            setHomeDeliveryEnabled(Boolean(data.delivery_home_enabled));
+            setHomeDeliveryPrice(data.delivery_home_price === null || data.delivery_home_price === undefined ? "" : String(data.delivery_home_price));
+            setPickupEnabled(data.delivery_pickup_enabled !== false);
+            setIsOfferLoading(false);
+          }
+
+          loadOfferForEdit();
+        }, [editId]);
+
+        React.useEffect(() => {
+          async function loadBusinessProfile() {
+            if (!isDraftRestored) return;
+            setIsProfileLoading(true);
+            const localTransactionId = localStorage.getItem("donosTransactionId") || "";
+            const localName = localStorage.getItem("donosDisplayName") || "";
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+            const metadata = userData.user?.user_metadata || {};
+            let profile = {
+              display_name: localName || metadata.display_name || "",
+              transaction_id: localTransactionId || metadata.transaction_id || "",
+            };
+
+            if (!userId) {
+              setBusinessProfile(profile.transaction_id ? profile : null);
+              if (profile.transaction_id) {
+                if (!editId) {
+                  setReceiverId(profile.transaction_id);
+                  setReceiverName(profile.display_name);
+                  setReceiverStatus("Usando el ID Donos de la empresa.");
+                }
+              } else {
+                setReceiverStatus("Inicia sesión para cargar el ID Donos de la empresa.");
+              }
+              setIsProfileLoading(false);
+              return;
+            }
+
+            const { data } = await supabaseClient
+              .from("profiles")
+              .select("display_name, transaction_id")
+              .eq("id", userId)
+              .maybeSingle();
+
+            if (data) {
+              profile = {
+                display_name: data.display_name || profile.display_name,
+                transaction_id: data.transaction_id || profile.transaction_id,
+              };
+            }
+
+            setBusinessProfile(profile.transaction_id ? profile : null);
+            if (profile.transaction_id) {
+              localStorage.setItem("donosTransactionId", profile.transaction_id);
+              if (profile.display_name) localStorage.setItem("donosDisplayName", profile.display_name);
+              if (!editId) {
+                setReceiverId(profile.transaction_id);
+                setReceiverName(profile.display_name);
+                setReceiverStatus("Usando el ID Donos de la empresa.");
+              }
+            } else {
+              setReceiverStatus("No encontramos el ID Donos de esta empresa. Prueba a iniciar sesión otra vez.");
+            }
+            setIsProfileLoading(false);
+          }
+
+          loadBusinessProfile();
+        }, [isDraftRestored, editId]);
+
+        React.useEffect(() => {
+          if (!isDraftRestored || editId) return;
+
+          const savedAt = new Date().toISOString();
+          const draft = {
+            title,
+            address,
+            selectedCategories,
+            basePrice,
+            reducedPrice,
+            hours,
+            startDate,
+            endDate,
+            age,
+            author,
+            description,
+            cartButtonText,
+            receiverMode,
+            receiverId,
+            receiverName,
+            receiverStatus,
+            homeDeliveryEnabled,
+            homeDeliveryPrice,
+            pickupEnabled,
+            savedAt,
+          };
+
+          localStorage.setItem(draftKey, JSON.stringify(draft));
+          setLastDraftSavedAt(savedAt);
+        }, [
+          isDraftRestored,
+          editId,
+          title,
+          address,
+          selectedCategories,
+          basePrice,
+          reducedPrice,
+          hours,
+          startDate,
+          endDate,
+          age,
+          author,
+          description,
+          cartButtonText,
+          receiverMode,
+          receiverId,
+          receiverName,
+          receiverStatus,
+          homeDeliveryEnabled,
+          homeDeliveryPrice,
+          pickupEnabled,
+        ]);
+
+        React.useEffect(() => {
+          const cleanId = cleanDonosId(receiverId);
+          const businessId = cleanDonosId(businessProfile?.transaction_id || "");
+
+          if (receiverMode === "business" && cleanId && cleanId === businessId) {
+            setReceiverName(businessProfile?.display_name || "");
+            setReceiverStatus("Usando el ID Donos de la empresa.");
+            return;
+          }
+
+          setReceiverName("");
+
+          if (cleanId.length !== 12) {
+            setReceiverStatus(cleanId ? "Introduce los 12 caracteres del ID Donos." : "");
+            return;
+          }
+
+          let cancelled = false;
+          setReceiverStatus("Buscando cuenta...");
+
+          async function lookupReceiver() {
+            const { data, error } = await supabaseClient.rpc("lookup_profile_by_transaction_id", {
+              search_transaction_id: cleanId,
+            });
+
+            if (cancelled) return;
+
+            if (error) {
+              setReceiverStatus("No hemos podido confirmar este ID ahora. Puedes guardarlo y revisarlo más tarde.");
+              return;
+            }
+
+            if (data && data.length > 0) {
+              setReceiverName(data[0].display_name);
+              setReceiverStatus("Cuenta encontrada.");
+            } else {
+              setReceiverStatus("No encontramos ninguna cuenta con ese ID.");
+            }
+          }
+
+          lookupReceiver();
+
+          return () => {
+            cancelled = true;
+          };
+        }, [receiverId, receiverMode, businessProfile]);
+
+        function useBusinessReceiverId() {
+          setReceiverMode("business");
+          if (isProfileLoading) {
+            setReceiverStatus("Cargando el ID Donos de la empresa...");
+            return;
+          }
+          setReceiverId(businessProfile?.transaction_id || "");
+          setReceiverName(businessProfile?.display_name || "");
+          setReceiverStatus(
+            businessProfile?.transaction_id
+              ? "Usando el ID Donos de la empresa."
+              : "No encontramos el ID Donos de esta empresa. Prueba a iniciar sesión otra vez."
+          );
+        }
+
+        function useCustomReceiverId() {
+          setReceiverMode("custom");
+          setReceiverId("");
+          setReceiverName("");
+          setReceiverStatus("");
+        }
+
+        function toggleCategory(category) {
+          setSelectedCategories((current) =>
+            current.includes(category)
+              ? current.filter((item) => item !== category)
+              : [...current, category]
+          );
+        }
+
+        function clearDraft() {
+          localStorage.removeItem(draftKey);
+          setCoverFiles([]);
+          setPresentationFiles([]);
+          setTitle("");
+          setAddress("");
+          setSelectedCategories([]);
+          setBasePrice("");
+          setReducedPrice("");
+          setHours("");
+          setStartDate("");
+          setEndDate("");
+          setAge("");
+          setAuthor("");
+          setDescription("");
+          setCartButtonText("Poner en la cesta");
+          setReceiverMode("business");
+          setReceiverId(businessProfile?.transaction_id || "");
+          setReceiverName(businessProfile?.display_name || "");
+          setReceiverStatus(businessProfile?.transaction_id ? "Usando el ID Donos de la empresa." : "");
+          setHomeDeliveryEnabled(false);
+          setHomeDeliveryPrice("");
+          setPickupEnabled(true);
+          setStatus({ type: "", message: "Borrador limpiado." });
+        }
+
+        async function handleSave(event) {
+          event.preventDefault();
+          setStatus({ type: "", message: "" });
+          setIsSaving(true);
+
+          try {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+
+            if (!userId) {
+              setStatus({
+                type: "error",
+                message: "Inicia sesión con tu cuenta empresa para guardar la oferta.",
+              });
+              return;
+            }
+
+            const payload = {
+              business_id: userId,
+              cover_photo_name: coverFiles[0]?.name || null,
+              cover_photo_data_url: coverFiles[0] ? await fileToDataUrl(coverFiles[0]) : existingCoverImage || null,
+              presentation_image_names: presentationFiles.map((file) => file.name),
+              presentation_image_data_urls: [
+                ...existingPresentationImages,
+                ...(await Promise.all(presentationFiles.map(fileToDataUrl))),
+              ],
+              title: title.trim() || null,
+              address: address.trim() || null,
+              categories: selectedCategories,
+              base_price: Number.isFinite(base) ? base : null,
+              reduced_price: Number.isFinite(reduced) ? reduced : null,
+              required_points: requiredPoints || null,
+              hours: hours.trim() || null,
+              start_date: startDate || null,
+              end_date: endDate || null,
+              age: age.trim() || null,
+              author: author.trim() || null,
+              description: description.trim() || null,
+              cart_button_text: cartButtonText.trim() || "Poner en la cesta",
+              receiver_transaction_id: cleanDonosId(receiverId) || null,
+              receiver_display_name: receiverName || null,
+              delivery_home_enabled: homeDeliveryEnabled,
+              delivery_home_price: homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
+              delivery_home_points: homeDeliveryEnabled ? deliveryPoints : null,
+              delivery_pickup_enabled: pickupEnabled,
+              updated_at: new Date().toISOString(),
+            };
+
+            const request = editId
+              ? supabaseClient.from("business_offers").update(payload).eq("id", editId).eq("business_id", userId).select("id").maybeSingle()
+              : supabaseClient.from("business_offers").insert(payload).select("id").maybeSingle();
+
+            const { data, error } = await request;
+            if (error) throw error;
+            if (editId && !data) {
+              setStatus({
+                type: "error",
+                message: "No tienes permiso para editar esta oferta con esta cuenta empresa.",
+              });
+              return;
+            }
+
+            if (!editId) localStorage.removeItem(draftKey);
+            setStatus({ type: "success", message: editId ? "Oferta actualizada correctamente." : "Oferta guardada correctamente." });
+          } catch (error) {
+            setStatus({
+              type: "error",
+              message:
+                error.message?.includes("row-level security")
+                  ? "Supabase está bloqueando el guardado. Ejecuta el SQL modo desarrollo para quitar RLS."
+                  : error.message || "No se ha podido guardar. Inténtalo de nuevo.",
+            });
+          } finally {
+            setIsSaving(false);
+          }
+        }
+
+        async function handleDelete() {
+          if (!editId || isDeleting) return;
+          setStatus({ type: "", message: "" });
+
+          const confirmed = window.confirm(`¿Eliminar definitivamente "${title || "esta publicación"}"?`);
+          if (!confirmed) return;
+
+          setIsDeleting(true);
+
+          try {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+
+            if (!userId) {
+              setStatus({
+                type: "error",
+                message: "Inicia sesión con tu cuenta empresa para eliminar la oferta.",
+              });
+              return;
+            }
+
+            const { error } = await supabaseClient
+              .from("business_offers")
+              .delete()
+              .eq("id", editId)
+              .eq("business_id", userId);
+
+            if (error) throw error;
+
+            setStatus({ type: "success", message: "Oferta eliminada correctamente." });
+            setTimeout(() => {
+              window.location.href = "my-offers.html";
+            }, 650);
+          } catch (error) {
+            setStatus({
+              type: "error",
+              message:
+                error.message?.includes("row-level security")
+                  ? "Supabase está bloqueando la eliminación. Revisa el SQL de ofertas."
+                  : error.message || "No se ha podido eliminar. Inténtalo de nuevo.",
+            });
+          } finally {
+            setIsDeleting(false);
+          }
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-5xl px-4 pb-10 pt-5 sm:px-6 lg:px-8">
+            <header className="flex items-center justify-between">
+              <a href="home.html?type=business" className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
+                <div>
+                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-xs font-semibold text-slate-400">Panel empresa</p>
+                </div>
+              </a>
+              <div className="flex items-center gap-2">
+                <a
+                  className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black text-slate-200 transition hover:bg-white/[0.1]"
+                  href="my-offers.html"
+                >
+                  Mis publicaciones
+                </a>
+                <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">Soy Empresa</span>
+              </div>
+            </header>
+
+            <section className="mt-7 grid gap-6 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+              <aside className="rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow lg:sticky lg:top-6">
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Editar oferta</p>
+                <h1 className="mt-3 text-4xl font-black leading-tight tracking-normal text-white">
+                  {editId ? "Modifica tu publicación." : "Crea tu propuesta para Donos."}
+                </h1>
+                <p className="mt-4 text-sm leading-6 text-slate-400">
+                  {editId
+                    ? "Cambia lo que quieras: imágenes, precios, entrega, fechas o texto. Después guarda y se actualiza la publicación."
+                    : "Todos los campos son opcionales. Puedes guardar un borrador rápido y completarlo más tarde."}
+                </p>
+
+                <div className="mt-6 rounded-[26px] border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Puntos calculados</p>
+                  <p className="mt-2 text-5xl font-black text-white">{requiredPoints}</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-400">pts necesarios</p>
+                </div>
+
+                <a
+                  className="mt-4 flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]"
+                  href="my-offers.html"
+                >
+                  Ver mis publicaciones
+                </a>
+              </aside>
+
+              <form className="glass space-y-5 rounded-[34px] border border-white/10 p-5 shadow-2xl shadow-black/30 sm:p-7" onSubmit={handleSave}>
+                {isOfferLoading && (
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4 text-sm font-bold text-slate-300">
+                    Cargando publicación...
+                  </div>
+                )}
+
+                {!editId && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+                    <div>
+                      <p className="text-sm font-black text-white">Borrador automático</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-400">
+                        {lastDraftSavedAt
+                          ? `Guardado localmente a las ${new Date(lastDraftSavedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
+                          : "Se guardará mientras escribes."}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearDraft}
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-black text-slate-200 transition hover:bg-white/[0.1]"
+                    >
+                      Limpiar borrador
+                    </button>
+                  </div>
+                )}
+
+                <FileDrop
+                  label="Foto de portada"
+                  files={coverFiles}
+                  existingImages={existingCoverImage ? [existingCoverImage] : []}
+                  onChange={(files) => setCoverFiles(files.slice(0, 1))}
+                  onRemoveExisting={() => setExistingCoverImage("")}
+                />
+                <Field label="Título">
+                  <input className={inputClass} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Ej. Entrada de cine joven" />
+                </Field>
+                <FileDrop
+                  label="Imágenes de presentación"
+                  multiple
+                  files={presentationFiles}
+                  existingImages={existingPresentationImages}
+                  onChange={setPresentationFiles}
+                  onRemoveExisting={(index) => setExistingPresentationImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                />
+                <Field label="Dirección">
+                  <input className={inputClass} value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Calle, número, barrio..." />
+                </Field>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-300">Categoría</p>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {categories.map((category) => {
+                      const selected = selectedCategories.includes(category);
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          onClick={() => toggleCategory(category)}
+                          className={`min-h-11 rounded-2xl border px-3 text-left text-sm font-bold transition ${
+                            selected
+                              ? "border-mint/60 bg-mint/15 text-mint"
+                              : "border-line bg-white/[0.055] text-slate-300 hover:bg-white/[0.08]"
+                          }`}
+                        >
+                          {category}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Precio de base">
+                    <input className={inputClass} inputMode="decimal" value={basePrice} onChange={(event) => setBasePrice(event.target.value)} placeholder="Ej. 12,00" />
+                  </Field>
+                  <Field label="Precio reducido">
+                    <input className={inputClass} inputMode="decimal" value={reducedPrice} onChange={(event) => setReducedPrice(event.target.value)} placeholder="Ej. 8,00" />
+                  </Field>
+                </div>
+
+                <div className="rounded-2xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-sm font-black text-mint">{requiredPoints} puntos para obtener el precio reducido</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-400">Cálculo automático: 1€ del precio reducido = 10 pts.</p>
+                </div>
+
+                <Field label="Horarios">
+                  <input className={inputClass} value={hours} onChange={(event) => setHours(event.target.value)} placeholder="Ej. Lunes a viernes, 17:00-22:00" />
+                </Field>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Fecha de inicio">
+                    <input className={inputClass} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                  </Field>
+                  <Field label="Fecha de fin">
+                    <input className={inputClass} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                  </Field>
+                </div>
+
+                <Field label="Edad">
+                  <input className={inputClass} value={age} onChange={(event) => setAge(event.target.value)} placeholder="Ej. Todos los públicos, +16..." />
+                </Field>
+
+                <Field label="Autor/a">
+                  <input className={inputClass} value={author} onChange={(event) => setAuthor(event.target.value)} placeholder="Ej. Nombre del autor, artista o responsable" />
+                </Field>
+
+                <Field label="Descripción">
+                  <textarea className={textareaClass} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Cuenta qué incluye la oferta..." />
+                </Field>
+
+                <Field label="Botón poner en la cesta">
+                  <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Poner en la cesta" />
+                </Field>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-sm font-medium text-slate-300">Propuesta de entrega</p>
+                  <div className="mt-3 grid gap-3">
+                    <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
+                        checked={pickupEnabled}
+                        onChange={(event) => setPickupEnabled(event.target.checked)}
+                      />
+                      <span>
+                        <span className="block text-sm font-black text-white">Recogida en tienda</span>
+                        <span className="mt-1 block text-xs leading-5 text-slate-400">La persona viene a la dirección indicada. No paga puntos extra.</span>
+                      </span>
+                    </label>
+
+                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <span className="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
+                          checked={homeDeliveryEnabled}
+                          onChange={(event) => setHomeDeliveryEnabled(event.target.checked)}
+                        />
+                        <span>
+                          <span className="block text-sm font-black text-white">Entrega a domicilio</span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-400">Indica el coste en euros y Donos lo convierte automáticamente a puntos.</span>
+                        </span>
+                      </span>
+
+                      {homeDeliveryEnabled && (
+                        <div className="mt-3">
+                          <input
+                            className={inputClass}
+                            inputMode="decimal"
+                            value={homeDeliveryPrice}
+                            onChange={(event) => setHomeDeliveryPrice(event.target.value.replace(/[^0-9,.]/g, ""))}
+                            placeholder="Coste de entrega en €"
+                          />
+                          <div className="mt-3 rounded-2xl border border-mint/20 bg-mint/10 p-3">
+                            <p className="text-sm font-black text-mint">
+                              {deliveryPoints} puntos extra por entrega
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-slate-400">1€ = 10 puntos</p>
+                          </div>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium text-slate-300">ID Donos con el que quieres recibir tus puntos</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={useBusinessReceiverId}
+                      disabled={isProfileLoading}
+                      className={`min-h-12 rounded-2xl border px-3 text-left text-sm font-black transition ${
+                        receiverMode === "business"
+                          ? "border-mint/60 bg-mint/15 text-mint"
+                          : "border-line bg-white/[0.055] text-slate-300 hover:bg-white/[0.08]"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {isProfileLoading ? "Cargando ID de empresa..." : "Con el ID Donos de la empresa"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={useCustomReceiverId}
+                      className={`min-h-12 rounded-2xl border px-3 text-left text-sm font-black transition ${
+                        receiverMode === "custom"
+                          ? "border-mint/60 bg-mint/15 text-mint"
+                          : "border-line bg-white/[0.055] text-slate-300 hover:bg-white/[0.08]"
+                      }`}
+                    >
+                      Añadir otro ID
+                    </button>
+                  </div>
+
+                  <input
+                    className={`${inputClass} mt-3`}
+                    value={formatDonosId(receiverId)}
+                    onChange={(event) => {
+                      setReceiverMode("custom");
+                      setReceiverId(cleanDonosId(event.target.value));
+                    }}
+                    placeholder="3B8K-1940-A27Z"
+                  />
+                  {receiverMode === "business" && businessProfile?.transaction_id && (
+                    <p className="mt-2 text-xs font-semibold text-slate-400">
+                      ID empresa: {formatDonosId(businessProfile.transaction_id)}
+                    </p>
+                  )}
+                </div>
+
+                {(receiverStatus || receiverName) && (
+                  <div className={`rounded-2xl border p-4 text-sm font-semibold ${
+                    receiverName ? "border-mint/25 bg-mint/10 text-mint" : "border-white/10 bg-white/[0.055] text-slate-300"
+                  }`}>
+                    {receiverName ? `Confirmación: ${receiverName}` : receiverStatus}
+                  </div>
+                )}
+
+                {status.message && (
+                  <div className={`rounded-2xl border p-4 text-sm font-semibold ${
+                    status.type === "success" ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/30 bg-coral/10 text-coral"
+                  }`}>
+                    <p>{status.message}</p>
+                    {status.type === "error" && status.message.includes("Inicia sesión") && (
+                      <a
+                        className="mt-3 inline-flex rounded-full bg-coral px-4 py-2 text-xs font-black text-white"
+                        href="login.html"
+                      >
+                        Iniciar sesión
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                  <button
+                    className="flex h-14 w-full items-center justify-center rounded-2xl bg-mint px-5 text-base font-black text-ink shadow-glow transition hover:translate-y-[-1px] hover:bg-[#66ffd0] disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isSaving || isOfferLoading || isDeleting}
+                  >
+                    {isSaving ? "Guardando..." : editId ? "Guardar cambios" : "Guardar"}
+                  </button>
+                  {editId && (
+                    <button
+                      type="button"
+                      className="flex h-14 items-center justify-center rounded-2xl border border-coral/30 bg-coral/10 px-5 text-base font-black text-coral transition hover:bg-coral/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isSaving || isOfferLoading || isDeleting}
+                      onClick={handleDelete}
+                    >
+                      {isDeleting ? "Eliminando..." : "Eliminar"}
+                    </button>
+                  )}
+                </div>
+              </form>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
