@@ -7,9 +7,21 @@ create table if not exists public.stripe_point_recharges (
   stripe_session_id text not null unique,
   points integer not null check (points > 0),
   amount_total integer not null default 0,
+  stripe_fee_amount integer not null default 0,
+  net_amount integer not null default 0,
+  customer_email text,
   currency text not null default 'eur',
   created_at timestamptz not null default now()
 );
+
+alter table public.stripe_point_recharges
+  add column if not exists stripe_fee_amount integer not null default 0;
+
+alter table public.stripe_point_recharges
+  add column if not exists net_amount integer not null default 0;
+
+alter table public.stripe_point_recharges
+  add column if not exists customer_email text;
 
 alter table public.stripe_point_recharges enable row level security;
 
@@ -26,7 +38,10 @@ create or replace function public.credit_points_from_stripe(
   p_points integer,
   p_stripe_session_id text,
   p_amount_total integer,
-  p_currency text
+  p_currency text,
+  p_stripe_fee_amount integer default 0,
+  p_net_amount integer default 0,
+  p_customer_email text default null
 )
 returns void
 language plpgsql
@@ -39,6 +54,9 @@ begin
     stripe_session_id,
     points,
     amount_total,
+    stripe_fee_amount,
+    net_amount,
+    customer_email,
     currency
   )
   values (
@@ -46,6 +64,9 @@ begin
     p_stripe_session_id,
     p_points,
     coalesce(p_amount_total, 0),
+    coalesce(p_stripe_fee_amount, 0),
+    coalesce(nullif(p_net_amount, 0), coalesce(p_amount_total, 0) - coalesce(p_stripe_fee_amount, 0)),
+    nullif(p_customer_email, ''),
     coalesce(nullif(p_currency, ''), 'eur')
   );
 
@@ -59,7 +80,7 @@ exception
 end;
 $$;
 
-grant execute on function public.credit_points_from_stripe(uuid, integer, text, integer, text) to service_role;
+grant execute on function public.credit_points_from_stripe(uuid, integer, text, integer, text, integer, integer, text) to service_role;
 
 notify pgrst, 'reload schema';
 

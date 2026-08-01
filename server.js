@@ -17,6 +17,7 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const adminPassword = process.env.ADMIN_DONOS_PASSWORD || "";
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -27,10 +28,10 @@ const supabaseAdmin =
     : null;
 
 const pointPacks = {
-  "50": { points: 50, amount: 500, label: "50 puntos" },
-  "100": { points: 100, amount: 1000, label: "100 puntos" },
-  "250": { points: 250, amount: 2500, label: "250 puntos" },
-  "500": { points: 500, amount: 5000, label: "500 puntos" },
+  "50": { points: 50, amount: 620, baseAmount: 500, feeAmount: 120, label: "50 puntos" },
+  "100": { points: 100, amount: 1120, baseAmount: 1000, feeAmount: 120, label: "100 puntos" },
+  "250": { points: 250, amount: 2620, baseAmount: 2500, feeAmount: 120, label: "250 puntos" },
+  "500": { points: 500, amount: 5120, baseAmount: 5000, feeAmount: 120, label: "500 puntos" },
 };
 
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (request, response) => {
@@ -54,12 +55,16 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
     const points = Number(session.metadata?.points || 0);
 
     if (userId && points > 0 && session.payment_status === "paid") {
+      const stripeAmounts = await getStripeAmounts(session);
       const { error } = await supabaseAdmin.rpc("credit_points_from_stripe", {
         p_user_id: userId,
         p_points: points,
         p_stripe_session_id: session.id,
-        p_amount_total: session.amount_total || 0,
-        p_currency: session.currency || "eur",
+        p_amount_total: stripeAmounts.amountTotal,
+        p_currency: stripeAmounts.currency,
+        p_stripe_fee_amount: stripeAmounts.feeAmount,
+        p_net_amount: stripeAmounts.netAmount,
+        p_customer_email: session.customer_details?.email || session.customer_email || "",
       });
 
       if (error) {
@@ -73,6 +78,50 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 });
 
 app.use(express.json());
+
+app.post("/api/admin/recharges", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("stripe_point_recharges")
+    .select("id, user_id, stripe_session_id, points, amount_total, stripe_fee_amount, net_amount, customer_email, currency, created_at")
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (error) {
+    console.error("Admin recharges error:", error);
+    return response.status(500).json({ error: "No se han podido cargar los pagos" });
+  }
+
+  const userIds = [...new Set((data || []).map((item) => item.user_id).filter(Boolean))];
+  let profilesById = {};
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points")
+      .in("id", userIds);
+
+    if (profilesError) {
+      console.error("Admin profiles error:", profilesError);
+    }
+
+    profilesById = Object.fromEntries((profiles || []).map((profile) => [profile.id, profile]));
+  }
+
+  response.json({
+    recharges: (data || []).map((item) => ({
+      ...item,
+      profiles: profilesById[item.user_id] || null,
+    })),
+  });
+});
 
 app.get("/api/stripe/config", (_request, response) => {
   response.json({
@@ -106,7 +155,7 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
             unit_amount: selectedPack.amount,
             product_data: {
               name: `Recarga Donos · ${selectedPack.label}`,
-              description: "Recarga de puntos Donos",
+              description: `Incluye ${formatCents(selectedPack.baseAmount)} de puntos + ${formatCents(selectedPack.feeAmount)} de gastos operativos`,
             },
           },
         },
@@ -114,6 +163,8 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
       metadata: {
         user_id: userId,
         points: String(selectedPack.points),
+        base_amount: String(selectedPack.baseAmount),
+        fee_amount: String(selectedPack.feeAmount),
       },
       success_url: `${origin}/transfer.html?stripe=success`,
       cancel_url: `${origin}/transfer.html?stripe=cancelled`,
@@ -125,6 +176,42 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
     response.status(500).json({ error: error.message || "Could not create Stripe Checkout session" });
   }
 });
+
+function formatCents(amount) {
+  return `${(amount / 100).toFixed(2).replace(".", ",")}€`;
+}
+
+async function getStripeAmounts(session) {
+  const fallback = {
+    amountTotal: session.amount_total || 0,
+    feeAmount: 0,
+    netAmount: session.amount_total || 0,
+    currency: session.currency || "eur",
+  };
+
+  if (!stripe || !session.payment_intent) return fallback;
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent, {
+      expand: ["latest_charge.balance_transaction"],
+    });
+    const balanceTransaction = paymentIntent.latest_charge?.balance_transaction;
+
+    if (!balanceTransaction || typeof balanceTransaction === "string") {
+      return fallback;
+    }
+
+    return {
+      amountTotal: balanceTransaction.amount || fallback.amountTotal,
+      feeAmount: balanceTransaction.fee || 0,
+      netAmount: balanceTransaction.net || fallback.netAmount,
+      currency: balanceTransaction.currency || fallback.currency,
+    };
+  } catch (error) {
+    console.error("Stripe balance transaction error:", error);
+    return fallback;
+  }
+}
 
 app.use(express.static(__dirname));
 

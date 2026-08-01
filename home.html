@@ -215,7 +215,7 @@
 
       function formatDonosId(value) {
         const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
-        return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "";
       }
 
       function getDiscountPercent(basePrice, reducedPrice) {
@@ -396,6 +396,7 @@
         const [accountName, setAccountName] = React.useState(localStorage.getItem("donosDisplayName") || "");
         const [accountPoints, setAccountPoints] = React.useState(0);
         const [transactionId, setTransactionId] = React.useState(localStorage.getItem("donosTransactionId") || "");
+        const [isLoggedIn, setIsLoggedIn] = React.useState(false);
         const [copyStatus, setCopyStatus] = React.useState("");
         const [selectedCategory, setSelectedCategory] = React.useState("");
         const [categoryOffers, setCategoryOffers] = React.useState([]);
@@ -413,6 +414,7 @@
             let points = 0;
 
             const { data } = await supabaseClient.auth.getUser();
+            setIsLoggedIn(Boolean(data.user?.id));
             const metadata = data.user?.user_metadata || {};
 
             if (metadata.account_type) type = metadata.account_type;
@@ -445,6 +447,7 @@
 
         const isBusiness = accountType === "business";
         const displayAccountName = accountName || (isBusiness ? "Empresa" : "Usuario");
+        const displayedDonosId = formatDonosId(transactionId);
         const copyTransactionId = async () => {
           const clean = String(transactionId || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
           if (!clean) return;
@@ -514,14 +517,25 @@
                   <div className="mt-6 flex items-center justify-between gap-3 rounded-3xl border border-mint/20 bg-mint/10 p-4">
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-mint">ID Donos</p>
-                      <p className="mt-1 truncate font-mono text-lg font-black tracking-normal text-white">{formatDonosId(transactionId)}</p>
+                      <p className="mt-1 truncate font-mono text-lg font-black tracking-normal text-white">
+                        {displayedDonosId || (isLoggedIn ? "ID no disponible" : "Inicia sesión")}
+                      </p>
                     </div>
-                    <button
-                      className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white ring-1 ring-white/10 transition hover:bg-white/15"
-                      onClick={copyTransactionId}
-                    >
-                      {copyStatus || "Copiar"}
-                    </button>
+                    {displayedDonosId ? (
+                      <button
+                        className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white ring-1 ring-white/10 transition hover:bg-white/15"
+                        onClick={copyTransactionId}
+                      >
+                        {copyStatus || "Copiar"}
+                      </button>
+                    ) : (
+                      <a
+                        className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white ring-1 ring-white/10 transition hover:bg-white/15"
+                        href="login.html"
+                      >
+                        Login
+                      </a>
+                    )}
                   </div>
                 </section>
               </div>

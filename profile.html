@@ -68,7 +68,7 @@
 
       function formatDonosId(value) {
         const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
-        return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "";
       }
 
       function formatNumber(value) {
@@ -158,6 +158,7 @@
         }
 
         const isBusiness = profile.account_type === "business";
+        const displayedDonosId = formatDonosId(profile.transaction_id);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-4 pb-28 pt-5 sm:px-6">
@@ -190,11 +191,13 @@
               <div className="mt-5 flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-black/20 p-4">
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">ID Donos</p>
-                  <p className="mt-1 truncate font-mono text-lg font-black text-white">{formatDonosId(profile.transaction_id)}</p>
+                  <p className="mt-1 truncate font-mono text-lg font-black text-white">{displayedDonosId || "ID no disponible"}</p>
                 </div>
-                <button className="shrink-0 rounded-full bg-mint px-4 py-2 text-xs font-black text-ink shadow-glow" onClick={copyId}>
-                  {copyStatus || "Copiar"}
-                </button>
+                {displayedDonosId && (
+                  <button className="shrink-0 rounded-full bg-mint px-4 py-2 text-xs font-black text-ink shadow-glow" onClick={copyId}>
+                    {copyStatus || "Copiar"}
+                  </button>
+                )}
               </div>
             </section>
 
