@@ -430,24 +430,6 @@ app.post("/api/purchases/offer", async (request, response) => {
       await supabaseAdmin.from("profiles").update({ address: deliveryAddress }).eq("id", user.id);
     }
 
-    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: buyerPoints - totalPoints })
-        .eq("id", user.id)
-        .select("points")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: Number(receiverProfile.points || 0) + totalPoints })
-        .eq("id", receiverProfile.id),
-    ]);
-
-    if (buyerError || receiverUpdateError) {
-      console.error("Purchase points update error:", buyerError || receiverUpdateError);
-      return response.status(500).json({ error: "points_update_failed" });
-    }
-
     const { data: purchase, error: purchaseError } = await supabaseAdmin
       .from("purchases")
       .insert({
@@ -466,7 +448,32 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     if (purchaseError) {
       console.error("Purchase insert error:", purchaseError);
-      return response.status(500).json({ error: "purchase_insert_failed" });
+      return response.status(500).json({
+        error: purchaseError.code === "42P01" ? "purchases_table_missing" : "purchase_insert_failed",
+        detail: purchaseError.message || "",
+      });
+    }
+
+    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: buyerPoints - totalPoints })
+        .eq("id", user.id)
+        .select("points")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: Number(receiverProfile.points || 0) + totalPoints })
+        .eq("id", receiverProfile.id),
+    ]);
+
+    if (buyerError || receiverUpdateError) {
+      console.error("Purchase points update error:", buyerError || receiverUpdateError);
+      await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
+      return response.status(500).json({
+        error: "points_update_failed",
+        detail: buyerError?.message || receiverUpdateError?.message || "",
+      });
     }
 
     response.json({

@@ -29,6 +29,20 @@
           radial-gradient(circle at 86% 8%, rgba(255, 107, 107, 0.12), transparent 30%),
           linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
       }
+
+      @keyframes success-pop {
+        0% { transform: scale(0.82); opacity: 0; }
+        55% { transform: scale(1.06); opacity: 1; }
+        100% { transform: scale(1); opacity: 1; }
+      }
+
+      @keyframes success-ring {
+        0% { transform: scale(0.72); opacity: 0.9; }
+        100% { transform: scale(1.55); opacity: 0; }
+      }
+
+      .success-pop { animation: success-pop 520ms cubic-bezier(.2,.9,.2,1) both; }
+      .success-ring { animation: success-ring 1500ms ease-out infinite; }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -59,6 +73,7 @@
         const [isBuying, setIsBuying] = React.useState(false);
         const [isSavingAddress, setIsSavingAddress] = React.useState(false);
         const [accessToken, setAccessToken] = React.useState("");
+        const [successPurchase, setSuccessPurchase] = React.useState(null);
 
         React.useEffect(() => {
           async function loadCheckout() {
@@ -169,11 +184,19 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "purchase_failed");
 
+            const updatedPoints = data?.buyer_points ?? 0;
             setPurchaseStatus({
               type: "success",
-              message: `Compra realizada. Te quedan ${data?.buyer_points ?? 0} pts.`,
+              message: `Compra realizada. Te quedan ${updatedPoints} pts.`,
             });
-            setProfile((current) => ({ ...current, points: data?.buyer_points ?? 0, address: deliveryAddress.trim() || current?.address }));
+            setSuccessPurchase({
+              title: offer.title || "Oferta Donos",
+              totalPoints,
+              remainingPoints: updatedPoints,
+              deliveryLabel,
+              receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donos",
+            });
+            setProfile((current) => ({ ...current, points: updatedPoints, address: deliveryAddress.trim() || current?.address }));
           } catch (error) {
             const message = error.message || "";
             setPurchaseStatus({
@@ -184,7 +207,11 @@
                   ? "Añade una dirección para la entrega a domicilio."
                   : message.includes("receiver")
                     ? "No se ha encontrado la cuenta que debe recibir los puntos."
-                    : "No se ha podido completar la compra.",
+                    : message.includes("purchases_table_missing") || message.includes("purchase_insert_failed")
+                      ? "Falta activar el SQL de pagos en Supabase."
+                      : message.includes("points_update_failed")
+                        ? "Supabase no ha podido mover los puntos. Revisa la tabla profiles."
+                        : "No se ha podido completar la compra.",
             });
           } finally {
             setIsBuying(false);
@@ -310,6 +337,62 @@
                 </button>
               </div>
             </section>
+
+            {successPurchase && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-2xl">
+                <section className="success-pop w-full max-w-md overflow-hidden rounded-[36px] border border-mint/25 bg-[#0D111D] shadow-2xl shadow-mint/10">
+                  <div className="relative grid place-items-center px-6 pt-8">
+                    <span className="success-ring absolute h-28 w-28 rounded-full border border-mint/50"></span>
+                    <span className="success-ring absolute h-28 w-28 rounded-full border border-mint/30 [animation-delay:450ms]"></span>
+                    <div className="relative grid h-24 w-24 place-items-center rounded-full bg-mint text-ink shadow-glow">
+                      <svg viewBox="0 0 24 24" className="h-12 w-12" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3">
+                        <path d="m5 12 4 4L19 6" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  <div className="px-6 pb-6 pt-5 text-center">
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Pago realizado</p>
+                    <h2 className="mt-2 text-3xl font-black leading-tight text-white">Compra completada</h2>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
+                      Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura.
+                    </p>
+
+                    <div className="mt-5 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 text-left">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-sm font-bold text-slate-400">Producto</span>
+                        <span className="text-right text-sm font-black text-white">{successPurchase.title}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-sm font-bold text-slate-400">Entrega</span>
+                        <span className="text-sm font-black text-white">{successPurchase.deliveryLabel}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-sm font-bold text-slate-400">Comercio</span>
+                        <span className="text-sm font-black text-white">{successPurchase.receiver}</span>
+                      </div>
+                      <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
+                        <span className="text-sm font-bold text-slate-400">Pagado</span>
+                        <span className="text-base font-black text-mint">{successPurchase.totalPoints} pts</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-sm font-bold text-slate-400">Saldo restante</span>
+                        <span className="text-base font-black text-white">{successPurchase.remainingPoints} pts</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" href="home.html">
+                        Inicio
+                      </a>
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]" href="profile.html">
+                        Mi cuenta
+                      </a>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
           </main>
         );
       }
