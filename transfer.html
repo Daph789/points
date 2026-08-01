@@ -78,6 +78,11 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "";
       }
 
+      function redirectToLogin() {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+      }
+
       function ActionButton({ icon, title, detail, primary, onClick }) {
         return (
           <button
@@ -125,7 +130,7 @@
           const currentUserId = userData.user?.id;
 
           if (!currentUserId) {
-            setStatus("Inicia sesión para ver y mover tus puntos.");
+            redirectToLogin();
             return 0;
           }
           setUserId(currentUserId);
@@ -238,7 +243,7 @@
 
         async function startRecharge(pack) {
           if (!userId) {
-            setStatus("Inicia sesión para recargar puntos.");
+            redirectToLogin();
             return;
           }
 

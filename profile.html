@@ -75,6 +75,11 @@
         return Number(value || 0).toLocaleString("es-ES");
       }
 
+      function redirectToLogin() {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+      }
+
       function InfoCard({ label, value }) {
         return (
           <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
@@ -95,7 +100,7 @@
             const userId = userData.user?.id;
 
             if (!userId) {
-              setStatus("Inicia sesión para ver tu perfil.");
+              redirectToLogin();
               return;
             }
 
@@ -147,6 +152,14 @@
           await navigator.clipboard.writeText(clean);
           setCopyStatus("Copiado");
           setTimeout(() => setCopyStatus(""), 1400);
+        }
+
+        async function signOut() {
+          await supabaseClient.auth.signOut();
+          localStorage.removeItem("donosAccountType");
+          localStorage.removeItem("donosDisplayName");
+          localStorage.removeItem("donosTransactionId");
+          window.location.href = "login.html";
         }
 
         if (status) {
@@ -208,6 +221,21 @@
               <InfoCard label="Dirección" value={profile.address} />
               {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
               {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}
+            </section>
+
+            <section className="mt-5 rounded-[30px] border border-coral/25 bg-coral/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-white">Sesión</p>
+                  <p className="mt-1 text-xs font-bold text-coral/80">Sal de esta cuenta para entrar con otra.</p>
+                </div>
+                <button
+                  className="h-11 rounded-2xl bg-coral px-5 text-sm font-black text-white transition hover:bg-[#ff8585]"
+                  onClick={signOut}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
             </section>
 
             <nav className="fixed inset-x-0 bottom-4 z-40 mx-auto w-[min(calc(100%-24px),520px)] rounded-[28px] border border-white/10 bg-[#101522]/88 p-2 shadow-nav backdrop-blur-2xl">

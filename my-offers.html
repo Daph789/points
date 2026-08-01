@@ -69,6 +69,11 @@
           .includes(cleanQuery);
       }
 
+      function redirectToLogin() {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+      }
+
       function OfferRow({ offer, onDelete }) {
         const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
         return (
@@ -137,7 +142,7 @@
             const userId = userData.user?.id;
 
             if (!userId) {
-              setStatus("Inicia sesión con tu cuenta empresa para ver tus publicaciones.");
+              redirectToLogin();
               return;
             }
 
@@ -174,7 +179,7 @@
           const userId = userData.user?.id;
 
           if (!userId) {
-            setDeleteStatus({ type: "error", message: "Inicia sesión de nuevo para eliminar esta publicación." });
+            redirectToLogin();
             return;
           }
 

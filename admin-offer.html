@@ -88,6 +88,11 @@
         return clean.replace(/(.{4})(.{4})(.{0,4})/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
       }
 
+      function redirectToLogin() {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+      }
+
       function fileToDataUrl(file) {
         return new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -294,7 +299,7 @@
                   setReceiverStatus("Usando el ID Donos de la empresa.");
                 }
               } else {
-                setReceiverStatus("Inicia sesión para cargar el ID Donos de la empresa.");
+                redirectToLogin();
               }
               setIsProfileLoading(false);
               return;
@@ -497,10 +502,7 @@
             const userId = userData.user?.id;
 
             if (!userId) {
-              setStatus({
-                type: "error",
-                message: "Inicia sesión con tu cuenta empresa para guardar la oferta.",
-              });
+              redirectToLogin();
               return;
             }
 
@@ -578,10 +580,7 @@
             const userId = userData.user?.id;
 
             if (!userId) {
-              setStatus({
-                type: "error",
-                message: "Inicia sesión con tu cuenta empresa para eliminar la oferta.",
-              });
+              redirectToLogin();
               return;
             }
 
