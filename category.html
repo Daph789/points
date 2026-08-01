@@ -52,6 +52,17 @@
         return Math.round(((base - reduced) / base) * 100);
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       function matchesSearch(offer, query) {
         const cleanQuery = query.trim().toLowerCase();
         if (!cleanQuery) return true;
@@ -108,9 +119,7 @@
                 {businessName && (
                   <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200">
                     <span className="truncate">{businessName}</span>
-                    {offer.business_is_verified && (
-                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-mint text-[11px] font-black text-ink">✓</span>
-                    )}
+                    {offer.business_is_verified && <VerifiedBadge />}
                   </div>
                 )}
                 <div className="mt-4 h-11 rounded-2xl bg-white/[0.08] py-3 text-center text-sm font-black text-white ring-1 ring-white/10">Ver detalles</div>

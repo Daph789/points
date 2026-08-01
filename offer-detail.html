@@ -53,6 +53,17 @@
         return Math.round(((base - reduced) / base) * 100);
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.5)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const id = params.get("id");
@@ -187,9 +198,7 @@
                 {businessName && (
                   <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
                     <span>{businessName}</span>
-                    {offer.business_is_verified && (
-                      <span className="grid h-6 w-6 place-items-center rounded-full bg-mint text-xs font-black text-ink">✓</span>
-                    )}
+                    {offer.business_is_verified && <VerifiedBadge />}
                   </div>
                 )}
                 {offer.author && (
