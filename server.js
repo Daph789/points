@@ -149,6 +149,37 @@ app.post("/api/admin/recharges/delete", async (request, response) => {
   response.json({ deleted: data?.[0] || null });
 });
 
+app.get("/api/me/profile", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return response.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  const userId = userData?.user?.id;
+
+  if (userError || !userId) {
+    return response.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Me profile error:", error);
+    return response.status(500).json({ error: "Could not load profile" });
+  }
+
+  response.json({ profile: profile || null });
+});
+
 app.get("/api/stripe/config", (_request, response) => {
   response.json({
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",
@@ -190,9 +221,29 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
       }
     }
 
-    const { data: profile } = userId
+    let { data: profile } = userId
       ? await supabaseAdmin.from("profiles").select("points").eq("id", userId).maybeSingle()
       : { data: null };
+
+    if (isPaid && userId && points > 0 && Number(profile?.points || 0) < points) {
+      const { data: recharge } = await supabaseAdmin
+        .from("stripe_point_recharges")
+        .select("id, created_at")
+        .eq("stripe_session_id", session.id)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (recharge?.id) {
+        const { data: correctedProfile, error: correctionError } = await supabaseAdmin
+          .from("profiles")
+          .update({ points: Number(profile?.points || 0) + points })
+          .eq("id", userId)
+          .select("points")
+          .maybeSingle();
+
+        if (!correctionError && correctedProfile) profile = correctedProfile;
+      }
+    }
 
     response.json({
       paid: isPaid,

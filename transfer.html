@@ -126,8 +126,9 @@
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
 
         const loadProfile = React.useCallback(async () => {
-          const { data: userData } = await supabaseClient.auth.getUser();
-          const currentUserId = userData.user?.id;
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          const currentUserId = sessionData.session?.user?.id;
 
           if (!currentUserId) {
             redirectToLogin();
@@ -135,18 +136,33 @@
           }
           setUserId(currentUserId);
 
-          const { data } = await supabaseClient
-            .from("profiles")
-            .select("display_name, points, transaction_id")
-            .eq("id", currentUserId)
-            .maybeSingle();
+          let data = null;
+
+          if (accessToken) {
+            const response = await fetch("/api/me/profile", {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const serverData = await response.json().catch(() => ({}));
+            if (response.ok) data = serverData.profile;
+          }
+
+          if (!data) {
+            const fallback = await supabaseClient
+              .from("profiles")
+              .select("display_name, points, transaction_id")
+              .eq("id", currentUserId)
+              .maybeSingle();
+            data = fallback.data;
+          }
 
           if (data?.display_name) setDisplayName(data.display_name);
           if (data?.transaction_id) {
             setTransactionId(data.transaction_id);
             localStorage.setItem("donosTransactionId", data.transaction_id);
           }
-          setPoints(Number(data?.points || 0));
+          if (data && typeof data.points !== "undefined") {
+            setPoints((current) => Math.max(Number(current || 0), Number(data.points || 0)));
+          }
           return Number(data?.points || 0);
         }, []);
 
@@ -177,7 +193,9 @@
               const data = await response.json();
               if (!response.ok) throw new Error(data.error || "No se ha podido sincronizar.");
 
-              if (typeof data.points === "number") setPoints(data.points);
+              if (typeof data.points === "number") {
+                setPoints((current) => Math.max(Number(current || 0), Number(data.points || 0)));
+              }
               if (data.credited) {
                 setStatus("Puntos añadidos correctamente.");
                 return true;

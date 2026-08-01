@@ -412,19 +412,34 @@
             let donosId = localStorage.getItem("donosTransactionId") || "";
             let points = 0;
 
-            const { data } = await supabaseClient.auth.getUser();
-            setIsLoggedIn(Boolean(data.user?.id));
-            const metadata = data.user?.user_metadata || {};
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            const authUser = sessionData.session?.user;
+            setIsLoggedIn(Boolean(authUser?.id));
+            const metadata = authUser?.user_metadata || {};
 
             if (metadata.account_type) type = metadata.account_type;
             if (metadata.display_name) name = metadata.display_name;
 
-            if (data.user?.id) {
-              const { data: profile } = await supabaseClient
-                .from("profiles")
-                .select("account_type, display_name, transaction_id, points")
-                .eq("id", data.user.id)
-                .maybeSingle();
+            if (authUser?.id) {
+              let profile = null;
+
+              if (accessToken) {
+                const response = await fetch("/api/me/profile", {
+                  headers: { Authorization: `Bearer ${accessToken}` },
+                });
+                const serverData = await response.json().catch(() => ({}));
+                if (response.ok) profile = serverData.profile;
+              }
+
+              if (!profile) {
+                const fallback = await supabaseClient
+                  .from("profiles")
+                  .select("account_type, display_name, transaction_id, points")
+                  .eq("id", authUser.id)
+                  .maybeSingle();
+                profile = fallback.data;
+              }
 
               if (profile?.account_type) type = profile.account_type;
               if (profile?.display_name) name = profile.display_name;

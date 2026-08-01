@@ -96,8 +96,10 @@
 
         React.useEffect(() => {
           async function loadProfile() {
-            const { data: userData } = await supabaseClient.auth.getUser();
-            const userId = userData.user?.id;
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            const authUser = sessionData.session?.user;
+            const userId = authUser?.id;
 
             if (!userId) {
               redirectToLogin();
@@ -105,11 +107,26 @@
             }
 
             const columns = "id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points";
-            let { data, error } = await supabaseClient
-              .from("profiles")
-              .select(columns)
-              .eq("id", userId)
-              .maybeSingle();
+            let data = null;
+            let error = null;
+
+            if (accessToken) {
+              const response = await fetch("/api/me/profile", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              const serverData = await response.json().catch(() => ({}));
+              if (response.ok) data = serverData.profile;
+            }
+
+            if (!data) {
+              const profileResponse = await supabaseClient
+                .from("profiles")
+                .select(columns)
+                .eq("id", userId)
+                .maybeSingle();
+              data = profileResponse.data;
+              error = profileResponse.error;
+            }
 
             if (error) {
               const fallback = await supabaseClient
@@ -123,11 +140,11 @@
             }
 
             if (!data) {
-              const metadata = userData.user.user_metadata || {};
+              const metadata = authUser.user_metadata || {};
               data = {
                 id: userId,
-                display_name: metadata.display_name || userData.user.email?.split("@")[0] || "Tu cuenta",
-                email: userData.user.email || "",
+                display_name: metadata.display_name || authUser.email?.split("@")[0] || "Tu cuenta",
+                email: authUser.email || "",
                 phone: metadata.phone || "",
                 neighborhood: metadata.neighborhood || "",
                 account_type: metadata.account_type || "user",
