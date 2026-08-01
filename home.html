@@ -404,8 +404,7 @@
         const [isLoadingOffers, setIsLoadingOffers] = React.useState(false);
         const [offersStatus, setOffersStatus] = React.useState("");
 
-        React.useEffect(() => {
-          async function loadAccount() {
+        const loadAccount = React.useCallback(async () => {
             const params = new URLSearchParams(window.location.search);
             const typeFromUrl = params.get("type");
             let type = typeFromUrl || localStorage.getItem("donosAccountType") || "user";
@@ -440,10 +439,25 @@
             setAccountPoints(points);
             localStorage.setItem("donosAccountType", type);
             if (name) localStorage.setItem("donosDisplayName", name);
-          }
-
-          loadAccount();
         }, []);
+
+        React.useEffect(() => {
+          loadAccount();
+        }, [loadAccount]);
+
+        React.useEffect(() => {
+          const handleRefresh = () => {
+            if (!document.hidden) loadAccount();
+          };
+
+          document.addEventListener("visibilitychange", handleRefresh);
+          window.addEventListener("focus", handleRefresh);
+
+          return () => {
+            document.removeEventListener("visibilitychange", handleRefresh);
+            window.removeEventListener("focus", handleRefresh);
+          };
+        }, [loadAccount]);
 
         const isBusiness = accountType === "business";
         const displayAccountName = accountName || (isBusiness ? "Empresa" : "Usuario");

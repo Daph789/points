@@ -120,43 +120,121 @@
         ];
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
 
-        React.useEffect(() => {
-          async function loadProfile() {
-            const { data: userData } = await supabaseClient.auth.getUser();
-            const userId = userData.user?.id;
+        const loadProfile = React.useCallback(async () => {
+          const { data: userData } = await supabaseClient.auth.getUser();
+          const currentUserId = userData.user?.id;
 
-            if (!userId) {
-              setStatus("Inicia sesión para ver y mover tus puntos.");
-              return;
-            }
-            setUserId(userId);
-
-            const { data } = await supabaseClient
-              .from("profiles")
-              .select("display_name, points, transaction_id")
-              .eq("id", userId)
-              .maybeSingle();
-
-            if (data?.display_name) setDisplayName(data.display_name);
-            if (data?.transaction_id) {
-              setTransactionId(data.transaction_id);
-              localStorage.setItem("donosTransactionId", data.transaction_id);
-            }
-            setPoints(Number(data?.points || 0));
+          if (!currentUserId) {
+            setStatus("Inicia sesión para ver y mover tus puntos.");
+            return 0;
           }
+          setUserId(currentUserId);
 
-          loadProfile();
+          const { data } = await supabaseClient
+            .from("profiles")
+            .select("display_name, points, transaction_id")
+            .eq("id", currentUserId)
+            .maybeSingle();
+
+          if (data?.display_name) setDisplayName(data.display_name);
+          if (data?.transaction_id) {
+            setTransactionId(data.transaction_id);
+            localStorage.setItem("donosTransactionId", data.transaction_id);
+          }
+          setPoints(Number(data?.points || 0));
+          return Number(data?.points || 0);
         }, []);
 
         React.useEffect(() => {
-          const stripeStatus = new URLSearchParams(window.location.search).get("stripe");
+          loadProfile();
+        }, [loadProfile]);
+
+        React.useEffect(() => {
+          const params = new URLSearchParams(window.location.search);
+          const stripeStatus = params.get("stripe");
+          const sessionId = params.get("session_id");
           if (stripeStatus === "success") {
-            setStatus("Pago recibido. Tus puntos se actualizarán automáticamente en unos segundos.");
+            setStatus("Pago recibido. Sincronizando tus puntos...");
           }
           if (stripeStatus === "cancelled") {
             setStatus("Recarga cancelada. No se ha cobrado nada.");
           }
-        }, []);
+
+          if (stripeStatus !== "success" || !sessionId) return undefined;
+
+          let tries = 0;
+          let isActive = true;
+
+          async function syncRecharge() {
+            tries += 1;
+            try {
+              const response = await fetch(`/api/stripe/recharge-status?session_id=${encodeURIComponent(sessionId)}`);
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.error || "No se ha podido sincronizar.");
+
+              if (typeof data.points === "number") setPoints(data.points);
+              if (data.credited) {
+                setStatus("Puntos añadidos correctamente.");
+                return true;
+              }
+
+              await loadProfile();
+            } catch (error) {
+              await loadProfile();
+            }
+
+            if (tries >= 20 && isActive) {
+              setStatus("Pago recibido. Si el saldo tarda, vuelve a abrir esta página en unos segundos.");
+              return true;
+            }
+
+            return false;
+          }
+
+          syncRecharge();
+          const intervalId = window.setInterval(async () => {
+            const finished = await syncRecharge();
+            if (finished) window.clearInterval(intervalId);
+          }, 2500);
+
+          return () => {
+            isActive = false;
+            window.clearInterval(intervalId);
+          };
+        }, [loadProfile]);
+
+        React.useEffect(() => {
+          if (!userId) return undefined;
+
+          const channel = supabaseClient
+            .channel(`donos-profile-points-${userId}`)
+            .on(
+              "postgres_changes",
+              { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` },
+              (payload) => {
+                if (typeof payload.new?.points === "number") setPoints(payload.new.points);
+              }
+            )
+            .subscribe();
+
+          return () => {
+            supabaseClient.removeChannel(channel);
+          };
+        }, [userId]);
+
+        React.useEffect(() => {
+          const handleRefresh = () => {
+            if (!document.hidden) loadProfile();
+          };
+
+          document.addEventListener("visibilitychange", handleRefresh);
+          window.addEventListener("focus", handleRefresh);
+
+          return () => {
+            document.removeEventListener("visibilitychange", handleRefresh);
+            window.removeEventListener("focus", handleRefresh);
+          };
+        }, [loadProfile]);
 
         async function startRecharge(pack) {
           if (!userId) {

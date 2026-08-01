@@ -129,6 +129,56 @@ app.get("/api/stripe/config", (_request, response) => {
   });
 });
 
+app.get("/api/stripe/recharge-status", async (request, response) => {
+  if (!stripe || !supabaseAdmin) {
+    return response.status(500).json({ error: "Stripe or Supabase admin is not configured" });
+  }
+
+  const sessionId = String(request.query.session_id || "");
+  if (!sessionId.startsWith("cs_")) {
+    return response.status(400).json({ error: "Missing Stripe session" });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const userId = session.metadata?.user_id;
+    const points = Number(session.metadata?.points || 0);
+    const isPaid = session.payment_status === "paid";
+
+    if (userId && points > 0 && isPaid) {
+      const stripeAmounts = await getStripeAmounts(session);
+      const { error } = await supabaseAdmin.rpc("credit_points_from_stripe", {
+        p_user_id: userId,
+        p_points: points,
+        p_stripe_session_id: session.id,
+        p_amount_total: stripeAmounts.amountTotal,
+        p_currency: stripeAmounts.currency,
+        p_stripe_fee_amount: stripeAmounts.feeAmount,
+        p_net_amount: stripeAmounts.netAmount,
+        p_customer_email: session.customer_details?.email || session.customer_email || "",
+      });
+
+      if (error) {
+        console.error("Recharge status credit error:", error);
+        return response.status(500).json({ error: "Could not credit points" });
+      }
+    }
+
+    const { data: profile } = userId
+      ? await supabaseAdmin.from("profiles").select("points").eq("id", userId).maybeSingle()
+      : { data: null };
+
+    response.json({
+      paid: isPaid,
+      credited: isPaid && Boolean(userId),
+      points: Number(profile?.points || 0),
+    });
+  } catch (error) {
+    console.error("Recharge status error:", error);
+    response.status(500).json({ error: "Could not check recharge" });
+  }
+});
+
 app.post("/api/stripe/create-checkout-session", async (request, response) => {
   if (!stripe) {
     return response.status(500).json({ error: "Stripe is not configured" });
@@ -166,7 +216,7 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
         base_amount: String(selectedPack.baseAmount),
         fee_amount: String(selectedPack.feeAmount),
       },
-      success_url: `${origin}/transfer.html?stripe=success`,
+      success_url: `${origin}/transfer.html?stripe=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/transfer.html?stripe=cancelled`,
     });
 

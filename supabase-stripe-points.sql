@@ -48,6 +48,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_inserted_id uuid;
 begin
   insert into public.stripe_point_recharges (
     user_id,
@@ -68,15 +70,16 @@ begin
     coalesce(nullif(p_net_amount, 0), coalesce(p_amount_total, 0) - coalesce(p_stripe_fee_amount, 0)),
     nullif(p_customer_email, ''),
     coalesce(nullif(p_currency, ''), 'eur')
-  );
+  )
+  on conflict (stripe_session_id) do nothing
+  returning id into v_inserted_id;
 
-  update public.profiles
-  set points = points + p_points,
-      updated_at = now()
-  where id = p_user_id;
-exception
-  when unique_violation then
-    null;
+  if v_inserted_id is not null then
+    update public.profiles
+    set points = points + p_points,
+        updated_at = now()
+    where id = p_user_id;
+  end if;
 end;
 $$;
 
