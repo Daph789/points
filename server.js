@@ -34,6 +34,105 @@ const pointPacks = {
   "500": { points: 500, amount: 5120, baseAmount: 5000, feeAmount: 120, label: "500 puntos" },
 };
 
+function generateDonosTransactionId() {
+  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const digits = "0123456789";
+  const characters = [
+    ...Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]),
+    ...Array.from({ length: 8 }, () => digits[Math.floor(Math.random() * digits.length)]),
+  ];
+
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
+  }
+
+  return characters.join("");
+}
+
+function cleanValidDonosId(value) {
+  const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  const letters = clean.replace(/[^A-Z]/g, "").length;
+  const digits = clean.replace(/[^0-9]/g, "").length;
+  return clean.length === 12 && letters === 4 && digits === 8 ? clean : "";
+}
+
+function metadataText(metadata, key) {
+  const value = metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+async function ensureProfileForUser(user) {
+  if (!supabaseAdmin || !user?.id) return null;
+
+  const profileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points";
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("profiles")
+    .select(profileColumns)
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing) return existing;
+
+  const metadata = user.user_metadata || user.raw_user_meta_data || {};
+  const accountType = metadataText(metadata, "account_type") === "business" ? "business" : "user";
+  const businessCategories = Array.isArray(metadata.business_categories) ? metadata.business_categories : null;
+  const displayName =
+    metadataText(metadata, "display_name") ||
+    metadataText(metadata, "full_name") ||
+    String(user.email || "").split("@")[0] ||
+    "Tu cuenta";
+
+  const baseProfile = {
+    id: user.id,
+    account_type: accountType,
+    display_name: displayName,
+    email: user.email || metadataText(metadata, "email"),
+    phone: metadataText(metadata, "phone") || null,
+    neighborhood: metadataText(metadata, "neighborhood") || "Donostia",
+    address: metadataText(metadata, "address") || null,
+    business_categories: businessCategories,
+    tax_id: metadataText(metadata, "tax_id") || null,
+    points: 0,
+  };
+
+  const metadataId = cleanValidDonosId(metadata.transaction_id);
+  const transactionIds = [
+    metadataId,
+    ...Array.from({ length: 8 }, () => generateDonosTransactionId()),
+  ].filter(Boolean);
+
+  let lastError = null;
+
+  for (const transactionId of transactionIds) {
+    const { data: created, error } = await supabaseAdmin
+      .from("profiles")
+      .insert({ ...baseProfile, transaction_id: transactionId })
+      .select(profileColumns)
+      .maybeSingle();
+
+    if (!error && created) return created;
+
+    lastError = error;
+    if (error?.code !== "23505") break;
+  }
+
+  throw lastError || new Error("Could not create profile");
+}
+
+async function ensureProfileForUserId(userId) {
+  if (!supabaseAdmin || !userId) return null;
+
+  const { data: userData, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (error || !userData?.user) {
+    console.error("Could not load auth user:", error);
+    return null;
+  }
+
+  return ensureProfileForUser(userData.user);
+}
+
 app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (request, response) => {
   if (!stripe || !supabaseAdmin) {
     return response.status(500).send("Stripe or Supabase admin is not configured");
@@ -55,6 +154,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
     const points = Number(session.metadata?.points || 0);
 
     if (userId && points > 0 && session.payment_status === "paid") {
+      await ensureProfileForUserId(userId);
       const stripeAmounts = await getStripeAmounts(session);
       const { error } = await supabaseAdmin.rpc("credit_points_from_stripe", {
         p_user_id: userId,
@@ -166,18 +266,13 @@ app.get("/api/me/profile", async (request, response) => {
     return response.status(401).json({ error: "Not authenticated" });
   }
 
-  const { data: profile, error } = await supabaseAdmin
-    .from("profiles")
-    .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const profile = await ensureProfileForUser(userData.user);
+    response.json({ profile: profile || null });
+  } catch (error) {
     console.error("Me profile error:", error);
     return response.status(500).json({ error: "Could not load profile" });
   }
-
-  response.json({ profile: profile || null });
 });
 
 app.get("/api/stripe/config", (_request, response) => {
@@ -203,6 +298,7 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
     const isPaid = session.payment_status === "paid";
 
     if (userId && points > 0 && isPaid) {
+      await ensureProfileForUserId(userId);
       const stripeAmounts = await getStripeAmounts(session);
       const { error } = await supabaseAdmin.rpc("credit_points_from_stripe", {
         p_user_id: userId,
@@ -253,6 +349,135 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
   } catch (error) {
     console.error("Recharge status error:", error);
     response.status(500).json({ error: "Could not check recharge" });
+  }
+});
+
+app.post("/api/purchases/offer", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return response.status(401).json({ error: "Not authenticated" });
+  }
+
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  const user = userData?.user;
+
+  if (userError || !user?.id) {
+    return response.status(401).json({ error: "Not authenticated" });
+  }
+
+  const offerId = String(request.body?.offerId || "");
+  const deliveryMethod = request.body?.deliveryMethod === "home" ? "home" : "pickup";
+  const deliveryAddress = String(request.body?.deliveryAddress || "").trim();
+
+  if (!offerId) {
+    return response.status(400).json({ error: "Missing offer" });
+  }
+
+  try {
+    const buyerProfile = await ensureProfileForUser(user);
+
+    const { data: offer, error: offerError } = await supabaseAdmin
+      .from("business_offers")
+      .select("*")
+      .eq("id", offerId)
+      .maybeSingle();
+
+    if (offerError || !offer) {
+      return response.status(404).json({ error: "offer_not_found" });
+    }
+
+    if (deliveryMethod === "pickup" && offer.delivery_pickup_enabled === false) {
+      return response.status(400).json({ error: "pickup_not_available" });
+    }
+
+    if (deliveryMethod === "home" && offer.delivery_home_enabled !== true) {
+      return response.status(400).json({ error: "home_delivery_not_available" });
+    }
+
+    if (deliveryMethod === "home" && deliveryAddress.length < 4) {
+      return response.status(400).json({ error: "delivery_address_missing" });
+    }
+
+    const receiverId = cleanValidDonosId(offer.receiver_transaction_id);
+    if (!receiverId) {
+      return response.status(400).json({ error: "receiver_missing" });
+    }
+
+    const { data: receiverProfile, error: receiverError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, transaction_id, points")
+      .eq("transaction_id", receiverId)
+      .maybeSingle();
+
+    if (receiverError || !receiverProfile) {
+      return response.status(400).json({ error: "receiver_not_found" });
+    }
+
+    const offerPoints = Math.max(Number(offer.required_points || 0), 0);
+    const deliveryPoints = deliveryMethod === "home" ? Math.max(Number(offer.delivery_home_points || 0), 0) : 0;
+    const totalPoints = offerPoints + deliveryPoints;
+    const buyerPoints = Number(buyerProfile?.points || 0);
+
+    if (buyerPoints < totalPoints) {
+      return response.status(400).json({ error: "insufficient_points" });
+    }
+
+    if (deliveryMethod === "home" && deliveryAddress !== (buyerProfile.address || "")) {
+      await supabaseAdmin.from("profiles").update({ address: deliveryAddress }).eq("id", user.id);
+    }
+
+    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: buyerPoints - totalPoints })
+        .eq("id", user.id)
+        .select("points")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: Number(receiverProfile.points || 0) + totalPoints })
+        .eq("id", receiverProfile.id),
+    ]);
+
+    if (buyerError || receiverUpdateError) {
+      console.error("Purchase points update error:", buyerError || receiverUpdateError);
+      return response.status(500).json({ error: "points_update_failed" });
+    }
+
+    const { data: purchase, error: purchaseError } = await supabaseAdmin
+      .from("purchases")
+      .insert({
+        buyer_id: user.id,
+        offer_id: offer.id,
+        delivery_method: deliveryMethod,
+        offer_points: offerPoints,
+        delivery_points: deliveryPoints,
+        delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
+        total_points: totalPoints,
+        receiver_transaction_id: receiverProfile.transaction_id,
+        receiver_profile_id: receiverProfile.id,
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (purchaseError) {
+      console.error("Purchase insert error:", purchaseError);
+      return response.status(500).json({ error: "purchase_insert_failed" });
+    }
+
+    response.json({
+      purchase_id: purchase?.id,
+      total_points: totalPoints,
+      buyer_points: Number(updatedBuyer?.points || 0),
+      receiver_display_name: receiverProfile.display_name,
+    });
+  } catch (error) {
+    console.error("Purchase error:", error);
+    response.status(500).json({ error: "purchase_failed" });
   }
 });
 

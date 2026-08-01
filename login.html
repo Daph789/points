@@ -102,11 +102,26 @@
 
         async function loadProfileAndRedirect(userId) {
           const next = new URLSearchParams(window.location.search).get("next");
-          const { data: profile } = await supabaseClient
-            .from("profiles")
-            .select("account_type, display_name, transaction_id")
-            .eq("id", userId)
-            .maybeSingle();
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          let profile = null;
+
+          if (accessToken) {
+            const response = await fetch("/api/me/profile", {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) profile = data.profile;
+          }
+
+          if (!profile) {
+            const { data } = await supabaseClient
+              .from("profiles")
+              .select("account_type, display_name, transaction_id")
+              .eq("id", userId)
+              .maybeSingle();
+            profile = data;
+          }
 
           const accountType = profile?.account_type || "user";
           const displayName = profile?.display_name || "";

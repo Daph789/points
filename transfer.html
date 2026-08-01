@@ -161,7 +161,7 @@
             localStorage.setItem("donosTransactionId", data.transaction_id);
           }
           if (data && typeof data.points !== "undefined") {
-            setPoints((current) => Math.max(Number(current || 0), Number(data.points || 0)));
+            setPoints(Number(data.points || 0));
           }
           return Number(data?.points || 0);
         }, []);

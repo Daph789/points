@@ -134,6 +134,18 @@
         return transactionId.replace(/(.{4})(.{4})(.{4})/, "$1-$2-$3");
       }
 
+      async function syncServerProfile() {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return null;
+
+        const response = await fetch("/api/me/profile", {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        return response.ok ? data.profile : null;
+      }
+
       function GoogleIcon() {
         return (
           <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
@@ -255,9 +267,12 @@
             if (error) throw error;
 
             if (data.user && data.session) {
+              const profile = await syncServerProfile();
+              if (profile?.transaction_id) localStorage.setItem("donosTransactionId", profile.transaction_id);
+              if (profile?.display_name) localStorage.setItem("donosDisplayName", profile.display_name);
               setStatus({
                 type: "success",
-                message: `Cuenta creada. Tu ID Donos es ${formatTransactionId(transactionId)}.`,
+                message: `Cuenta creada. Tu ID Donos es ${formatTransactionId(profile?.transaction_id || transactionId)}.`,
               });
             } else {
               setStatus({
