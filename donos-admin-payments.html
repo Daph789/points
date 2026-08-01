@@ -69,6 +69,7 @@
         const [selected, setSelected] = React.useState(null);
         const [status, setStatus] = React.useState("");
         const [isLoading, setIsLoading] = React.useState(false);
+        const [deletingId, setDeletingId] = React.useState("");
 
         React.useEffect(() => {
           if (isUnlocked) loadRecharges();
@@ -96,6 +97,35 @@
             setStatus(error.message || "No se han podido cargar los pagos.");
           } finally {
             setIsLoading(false);
+          }
+        }
+
+        async function deleteRecharge(item) {
+          const profile = item.profiles || {};
+          const label = profile.display_name || item.customer_email || "este cliente";
+          const confirmed = window.confirm(`¿Eliminar este pago de ${label} y retirar ${item.points} pts de su cuenta?`);
+          if (!confirmed) return;
+
+          setStatus("");
+          setDeletingId(item.id);
+
+          try {
+            const response = await fetch("/api/admin/recharges/delete", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, rechargeId: item.id }),
+            });
+            const data = await response.json();
+
+            if (!response.ok) throw new Error(data.error || "No se ha podido eliminar el pago.");
+
+            setRecharges((current) => current.filter((recharge) => recharge.id !== item.id));
+            if (selected?.id === item.id) setSelected(null);
+            setStatus("Pago eliminado y puntos ajustados.");
+          } catch (error) {
+            setStatus(error.message || "No se ha podido eliminar el pago.");
+          } finally {
+            setDeletingId("");
           }
         }
 
@@ -154,7 +184,7 @@
             </section>
 
             <section className="mt-6 overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055]">
-              <div className="hidden grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_auto] gap-3 border-b border-white/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-slate-500 lg:grid">
+              <div className="hidden grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_150px] gap-3 border-b border-white/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-slate-500 lg:grid">
                 <span>Cliente</span>
                 <span>Contacto</span>
                 <span>Fecha</span>
@@ -168,7 +198,7 @@
                 {recharges.map((item) => {
                   const profile = item.profiles || {};
                   return (
-                    <article key={item.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_auto] lg:items-center">
+                    <article key={item.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_150px] lg:items-center">
                       <div>
                         <p className="font-black text-white">{profile.display_name || item.customer_email || "Cliente"}</p>
                         <p className="mt-1 font-mono text-xs font-bold text-slate-500">{formatDonosId(profile.transaction_id)}</p>
@@ -184,9 +214,18 @@
                         <p className="text-sm font-black text-mint">+{item.points} pts</p>
                         <p className="mt-1 text-xs font-bold text-slate-500">Ahora: {profile.points || 0} pts</p>
                       </div>
-                      <button className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink" onClick={() => setSelected(item)}>
-                        Más
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink" onClick={() => setSelected(item)}>
+                          Más
+                        </button>
+                        <button
+                          className="h-10 rounded-2xl border border-coral/25 bg-coral/10 px-3 text-sm font-black text-coral transition hover:bg-coral/15 disabled:opacity-50"
+                          disabled={deletingId === item.id}
+                          onClick={() => deleteRecharge(item)}
+                        >
+                          {deletingId === item.id ? "..." : "Eliminar"}
+                        </button>
+                      </div>
                     </article>
                   );
                 })}
@@ -223,6 +262,14 @@
                     <DetailItem label="Stripe cortó" value={money(selected.stripe_fee_amount, selected.currency)} />
                     <DetailItem label="Neto recibido" value={money(selected.net_amount, selected.currency)} />
                   </div>
+
+                  <button
+                    className="mt-5 h-12 w-full rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral transition hover:bg-coral/15 disabled:opacity-50"
+                    disabled={deletingId === selected.id}
+                    onClick={() => deleteRecharge(selected)}
+                  >
+                    {deletingId === selected.id ? "Eliminando..." : "Eliminar este pago de prueba"}
+                  </button>
                 </section>
               </div>
             )}

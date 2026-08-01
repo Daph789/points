@@ -123,6 +123,32 @@ app.post("/api/admin/recharges", async (request, response) => {
   });
 });
 
+app.post("/api/admin/recharges/delete", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const rechargeId = String(request.body?.rechargeId || "");
+  if (!rechargeId) {
+    return response.status(400).json({ error: "Falta el pago a eliminar" });
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("admin_delete_stripe_recharge", {
+    p_recharge_id: rechargeId,
+  });
+
+  if (error) {
+    console.error("Admin delete recharge error:", error);
+    return response.status(500).json({ error: "No se ha podido eliminar el pago" });
+  }
+
+  response.json({ deleted: data?.[0] || null });
+});
+
 app.get("/api/stripe/config", (_request, response) => {
   response.json({
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",

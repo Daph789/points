@@ -85,6 +85,52 @@ $$;
 
 grant execute on function public.credit_points_from_stripe(uuid, integer, text, integer, text, integer, integer, text) to service_role;
 
+create or replace function public.admin_delete_stripe_recharge(
+  p_recharge_id uuid
+)
+returns table (
+  deleted_id uuid,
+  deleted_user_id uuid,
+  removed_points integer,
+  remaining_points integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_recharge public.stripe_point_recharges%rowtype;
+  v_remaining_points integer := 0;
+begin
+  select *
+  into v_recharge
+  from public.stripe_point_recharges
+  where id = p_recharge_id
+  for update;
+
+  if not found then
+    raise exception 'Recharge not found';
+  end if;
+
+  delete from public.stripe_point_recharges
+  where id = p_recharge_id;
+
+  update public.profiles
+  set points = greatest(points - v_recharge.points, 0),
+      updated_at = now()
+  where id = v_recharge.user_id
+  returning points into v_remaining_points;
+
+  return query select
+    v_recharge.id,
+    v_recharge.user_id,
+    v_recharge.points,
+    coalesce(v_remaining_points, 0);
+end;
+$$;
+
+grant execute on function public.admin_delete_stripe_recharge(uuid) to service_role;
+
 notify pgrst, 'reload schema';
 
 select 'Stripe points ready' as status;
