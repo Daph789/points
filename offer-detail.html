@@ -22,12 +22,15 @@
     </script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
-      html { background: #060914; }
+      html { background: #060914; overflow-x: hidden; }
       body {
+        overflow-x: hidden;
         background:
           radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
           linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
       }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -164,7 +167,7 @@
         };
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl pb-28">
-            <section className="relative min-h-[420px] overflow-hidden rounded-b-[36px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
+            <section className="relative min-h-[360px] overflow-hidden rounded-b-[30px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B] sm:min-h-[420px] sm:rounded-b-[36px]">
               {offer.cover_photo_data_url ? (
                 <button className="absolute inset-0 block h-full w-full cursor-zoom-in" onClick={() => openImage(0)}>
                   <img className="h-full w-full object-cover" src={offer.cover_photo_data_url} alt="" />
@@ -194,7 +197,7 @@
               </header>
               <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
-                <h1 className="mt-2 max-w-3xl text-4xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
+                <h1 className="mt-2 max-w-3xl break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
                 {businessName && (
                   <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
                     <span>{businessName}</span>
@@ -233,7 +236,7 @@
                   {allImages.map((src, index) => (
                     <button
                       key={index}
-                      className="group relative h-40 min-w-[220px] overflow-hidden rounded-3xl border border-white/10 bg-white/[0.055]"
+                      className="group relative h-36 min-w-[180px] overflow-hidden rounded-3xl border border-white/10 bg-white/[0.055] sm:h-40 sm:min-w-[220px]"
                       onClick={() => openImage(index)}
                     >
                       <img className="h-full w-full object-cover transition duration-300 group-hover:scale-105" src={src} alt="" />
@@ -361,13 +364,13 @@
             </section>
 
             <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl">
-              <div className="mx-auto flex max-w-5xl items-center gap-3">
+                <div className="mx-auto flex max-w-5xl items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</p>
                   <p className="truncate text-2xl font-black text-white">{totalPoints} pts</p>
                 </div>
                 <button
-                  className={`h-14 rounded-2xl px-6 text-base font-black transition ${
+                  className={`h-12 rounded-2xl px-5 text-sm font-black transition sm:h-14 sm:px-6 sm:text-base ${
                     canBuy ? "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]" : "bg-white/10 text-slate-500"
                   }`}
                   disabled={!canBuy}

@@ -25,13 +25,16 @@
     </script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
-      html { background: #060914; }
+      html { background: #060914; overflow-x: hidden; }
       body {
+        overflow-x: hidden;
         background:
           radial-gradient(circle at 20% -8%, rgba(66, 242, 179, 0.20), transparent 30%),
           radial-gradient(circle at 88% 8%, rgba(255, 107, 107, 0.13), transparent 32%),
           linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
       }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -288,7 +291,7 @@
         }
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-28 pt-5 sm:px-6">
+          <main className="mx-auto min-h-screen w-full max-w-3xl px-3 pb-28 pt-4 sm:px-6">
             <header className="flex items-center justify-between gap-3">
               <a href="home.html" className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
@@ -306,13 +309,13 @@
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Saldo disponible</p>
                   <h1 className="mt-3 text-2xl font-black text-white">{displayName}</h1>
                   <div className="mt-7 flex flex-wrap items-end justify-between gap-5">
-                    <div>
-                      <p className="text-[62px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(points)}</p>
+                    <div className="min-w-0">
+                      <p className="text-[52px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(points)}</p>
                       <p className="mt-1 text-base font-bold text-slate-300">puntos</p>
                     </div>
                     <div className="rounded-3xl border border-mint/20 bg-mint/10 px-4 py-3 text-right">
                       <p className="text-xs font-semibold text-mint">ID Donos</p>
-                      <p className="mt-1 font-mono text-base font-black text-white">{displayedDonosId || "Inicia sesión"}</p>
+                      <p className="mt-1 break-all font-mono text-sm font-black text-white sm:text-base">{displayedDonosId || "Inicia sesión"}</p>
                     </div>
                   </div>
                   <p className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs font-bold text-slate-400">
@@ -404,13 +407,13 @@
               </div>
             </section>
 
-            <nav className="fixed inset-x-0 bottom-4 z-40 mx-auto w-[min(calc(100%-24px),520px)] rounded-[28px] border border-white/10 bg-[#101522]/88 p-2 shadow-nav backdrop-blur-2xl">
+            <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">
                 {navItems.map((item) => (
                   <a
                     key={item.label}
                     href={item.href}
-                    className={`flex h-14 flex-col items-center justify-center rounded-3xl text-xs font-black transition ${
+                    className={`flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
                       item.active
                         ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]"
                         : "text-slate-400 hover:bg-white/[0.06] hover:text-white"

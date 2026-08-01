@@ -22,13 +22,16 @@
     </script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
-      html { background: #060914; }
+      html { background: #060914; overflow-x: hidden; }
       body {
+        overflow-x: hidden;
         background:
           radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
           radial-gradient(circle at 86% 8%, rgba(255, 107, 107, 0.12), transparent 30%),
           linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
       }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
 
       @keyframes success-pop {
         0% { transform: scale(0.82); opacity: 0; }
@@ -219,7 +222,7 @@
         }
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-3xl px-4 py-5 sm:px-6">
+          <main className="mx-auto min-h-screen w-full max-w-3xl px-3 py-4 sm:px-6">
             <header className="flex items-center justify-between">
               <button className="rounded-full bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => history.back()}>
                 Volver
@@ -233,12 +236,12 @@
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent"></div>
                 <div className="absolute bottom-5 left-5 right-5">
                   <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Resumen</p>
-                  <h1 className="mt-2 text-3xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h1>
+                  <h1 className="mt-2 break-words text-2xl font-black leading-tight text-white sm:text-3xl">{offer.title || "Oferta sin título"}</h1>
                 </div>
               </div>
 
               <div className="space-y-4 p-5">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 min-[380px]:grid-cols-2">
                   <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Tus puntos</p>
                     <p className="mt-2 text-2xl font-black text-white">{userPoints} pts</p>
@@ -361,7 +364,7 @@
                     <div className="mt-5 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 text-left">
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Producto</span>
-                        <span className="text-right text-sm font-black text-white">{successPurchase.title}</span>
+                    <span className="break-words text-right text-sm font-black text-white">{successPurchase.title}</span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Entrega</span>
@@ -381,7 +384,7 @@
                       </div>
                     </div>
 
-                    <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="mt-5 grid gap-3 min-[380px]:grid-cols-2">
                       <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" href="home.html">
                         Inicio
                       </a>

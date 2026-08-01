@@ -38,13 +38,25 @@
 
       html {
         background: #060914;
+        overflow-x: hidden;
       }
 
       body {
+        min-width: 0;
+        overflow-x: hidden;
         background:
           radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
           radial-gradient(circle at 86% 8%, rgba(255, 107, 107, 0.13), transparent 30%),
           linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
+      }
+
+      #root, main {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+
+      * {
+        min-width: 0;
       }
 
       .glass {
@@ -191,9 +203,9 @@
 
       function Category({ category, active, onClick }) {
         return (
-          <button className="min-w-[82px] text-center focus:outline-none" onClick={onClick}>
+          <button className="min-w-[74px] text-center focus:outline-none sm:min-w-[82px]" onClick={onClick}>
             <div
-              className={`mx-auto grid h-[70px] w-[70px] place-items-center rounded-full bg-gradient-to-br ${category.color} ${category.tint} text-3xl ring-1 transition hover:scale-[1.03] ${
+              className={`mx-auto grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br ${category.color} ${category.tint} text-2xl ring-1 transition hover:scale-[1.03] sm:h-[70px] sm:w-[70px] sm:text-3xl ${
                 active ? "ring-mint ring-offset-4 ring-offset-[#060914]" : "ring-white/20"
               }`}
             >
@@ -534,15 +546,15 @@
         }
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-28 pt-5 sm:px-6 lg:px-8 lg:pb-10">
+	          <main className="mx-auto min-h-screen w-full max-w-6xl px-3 pb-28 pt-4 sm:px-6 lg:px-8 lg:pb-10">
             <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
               <div className="lg:sticky lg:top-6">
-                <header className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">
+                <header className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow sm:h-11 sm:w-11">
                       D
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-lg font-black leading-tight">Donos</p>
                         {isBusiness && (
@@ -550,28 +562,28 @@
                             Soy Empresa
                           </span>
                         )}
-                        <span className="max-w-[170px] truncate rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-slate-200">
+                        <span className="max-w-[145px] truncate rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-slate-200 sm:max-w-[170px]">
                           {displayAccountName}
                         </span>
                       </div>
                       <p className="text-xs font-semibold text-slate-400">Inicio</p>
                     </div>
                   </div>
-                  <button className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-xl">
+                  <button className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-xl sm:h-11 sm:w-11">
                     ◐
                   </button>
                 </header>
 
-                <section className="mt-6 rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow sm:p-8">
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Saldo Donos</p>
+                <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:mt-6 sm:rounded-[34px] sm:p-8">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint sm:text-sm sm:tracking-[0.18em]">Saldo Donos</p>
                   <div className="mt-4">
-                    <p className="text-[62px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(accountPoints)}</p>
+                    <p className="text-[52px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(accountPoints)}</p>
                     <p className="mt-1 text-base font-bold text-slate-300">puntos</p>
                   </div>
-                  <div className="mt-6 flex items-center justify-between gap-3 rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                    <div className="min-w-0">
+                  <div className="mt-5 flex flex-col items-start gap-3 rounded-3xl border border-mint/20 bg-mint/10 p-4 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between sm:mt-6">
+                    <div className="w-full min-w-0">
                       <p className="text-xs font-semibold text-mint">ID Donos</p>
-                      <p className="mt-1 truncate font-mono text-lg font-black tracking-normal text-white">
+                      <p className="mt-1 break-all font-mono text-base font-black tracking-normal text-white sm:text-lg">
                         {displayedDonosId || (isLoggedIn ? "ID no disponible" : "Inicia sesión")}
                       </p>
                     </div>
@@ -597,9 +609,9 @@
               <section className="space-y-7">
                 <section>
                   <div className="flex items-end justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Cerca de ti</p>
-                      <h1 className="mt-2 text-2xl font-black tracking-normal text-white sm:text-3xl">
+                      <h1 className="mt-2 max-w-full break-words text-[26px] font-black leading-tight tracking-normal text-white sm:text-3xl">
                         Aprovechar actividades culturales
                       </h1>
                     </div>
@@ -625,7 +637,7 @@
                     )}
                   </div>
 
-                  <div className="no-scrollbar -mx-4 mt-5 flex gap-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
+                  <div className="no-scrollbar -mx-3 mt-5 flex max-w-[100vw] gap-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:gap-4 sm:px-0">
                     {categories.map((category) => (
                       <Category
                         key={category.label}
@@ -676,7 +688,7 @@
                   </section>
                 )}
 
-                <section className="pt-28 lg:pt-0">
+                <section className="pt-10 lg:pt-0">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
                       <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Feed</p>
@@ -696,13 +708,13 @@
               </section>
             </section>
 
-            <nav className="fixed inset-x-0 bottom-4 z-40 mx-auto w-[min(calc(100%-24px),520px)] rounded-[28px] border border-white/10 bg-[#101522]/88 p-2 shadow-nav backdrop-blur-2xl">
+            <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">
                 {navItems.map((item) => (
                   <a
                     key={item.label}
                     href={item.href}
-                    className={`flex h-14 flex-col items-center justify-center rounded-3xl text-xs font-black transition ${
+                    className={`flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
                       item.active
                         ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]"
                         : "text-slate-400 hover:bg-white/[0.06] hover:text-white"

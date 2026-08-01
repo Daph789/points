@@ -36,6 +36,20 @@
 
       html {
         background: #070a12;
+        overflow-x: hidden;
+      }
+
+      body {
+        overflow-x: hidden;
+      }
+
+      #root, main {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+
+      * {
+        min-width: 0;
       }
 
       .mesh {
@@ -176,7 +190,7 @@
       }
 
       const inputClass =
-        "h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
+        "h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
 
       function App() {
         const [accountType, setAccountType] = React.useState("");
@@ -311,40 +325,40 @@
         }
 
         const profileCards = (
-          <div className="mt-7 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid gap-3 sm:mt-7 sm:grid-cols-2">
             <button
               type="button"
               onClick={() => chooseAccountType("user")}
-              className={`rounded-[26px] border p-5 text-left transition hover:translate-y-[-2px] ${
+              className={`max-w-full rounded-[24px] border p-4 text-left transition hover:translate-y-[-2px] sm:rounded-[26px] sm:p-5 ${
                 isUser
                   ? "border-mint/60 bg-mint/10 shadow-glow"
                   : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
               }`}
             >
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-mint text-3xl">👤</div>
-              <p className="mt-4 text-lg font-black text-white">Soy un usuario</p>
-              <p className="mt-2 text-sm leading-5 text-slate-400">Chollos, planes culturales y compraventa entre jóvenes.</p>
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-2xl sm:h-14 sm:w-14 sm:text-3xl">👤</div>
+              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un usuario</p>
+              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Chollos, planes culturales y compraventa entre jóvenes.</p>
             </button>
 
             <button
               type="button"
               onClick={() => chooseAccountType("business")}
-              className={`rounded-[26px] border p-5 text-left transition hover:translate-y-[-2px] ${
+              className={`max-w-full rounded-[24px] border p-4 text-left transition hover:translate-y-[-2px] sm:rounded-[26px] sm:p-5 ${
                 isBusiness
                   ? "border-mint/60 bg-mint/10 shadow-glow"
                   : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
               }`}
             >
-              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-sun text-3xl">🏢</div>
-              <p className="mt-4 text-lg font-black text-white">Soy un comercio / Empresa</p>
-              <p className="mt-2 text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donos.</p>
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl sm:h-14 sm:w-14 sm:text-3xl">🏢</div>
+              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un comercio / Empresa</p>
+              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donos.</p>
             </button>
           </div>
         );
 
         return (
           <main className="mesh min-h-screen overflow-hidden">
-            <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-4 py-5 sm:px-6 lg:grid-cols-[1fr_0.92fr] lg:px-8 lg:py-10">
+            <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-3 py-4 sm:px-6 lg:grid-cols-[1fr_0.92fr] lg:px-8 lg:py-10">
               <aside className="hidden lg:block">
                 <div className="max-w-xl">
                   <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-slate-200">
@@ -391,18 +405,18 @@
               </aside>
 
               <section className="mx-auto w-full max-w-md lg:max-w-[520px]">
-                <div className="mb-5 flex items-center justify-between lg:hidden">
-                  <div className="flex items-center gap-3">
-                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink">D</div>
-                    <div>
+                <div className="mb-5 flex items-center justify-between gap-3 lg:hidden">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink sm:h-11 sm:w-11">D</div>
+                    <div className="min-w-0">
                       <p className="text-lg font-black">Donos</p>
                       <p className="text-xs font-medium text-slate-400">Chollos locales</p>
                     </div>
                   </div>
-                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">Beta</span>
+                  <span className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">Beta</span>
                 </div>
 
-                <div className="glass rounded-[30px] border border-white/10 p-5 shadow-2xl shadow-black/30 sm:p-7">
+                <div className="glass max-w-full rounded-[26px] border border-white/10 p-4 shadow-2xl shadow-black/30 sm:rounded-[30px] sm:p-7">
                   <div className="hidden items-center gap-3 lg:flex">
                     <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-xl font-black text-ink">D</div>
                     <div>
@@ -413,7 +427,7 @@
 
                   <div className="mt-1 lg:mt-8">
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Crear cuenta</p>
-                    <h2 className="mt-2 text-3xl font-black tracking-normal text-white sm:text-4xl">
+                    <h2 className="mt-2 break-words text-[32px] font-black leading-tight tracking-normal text-white sm:text-4xl">
                       {accountType ? (isBusiness ? "Registro Empresa" : "Registro Usuario") : "Elige tu perfil"}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
@@ -429,11 +443,11 @@
                     <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
                       {isUser && (
                         <>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-2 gap-2 sm:gap-3">
                             <button
                               type="button"
                               onClick={() => handleSocialLogin("google")}
-                              className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
+                              className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-2 text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
                             >
                               <GoogleIcon />
                               Google
@@ -441,7 +455,7 @@
                             <button
                               type="button"
                               onClick={() => handleSocialLogin("apple")}
-                              className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
+                              className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-2 text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
                             >
                               <AppleIcon />
                               Apple
@@ -471,7 +485,7 @@
                         <>
                           <div>
                             <p className="mb-2 text-sm font-medium text-slate-300">Categorías</p>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid gap-2 min-[390px]:grid-cols-2">
                               {businessCategories.map((item) => {
                                 const isSelected = businessCategoriesSelected.includes(item);
                                 return (
@@ -518,7 +532,7 @@
                       {isBusiness && (
                         <>
                           <Field label="Teléfono de contacto">
-                            <div className="grid grid-cols-[96px_1fr] gap-2">
+	                            <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
                               <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
                                 <span>🇪🇸</span>
                                 <span>+34</span>
@@ -611,7 +625,7 @@
                           checked={acceptedTerms}
                           onChange={(event) => setAcceptedTerms(event.target.checked)}
                         />
-                        <span className="text-xs leading-5 text-slate-400">
+	                        <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
                           Acepto las condiciones de Donos y recibir avisos importantes de mi cuenta.
                         </span>
                       </label>
