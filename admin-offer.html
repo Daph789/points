@@ -288,6 +288,7 @@
             let profile = {
               display_name: localName || metadata.display_name || "",
               transaction_id: localTransactionId || metadata.transaction_id || "",
+              is_verified: false,
             };
 
             if (!userId) {
@@ -307,7 +308,7 @@
 
             const { data } = await supabaseClient
               .from("profiles")
-              .select("display_name, transaction_id")
+              .select("display_name, transaction_id, is_verified")
               .eq("id", userId)
               .maybeSingle();
 
@@ -315,6 +316,7 @@
               profile = {
                 display_name: data.display_name || profile.display_name,
                 transaction_id: data.transaction_id || profile.transaction_id,
+                is_verified: Boolean(data.is_verified),
               };
             }
 
@@ -530,6 +532,8 @@
               cart_button_text: cartButtonText.trim() || "Poner en la cesta",
               receiver_transaction_id: cleanDonosId(receiverId) || null,
               receiver_display_name: receiverName || null,
+              business_display_name: businessProfile?.display_name || null,
+              business_is_verified: Boolean(businessProfile?.is_verified),
               delivery_home_enabled: homeDeliveryEnabled,
               delivery_home_price: homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: homeDeliveryEnabled ? deliveryPoints : null,

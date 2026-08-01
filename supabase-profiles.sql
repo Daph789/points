@@ -13,12 +13,16 @@ create table if not exists public.profiles (
     and length(regexp_replace(transaction_id, '[^A-Z]', '', 'g')) = 4
     and length(regexp_replace(transaction_id, '[^0-9]', '', 'g')) = 8
   ),
+  is_verified boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.profiles
   add column if not exists transaction_id text;
+
+alter table public.profiles
+  add column if not exists is_verified boolean not null default false;
 
 alter table public.profiles
   add column if not exists account_type text not null default 'user';
@@ -261,6 +265,8 @@ create table if not exists public.business_offers (
   cart_button_text text,
   receiver_transaction_id text,
   receiver_display_name text,
+  business_display_name text,
+  business_is_verified boolean not null default false,
   delivery_home_enabled boolean not null default false,
   delivery_home_price numeric,
   delivery_home_points integer,

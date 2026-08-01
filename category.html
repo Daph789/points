@@ -60,6 +60,8 @@
           offer.title,
           offer.address,
           offer.author,
+          offer.business_display_name,
+          offer.receiver_display_name,
           offer.description,
           offer.categories?.join(" "),
         ]
@@ -71,6 +73,7 @@
 
       function OfferCard({ offer }) {
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         return (
           <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
             <button className="block w-full text-left" onClick={() => window.location.href = `offer-detail.html?id=${offer.id}`}>
@@ -102,6 +105,14 @@
                     {offer.base_price !== null && <p className="text-xl font-black text-slate-400 line-through">{formatEuro(offer.base_price)}</p>}
                   </div>
                 </div>
+                {businessName && (
+                  <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200">
+                    <span className="truncate">{businessName}</span>
+                    {offer.business_is_verified && (
+                      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-mint text-[11px] font-black text-ink">✓</span>
+                    )}
+                  </div>
+                )}
                 <div className="mt-4 h-11 rounded-2xl bg-white/[0.08] py-3 text-center text-sm font-black text-white ring-1 ring-white/10">Ver detalles</div>
               </div>
             </button>

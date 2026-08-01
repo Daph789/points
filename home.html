@@ -228,6 +228,7 @@
       function OfferCard({ offer, onOpen }) {
         const firstCategory = offer.categories?.[0] || "Oferta";
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         return (
           <article
             className="cursor-pointer overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20 transition hover:translate-y-[-2px]"
@@ -257,6 +258,12 @@
                 <div>
                   <h3 className="text-base font-black text-white">{offer.title || "Oferta sin título"}</h3>
                   <p className="mt-1 text-sm font-medium text-slate-400">{offer.address || "Donostia"}</p>
+                  {businessName && (
+                    <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/[0.07] px-2.5 py-1 text-xs font-black text-slate-200 ring-1 ring-white/10">
+                      <span className="truncate">{businessName}</span>
+                      {offer.business_is_verified && <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-mint text-[10px] text-ink">✓</span>}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   {offer.base_price !== null && (
@@ -282,6 +289,7 @@
         if (!offer) return null;
 
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const detailItems = [
           ["Dirección", offer.address],
           ["Categoría", offer.categories?.join(", ")],
@@ -307,9 +315,15 @@
                   ×
                 </button>
                 <div className="absolute bottom-5 left-5 right-5">
-                  <p className="text-sm font-black uppercase tracking-[0.16em] text-ink/70">Detalle</p>
-                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h2>
-                </div>
+	                  <p className="text-sm font-black uppercase tracking-[0.16em] text-ink/70">Detalle</p>
+	                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h2>
+	                  {businessName && (
+	                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur">
+	                      <span>{businessName}</span>
+	                      {offer.business_is_verified && <span className="grid h-5 w-5 place-items-center rounded-full bg-mint text-[11px] text-ink">✓</span>}
+	                    </div>
+	                  )}
+	                </div>
                 <div className="absolute bottom-5 right-5 text-7xl drop-shadow-2xl" aria-hidden="true">📚</div>
               </div>
 

@@ -65,7 +65,7 @@ function metadataText(metadata, key) {
 async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
-  const profileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points";
+  const profileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
   const { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -95,6 +95,7 @@ async function ensureProfileForUser(user) {
     business_categories: businessCategories,
     tax_id: metadataText(metadata, "tax_id") || null,
     points: 0,
+    is_verified: false,
   };
 
   const metadataId = cleanValidDonosId(metadata.transaction_id);
@@ -205,7 +206,7 @@ app.post("/api/admin/recharges", async (request, response) => {
   if (userIds.length > 0) {
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified")
       .in("id", userIds);
 
     if (profilesError) {
@@ -247,6 +248,110 @@ app.post("/api/admin/recharges/delete", async (request, response) => {
   }
 
   response.json({ deleted: data?.[0] || null });
+});
+
+app.post("/api/admin/accounts", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const [{ data: accounts, error: accountsError }, { data: recharges, error: rechargesError }] = await Promise.all([
+    supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, created_at")
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("stripe_point_recharges")
+      .select("amount_total, stripe_fee_amount, net_amount, points"),
+  ]);
+
+  if (accountsError) {
+    console.error("Admin accounts error:", accountsError);
+    return response.status(500).json({ error: "No se han podido cargar las cuentas" });
+  }
+
+  if (rechargesError) {
+    console.error("Admin accounts recharges error:", rechargesError);
+  }
+
+  const enrichedAccounts = (accounts || []).map((account) => {
+    const points = Number(account.points || 0);
+    return {
+      ...account,
+      point_value_cents: points * 10,
+    };
+  });
+
+  const totalPoints = enrichedAccounts.reduce((sum, account) => sum + Number(account.points || 0), 0);
+  const totalPaid = (recharges || []).reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
+  const totalFees = (recharges || []).reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
+  const totalNet = (recharges || []).reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+  const totalLiability = totalPoints * 10;
+
+  response.json({
+    accounts: enrichedAccounts,
+    summary: {
+      total_accounts: enrichedAccounts.length,
+      total_users: enrichedAccounts.filter((account) => account.account_type !== "business").length,
+      total_businesses: enrichedAccounts.filter((account) => account.account_type === "business").length,
+      total_verified: enrichedAccounts.filter((account) => account.is_verified).length,
+      total_points: totalPoints,
+      total_point_value_cents: totalLiability,
+      total_paid_cents: totalPaid,
+      total_stripe_fees_cents: totalFees,
+      total_net_cents: totalNet,
+      reserve_margin_cents: totalNet - totalLiability,
+    },
+  });
+});
+
+app.post("/api/admin/accounts/verify", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const profileId = String(request.body?.profileId || "");
+  const isVerified = Boolean(request.body?.isVerified);
+
+  if (!profileId) {
+    return response.status(400).json({ error: "Falta la cuenta" });
+  }
+
+  const { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .update({ is_verified: isVerified })
+    .eq("id", profileId)
+    .select("id, display_name, account_type, is_verified")
+    .maybeSingle();
+
+  if (error || !profile) {
+    console.error("Admin verify account error:", error);
+    return response.status(500).json({ error: "No se ha podido actualizar la cuenta" });
+  }
+
+  if (profile.account_type === "business") {
+    const { error: offersError } = await supabaseAdmin
+      .from("business_offers")
+      .update({
+        business_display_name: profile.display_name,
+        business_is_verified: profile.is_verified,
+      })
+      .eq("business_id", profile.id);
+
+    if (offersError) {
+      console.error("Admin verify offers sync error:", offersError);
+    }
+  }
+
+  response.json({ profile });
 });
 
 app.get("/api/me/profile", async (request, response) => {

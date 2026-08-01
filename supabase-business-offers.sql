@@ -20,6 +20,8 @@ create table if not exists public.business_offers (
   cart_button_text text,
   receiver_transaction_id text,
   receiver_display_name text,
+  business_display_name text,
+  business_is_verified boolean not null default false,
   delivery_home_enabled boolean not null default false,
   delivery_home_price numeric,
   delivery_home_points integer,
@@ -90,6 +92,12 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists receiver_display_name text;
+
+alter table public.business_offers
+  add column if not exists business_display_name text;
+
+alter table public.business_offers
+  add column if not exists business_is_verified boolean not null default false;
 
 alter table public.business_offers
   add column if not exists delivery_home_enabled boolean not null default false;

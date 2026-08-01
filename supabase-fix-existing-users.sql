@@ -17,6 +17,9 @@ alter table public.profiles
   add column if not exists transaction_id text;
 
 alter table public.profiles
+  add column if not exists is_verified boolean not null default false;
+
+alter table public.profiles
   alter column phone drop not null;
 
 create or replace function public.generate_donos_transaction_id()

@@ -106,6 +106,7 @@
         const basePoints = Number(offer.required_points || 0);
         const deliveryExtraPoints = deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0;
         const totalPoints = basePoints + deliveryExtraPoints;
+        const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const canBuy = Boolean(deliveryChoice && totalPoints > 0);
         const goToCheckout = () => {
           if (!canBuy) return;
@@ -183,6 +184,14 @@
               <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
                 <h1 className="mt-2 max-w-3xl text-4xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
+                {businessName && (
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
+                    <span>{businessName}</span>
+                    {offer.business_is_verified && (
+                      <span className="grid h-6 w-6 place-items-center rounded-full bg-mint text-xs font-black text-ink">✓</span>
+                    )}
+                  </div>
+                )}
                 {offer.author && (
                   <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
                     <span className="grid h-7 w-7 place-items-center rounded-full bg-white/10 text-xs">✦</span>

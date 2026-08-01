@@ -70,6 +70,7 @@
         const [status, setStatus] = React.useState("");
         const [isLoading, setIsLoading] = React.useState(false);
         const [deletingId, setDeletingId] = React.useState("");
+        const [search, setSearch] = React.useState("");
 
         React.useEffect(() => {
           if (isUnlocked) loadRecharges();
@@ -155,6 +156,20 @@
         const totalPaid = recharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
         const totalFees = recharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
         const totalNet = recharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+        const filteredRecharges = recharges.filter((item) => {
+          const profile = item.profiles || {};
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            profile.display_name,
+            profile.email,
+            profile.phone,
+            profile.transaction_id,
+            profile.neighborhood,
+            item.customer_email,
+            item.stripe_session_id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -163,9 +178,14 @@
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
                 <h1 className="mt-1 text-4xl font-black text-white">Pagos Stripe</h1>
               </div>
-              <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" onClick={loadRecharges}>
-                Actualizar
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <a className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" href="donos-admin-accounts.html">
+                  Ver reserva por cuenta
+                </a>
+                <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" onClick={loadRecharges}>
+                  Actualizar
+                </button>
+              </div>
             </header>
 
             <section className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -183,6 +203,18 @@
               </div>
             </section>
 
+            <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3">
+              <label className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                <input
+                  className="h-11 min-w-0 flex-1 bg-transparent text-base font-bold text-white outline-none placeholder:text-slate-500"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar pago, email, ID Donos, cliente..."
+                />
+              </label>
+            </section>
+
             <section className="mt-6 overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055]">
               <div className="hidden grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_150px] gap-3 border-b border-white/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-slate-500 lg:grid">
                 <span>Cliente</span>
@@ -195,7 +227,7 @@
               </div>
 
               <div className="divide-y divide-white/10">
-                {recharges.map((item) => {
+                {filteredRecharges.map((item) => {
                   const profile = item.profiles || {};
                   return (
                     <article key={item.id} className="grid gap-3 px-5 py-4 lg:grid-cols-[1.25fr_1fr_.8fr_.8fr_.8fr_.8fr_150px] lg:items-center">
@@ -231,8 +263,10 @@
                 })}
               </div>
 
-              {recharges.length === 0 && (
-                <div className="p-6 text-sm font-bold text-slate-300">Todavía no hay recargas registradas.</div>
+              {filteredRecharges.length === 0 && (
+                <div className="p-6 text-sm font-bold text-slate-300">
+                  {recharges.length === 0 ? "Todavía no hay recargas registradas." : "No hay resultados para esta búsqueda."}
+                </div>
               )}
             </section>
 
