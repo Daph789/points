@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
       tailwind.config = {
@@ -79,11 +80,26 @@
       function App() {
         const [purchase, setPurchase] = React.useState(null);
         const [status, setStatus] = React.useState("Cargando pedido...");
+        const qrRef = React.useRef(null);
         const purchaseId = new URLSearchParams(window.location.search).get("id");
 
         React.useEffect(() => {
           loadPurchase();
         }, []);
+
+        React.useEffect(() => {
+          if (!purchase?.qr_token || !qrRef.current || !window.QRCode) return;
+          qrRef.current.innerHTML = "";
+          const validationUrl = `${window.location.origin}/validate-ticket.html?ticket=${encodeURIComponent(purchase.qr_token)}`;
+          new window.QRCode(qrRef.current, {
+            text: validationUrl,
+            width: 176,
+            height: 176,
+            colorDark: "#060914",
+            colorLight: "#ffffff",
+            correctLevel: window.QRCode.CorrectLevel.H,
+          });
+        }, [purchase?.qr_token]);
 
         async function loadPurchase() {
           if (!purchaseId) {
@@ -126,7 +142,7 @@
 
         const offer = purchase.offer || {};
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
-        const image = offer.cover_image || offer.presentation_images?.[0];
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -158,6 +174,23 @@
                   <InfoCard label="Entrega" value={`${purchase.delivery_points || 0} pts`} />
                 </div>
 
+                <section className="grid gap-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 sm:grid-cols-[210px_1fr] sm:items-center">
+                  <div className="mx-auto rounded-[26px] bg-white p-4 shadow-glow">
+                    <div ref={qrRef} className="grid h-44 w-44 place-items-center text-xs font-black text-ink"></div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Billete Donos</p>
+                    <h2 className="mt-2 text-2xl font-black text-white">Código de validación</h2>
+                    <div className="mt-4 grid gap-3 min-[430px]:grid-cols-2">
+                      <InfoCard label="Validación" value={purchase.validation_code} />
+                      <InfoCard label="Seguridad" value={purchase.security_code} />
+                    </div>
+                    <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">
+                      Enseña este QR o estos dos códigos al comercio para validar tu compra.
+                    </p>
+                  </div>
+                </section>
+
                 <section className="rounded-[28px] border border-white/10 bg-[#0D111D] p-4">
                   <p className="text-sm font-black text-white">Resumen del pedido</p>
                   <div className="mt-4 space-y-3 text-sm font-bold">
@@ -177,6 +210,18 @@
                       <span className="text-slate-400">ID receptor</span>
                       <span className="break-all text-right font-mono text-white">{purchase.receiver_transaction_id}</span>
                     </div>
+                    <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
+                      <span className="text-slate-400">Validez QR</span>
+                      <span className="text-right text-white">
+                        Desde {purchase.qr_valid_from || "hoy"}{purchase.qr_valid_until ? ` hasta ${purchase.qr_valid_until}` : ""}
+                      </span>
+                    </div>
+                    {purchase.verified_at && (
+                      <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
+                        <span className="text-slate-400">Estado</span>
+                        <span className="text-right text-coral">Ya validado</span>
+                      </div>
+                    )}
                   </div>
                 </section>
 

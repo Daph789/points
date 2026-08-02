@@ -12,11 +12,63 @@ create table if not exists public.purchases (
   total_points integer not null,
   receiver_transaction_id text not null,
   receiver_profile_id uuid not null references public.profiles(id),
+  validation_code text,
+  security_code text,
+  qr_token text,
+  qr_valid_from date default current_date,
+  qr_valid_until date,
+  verified_at timestamptz,
+  verified_by uuid references auth.users(id),
+  verification_method text,
+  verification_count integer not null default 0,
+  last_verified_at timestamptz,
   created_at timestamptz not null default now()
 );
 
 alter table public.purchases
   add column if not exists delivery_address text;
+
+alter table public.purchases
+  add column if not exists validation_code text;
+
+alter table public.purchases
+  add column if not exists security_code text;
+
+alter table public.purchases
+  add column if not exists qr_token text;
+
+alter table public.purchases
+  add column if not exists qr_valid_from date default current_date;
+
+alter table public.purchases
+  add column if not exists qr_valid_until date;
+
+alter table public.purchases
+  add column if not exists verified_at timestamptz;
+
+alter table public.purchases
+  add column if not exists verified_by uuid references auth.users(id);
+
+alter table public.purchases
+  add column if not exists verification_method text;
+
+alter table public.purchases
+  add column if not exists verification_count integer not null default 0;
+
+alter table public.purchases
+  add column if not exists last_verified_at timestamptz;
+
+alter table public.business_offers
+  add column if not exists qr_valid_from date;
+
+alter table public.business_offers
+  add column if not exists qr_valid_until date;
+
+create unique index if not exists purchases_validation_code_key
+  on public.purchases(validation_code);
+
+create unique index if not exists purchases_qr_token_key
+  on public.purchases(qr_token);
 
 alter table public.purchases enable row level security;
 
@@ -134,7 +186,12 @@ begin
     delivery_address,
     total_points,
     receiver_transaction_id,
-    receiver_profile_id
+    receiver_profile_id,
+    validation_code,
+    security_code,
+    qr_token,
+    qr_valid_from,
+    qr_valid_until
   )
   values (
     buyer_profile.id,
@@ -145,7 +202,12 @@ begin
     nullif(trim(coalesce(p_delivery_address, '')), ''),
     total_cost,
     receiver_profile.transaction_id,
-    receiver_profile.id
+    receiver_profile.id,
+    upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 7)),
+    lpad(floor(random() * 10000)::int::text, 4, '0'),
+    gen_random_uuid()::text,
+    coalesce(offer_row.qr_valid_from, offer_row.start_date, current_date),
+    coalesce(offer_row.qr_valid_until, offer_row.end_date)
   )
   returning id into new_purchase_id;
 

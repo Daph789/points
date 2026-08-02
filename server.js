@@ -5,6 +5,7 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomInt, randomUUID } from "node:crypto";
 
 dotenv.config({ path: ".env.local" });
 
@@ -55,6 +56,27 @@ function cleanValidDonosId(value) {
   const letters = clean.replace(/[^A-Z]/g, "").length;
   const digits = clean.replace(/[^0-9]/g, "").length;
   return clean.length === 12 && letters === 4 && digits === 8 ? clean : "";
+}
+
+function generateTicketValidationCode() {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  return Array.from({ length: 7 }, () => alphabet[randomInt(alphabet.length)]).join("");
+}
+
+function generateTicketSecurityCode() {
+  return Array.from({ length: 4 }, () => String(randomInt(10))).join("");
+}
+
+function cleanTicketValidationCode(value) {
+  return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 7);
+}
+
+function cleanTicketSecurityCode(value) {
+  return String(value || "").replace(/[^0-9]/g, "").slice(0, 4);
+}
+
+function todayDateString() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function metadataText(metadata, key) {
@@ -403,7 +425,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, title, cover_image, presentation_images, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -440,7 +462,7 @@ app.get("/api/me/purchases", async (request, response) => {
 
     const { data: purchases, error } = await supabaseAdmin
       .from("purchases")
-      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, created_at")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, validation_code, security_code, qr_token, qr_valid_from, qr_valid_until, verified_at, last_verified_at, verification_count, created_at")
       .eq("buyer_id", auth.user.id)
       .order("created_at", { ascending: false })
       .limit(250);
@@ -472,7 +494,7 @@ app.get("/api/me/purchases/:id", async (request, response) => {
 
     const { data: purchase, error } = await supabaseAdmin
       .from("purchases")
-      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, created_at")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, validation_code, security_code, qr_token, qr_valid_from, qr_valid_until, verified_at, last_verified_at, verification_count, created_at")
       .eq("id", request.params.id)
       .eq("buyer_id", auth.user.id)
       .maybeSingle();
@@ -491,6 +513,108 @@ app.get("/api/me/purchases/:id", async (request, response) => {
   } catch (error) {
     console.error("Purchase detail fatal error:", error);
     response.status(500).json({ error: "purchase_detail_failed" });
+  }
+});
+
+app.post("/api/business/tickets/verify", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const validationCode = cleanTicketValidationCode(request.body?.validationCode);
+  const securityCode = cleanTicketSecurityCode(request.body?.securityCode);
+  const qrToken = String(request.body?.qrToken || "").trim();
+  const method = qrToken ? "qr" : "manual";
+
+  if (!qrToken && (validationCode.length !== 7 || securityCode.length !== 4)) {
+    return response.status(400).json({ error: "missing_ticket_codes" });
+  }
+
+  try {
+    const businessProfile = await ensureProfileForUser(auth.user);
+    if (businessProfile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    let query = supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, validation_code, security_code, qr_token, qr_valid_from, qr_valid_until, verified_at, verified_by, verification_method, verification_count, last_verified_at, created_at")
+      .limit(1);
+
+    query = qrToken
+      ? query.eq("qr_token", qrToken)
+      : query.eq("validation_code", validationCode).eq("security_code", securityCode);
+
+    const { data: purchaseRows, error: purchaseError } = await query;
+    const purchase = purchaseRows?.[0];
+
+    if (purchaseError) {
+      console.error("Ticket verification lookup error:", purchaseError);
+      return response.status(500).json({ error: "ticket_lookup_failed" });
+    }
+
+    if (!purchase) return response.status(404).json({ error: "ticket_not_found" });
+
+    const [enriched] = await enrichPurchases([purchase]);
+    const offer = enriched.offer || {};
+
+    if (offer.business_id !== auth.user.id && purchase.receiver_profile_id !== auth.user.id) {
+      return response.status(403).json({ error: "ticket_not_owned_by_business" });
+    }
+
+    const today = todayDateString();
+    const validFrom = purchase.qr_valid_from || offer.qr_valid_from || offer.start_date || null;
+    const validUntil = purchase.qr_valid_until || offer.qr_valid_until || offer.end_date || null;
+    const notStarted = validFrom && today < validFrom;
+    const expired = validUntil && today > validUntil;
+    const alreadyVerified = Boolean(purchase.verified_at);
+    const ticketStatus = alreadyVerified ? "already_verified" : notStarted ? "not_started" : expired ? "expired" : "valid";
+
+    const shouldConsumeTicket = ticketStatus === "valid";
+    const { data: updatedPurchase, error: updateError } = await supabaseAdmin
+      .from("purchases")
+      .update({
+        verified_at: shouldConsumeTicket ? (purchase.verified_at || new Date().toISOString()) : purchase.verified_at,
+        verified_by: shouldConsumeTicket ? auth.user.id : purchase.verified_by,
+        verification_method: shouldConsumeTicket ? method : purchase.verification_method,
+        verification_count: Number(purchase.verification_count || 0) + 1,
+        last_verified_at: new Date().toISOString(),
+      })
+      .eq("id", purchase.id)
+      .select("id, verified_at, verified_by, verification_method, verification_count, last_verified_at")
+      .maybeSingle();
+
+    if (updateError) {
+      console.error("Ticket verification update error:", updateError);
+      return response.status(500).json({ error: "ticket_verify_failed" });
+    }
+
+    const { data: buyer } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, transaction_id")
+      .eq("id", purchase.buyer_id)
+      .maybeSingle();
+
+    response.json({
+      status: ticketStatus,
+      purchase: {
+        ...enriched,
+        ...updatedPurchase,
+        qr_valid_from: validFrom,
+        qr_valid_until: validUntil,
+      },
+      buyer: buyer || null,
+      business: {
+        display_name: businessProfile.display_name,
+        transaction_id: businessProfile.transaction_id,
+      },
+    });
+  } catch (error) {
+    console.error("Ticket verification fatal error:", error);
+    response.status(500).json({ error: "ticket_verify_failed" });
   }
 });
 
@@ -649,21 +773,36 @@ app.post("/api/purchases/offer", async (request, response) => {
       await supabaseAdmin.from("profiles").update({ address: deliveryAddress }).eq("id", user.id);
     }
 
-    const { data: purchase, error: purchaseError } = await supabaseAdmin
-      .from("purchases")
-      .insert({
-        buyer_id: user.id,
-        offer_id: offer.id,
-        delivery_method: deliveryMethod,
-        offer_points: offerPoints,
-        delivery_points: deliveryPoints,
-        delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
-        total_points: totalPoints,
-        receiver_transaction_id: receiverProfile.transaction_id,
-        receiver_profile_id: receiverProfile.id,
-      })
-      .select("id")
-      .maybeSingle();
+    let purchase = null;
+    let purchaseError = null;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const { data, error } = await supabaseAdmin
+        .from("purchases")
+        .insert({
+          buyer_id: user.id,
+          offer_id: offer.id,
+          delivery_method: deliveryMethod,
+          offer_points: offerPoints,
+          delivery_points: deliveryPoints,
+          delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
+          total_points: totalPoints,
+          receiver_transaction_id: receiverProfile.transaction_id,
+          receiver_profile_id: receiverProfile.id,
+          validation_code: generateTicketValidationCode(),
+          security_code: generateTicketSecurityCode(),
+          qr_token: randomUUID(),
+          qr_valid_from: offer.qr_valid_from || offer.start_date || todayDateString(),
+          qr_valid_until: offer.qr_valid_until || offer.end_date || null,
+        })
+        .select("id")
+        .maybeSingle();
+
+      purchase = data;
+      purchaseError = error;
+
+      if (!error || error.code !== "23505") break;
+    }
 
     if (purchaseError) {
       console.error("Purchase insert error:", purchaseError);

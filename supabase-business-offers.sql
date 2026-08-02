@@ -26,6 +26,8 @@ create table if not exists public.business_offers (
   delivery_home_price numeric,
   delivery_home_points integer,
   delivery_pickup_enabled boolean not null default true,
+  qr_valid_from date,
+  qr_valid_until date,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -110,6 +112,12 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists delivery_pickup_enabled boolean not null default true;
+
+alter table public.business_offers
+  add column if not exists qr_valid_from date;
+
+alter table public.business_offers
+  add column if not exists qr_valid_until date;
 
 alter table public.business_offers enable row level security;
 

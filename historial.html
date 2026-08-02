@@ -95,7 +95,7 @@
       function PurchaseCard({ purchase }) {
         const offer = purchase.offer || {};
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
-        const image = offer.cover_image || offer.presentation_images?.[0];
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         return (
           <a
             href={`order-detail.html?id=${purchase.id}`}

@@ -100,6 +100,10 @@
         return clean.replace(/(.{4})(.{4})(.{0,4})/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
       }
 
+      function todayDateString() {
+        return new Date().toISOString().slice(0, 10);
+      }
+
       function redirectToLogin() {
         const next = window.location.pathname + window.location.search;
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
@@ -174,6 +178,8 @@
         const [hours, setHours] = React.useState("");
         const [startDate, setStartDate] = React.useState("");
         const [endDate, setEndDate] = React.useState("");
+        const [qrValidFrom, setQrValidFrom] = React.useState(todayDateString());
+        const [qrValidUntil, setQrValidUntil] = React.useState("");
         const [age, setAge] = React.useState("");
         const [author, setAuthor] = React.useState("");
         const [description, setDescription] = React.useState("");
@@ -223,6 +229,8 @@
             setHours(draft.hours || "");
             setStartDate(draft.startDate || "");
             setEndDate(draft.endDate || "");
+            setQrValidFrom(draft.qrValidFrom || todayDateString());
+            setQrValidUntil(draft.qrValidUntil || "");
             setAge(draft.age || "");
             setAuthor(draft.author || "");
             setDescription(draft.description || "");
@@ -271,6 +279,8 @@
             setHours(data.hours || "");
             setStartDate(data.start_date || "");
             setEndDate(data.end_date || "");
+            setQrValidFrom(data.qr_valid_from || data.start_date || todayDateString());
+            setQrValidUntil(data.qr_valid_until || data.end_date || "");
             setAge(data.age || "");
             setAuthor(data.author || "");
             setDescription(data.description || "");
@@ -363,6 +373,8 @@
             hours,
             startDate,
             endDate,
+            qrValidFrom,
+            qrValidUntil,
             age,
             author,
             description,
@@ -390,6 +402,8 @@
           hours,
           startDate,
           endDate,
+          qrValidFrom,
+          qrValidUntil,
           age,
           author,
           description,
@@ -492,6 +506,8 @@
           setHours("");
           setStartDate("");
           setEndDate("");
+          setQrValidFrom(todayDateString());
+          setQrValidUntil("");
           setAge("");
           setAuthor("");
           setDescription("");
@@ -538,6 +554,8 @@
               hours: hours.trim() || null,
               start_date: startDate || null,
               end_date: endDate || null,
+              qr_valid_from: qrValidFrom || todayDateString(),
+              qr_valid_until: qrValidUntil || endDate || null,
               age: age.trim() || null,
               author: author.trim() || null,
               description: description.trim() || null,
@@ -769,6 +787,21 @@
                   <Field label="Fecha de fin">
                     <input className={inputClass} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                   </Field>
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-sm font-black text-white">Validez del QR de compra</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
+                    Se generará un QR único para cada compra. La fecha de inicio viene preparada para hoy.
+                  </p>
+                  <div className="mt-4 grid gap-4 min-[430px]:grid-cols-2">
+                    <Field label="QR válido desde">
+                      <input className={inputClass} type="date" value={qrValidFrom} onChange={(event) => setQrValidFrom(event.target.value)} />
+                    </Field>
+                    <Field label="QR válido hasta">
+                      <input className={inputClass} type="date" value={qrValidUntil} onChange={(event) => setQrValidUntil(event.target.value)} />
+                    </Field>
+                  </div>
                 </div>
 
                 <Field label="Edad">
