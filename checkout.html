@@ -193,6 +193,7 @@
               message: `Compra realizada. Te quedan ${updatedPoints} pts.`,
             });
             setSuccessPurchase({
+              id: data?.purchase_id,
               title: offer.title || "Oferta Donos",
               totalPoints,
               remainingPoints: updatedPoints,
@@ -388,8 +389,8 @@
                       <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" href="home.html">
                         Inicio
                       </a>
-                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]" href="profile.html">
-                        Mi cuenta
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]" href={successPurchase.id ? `order-detail.html?id=${successPurchase.id}` : "historial.html"}>
+                        Ver pedido
                       </a>
                     </div>
                   </div>

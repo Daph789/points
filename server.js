@@ -380,6 +380,120 @@ app.get("/api/me/profile", async (request, response) => {
   }
 });
 
+async function getAuthenticatedUser(request) {
+  if (!supabaseAdmin) return { error: "Supabase admin is not configured", status: 500 };
+
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (!token) return { error: "Not authenticated", status: 401 };
+
+  const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+  const user = userData?.user;
+
+  if (userError || !user?.id) return { error: "Not authenticated", status: 401 };
+
+  return { user };
+}
+
+async function enrichPurchases(purchases) {
+  const offerIds = [...new Set((purchases || []).map((purchase) => purchase.offer_id).filter(Boolean))];
+  const receiverIds = [...new Set((purchases || []).map((purchase) => purchase.receiver_profile_id).filter(Boolean))];
+  let offersById = {};
+  let receiversById = {};
+
+  if (offerIds.length > 0) {
+    const { data: offers, error: offersError } = await supabaseAdmin
+      .from("business_offers")
+      .select("id, title, cover_image, presentation_images, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author")
+      .in("id", offerIds);
+
+    if (offersError) console.error("Purchase history offers error:", offersError);
+    offersById = Object.fromEntries((offers || []).map((offer) => [offer.id, offer]));
+  }
+
+  if (receiverIds.length > 0) {
+    const { data: receivers, error: receiversError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, transaction_id, is_verified")
+      .in("id", receiverIds);
+
+    if (receiversError) console.error("Purchase history receivers error:", receiversError);
+    receiversById = Object.fromEntries((receivers || []).map((profile) => [profile.id, profile]));
+  }
+
+  return (purchases || []).map((purchase) => ({
+    ...purchase,
+    offer: offersById[purchase.offer_id] || null,
+    receiver: receiversById[purchase.receiver_profile_id] || null,
+  }));
+}
+
+app.get("/api/me/purchases", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    await ensureProfileForUser(auth.user);
+
+    const { data: purchases, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, created_at")
+      .eq("buyer_id", auth.user.id)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Purchase history error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "purchases_table_missing" : "purchase_history_failed",
+      });
+    }
+
+    response.json({ purchases: await enrichPurchases(purchases || []) });
+  } catch (error) {
+    console.error("Purchase history fatal error:", error);
+    response.status(500).json({ error: "purchase_history_failed" });
+  }
+});
+
+app.get("/api/me/purchases/:id", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    await ensureProfileForUser(auth.user);
+
+    const { data: purchase, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, created_at")
+      .eq("id", request.params.id)
+      .eq("buyer_id", auth.user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Purchase detail error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "purchases_table_missing" : "purchase_detail_failed",
+      });
+    }
+
+    if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
+
+    const [enriched] = await enrichPurchases([purchase]);
+    response.json({ purchase: enriched });
+  } catch (error) {
+    console.error("Purchase detail fatal error:", error);
+    response.status(500).json({ error: "purchase_detail_failed" });
+  }
+});
+
 app.get("/api/stripe/config", (_request, response) => {
   response.json({
     publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",
