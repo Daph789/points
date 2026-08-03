@@ -56,6 +56,16 @@
         return Math.round(((base - reduced) / base) * 100);
       }
 
+      function getRemainingStock(offer) {
+        if (offer.stock_quantity === null || offer.stock_quantity === undefined || offer.stock_quantity === "") return null;
+        return Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
+      }
+
+      function isOutOfStock(offer) {
+        const remaining = getRemainingStock(offer);
+        return remaining !== null && remaining <= 0;
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.5)] ring-2 ring-white/20" title="Cuenta certificada">
@@ -121,7 +131,9 @@
         const deliveryExtraPoints = deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0;
         const totalPoints = basePoints + deliveryExtraPoints;
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
-        const canBuy = Boolean(deliveryChoice && totalPoints > 0);
+        const remainingStock = getRemainingStock(offer);
+        const outOfStock = isOutOfStock(offer);
+        const canBuy = Boolean(deliveryChoice && totalPoints > 0 && !outOfStock);
         const goToCheckout = () => {
           if (!canBuy) return;
           window.location.href = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
@@ -189,10 +201,13 @@
                       Editar
                     </a>
                   )}
-                  {discountPercent !== null && (
-                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">-{discountPercent}%</span>
+	                  {discountPercent !== null && (
+	                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">-{discountPercent}%</span>
+	                  )}
+                  {outOfStock && (
+                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">Agotado</span>
                   )}
-                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} pts</span>
+	                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} pts</span>
                 </div>
               </header>
               <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
@@ -229,13 +244,21 @@
                   <p className="text-xs font-semibold text-mint">Puntos</p>
                   <p className="mt-1 text-3xl font-black">{offer.required_points || 0}</p>
                 </div>
-                {discountPercent !== null && (
-                  <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:col-span-2">
-                    <p className="text-xs font-semibold text-coral">Descuento</p>
-                    <p className="mt-1 text-3xl font-black">-{discountPercent}%</p>
+	                {discountPercent !== null && (
+	                  <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:col-span-2">
+	                    <p className="text-xs font-semibold text-coral">Descuento</p>
+	                    <p className="mt-1 text-3xl font-black">-{discountPercent}%</p>
+	                  </div>
+	                )}
+                {remainingStock !== null && (
+                  <div className={`rounded-3xl border p-4 sm:col-span-2 ${
+                    outOfStock ? "border-coral/25 bg-coral/10" : "border-white/10 bg-white/[0.055]"
+                  }`}>
+                    <p className={`text-xs font-semibold ${outOfStock ? "text-coral" : "text-slate-400"}`}>Disponibilidad</p>
+                    <p className="mt-1 text-3xl font-black">{outOfStock ? "Agotado" : `${remainingStock} disponibles`}</p>
                   </div>
                 )}
-              </div>
+	              </div>
 
               {allImages.length > 0 && (
                 <div className="no-scrollbar -mx-4 mt-6 flex gap-3 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -375,15 +398,15 @@
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</p>
                   <p className="truncate text-2xl font-black text-white">{totalPoints} pts</p>
                 </div>
-                <button
-                  className={`h-12 rounded-2xl px-5 text-sm font-black transition sm:h-14 sm:px-6 sm:text-base ${
-                    canBuy ? "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]" : "bg-white/10 text-slate-500"
-                  }`}
-                  disabled={!canBuy}
-                  onClick={goToCheckout}
-                >
-                  Comprar
-                </button>
+	                <button
+	                  className={`h-12 rounded-2xl px-5 text-sm font-black transition sm:h-14 sm:px-6 sm:text-base ${
+	                    canBuy ? "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]" : "bg-white/10 text-slate-500"
+	                  }`}
+	                  disabled={!canBuy}
+	                  onClick={goToCheckout}
+	                >
+	                  {outOfStock ? "Agotado" : "Comprar"}
+	                </button>
               </div>
             </div>
 

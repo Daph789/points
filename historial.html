@@ -81,6 +81,16 @@
         return value === "home" ? "Entrega a domicilio" : "Recogida en tienda";
       }
 
+      function getRemainingStock(offer) {
+        if (offer.stock_quantity === null || offer.stock_quantity === undefined || offer.stock_quantity === "") return null;
+        return Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
+      }
+
+      function isOutOfStock(offer) {
+        const remaining = getRemainingStock(offer);
+        return remaining !== null && remaining <= 0;
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
@@ -202,17 +212,46 @@
         );
       }
 
+      function StockOfferCard({ offer }) {
+        const remaining = getRemainingStock(offer);
+        const outOfStock = isOutOfStock(offer);
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        return (
+          <a
+            href={`admin-offer.html?id=${offer.id}`}
+            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[64px_1fr_auto]"
+          >
+            <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-gradient-to-br from-coral/40 to-mint/20 ring-1 ring-white/10">
+              {image ? <img className="h-full w-full object-cover opacity-80" src={image} alt="" /> : <span className="grid h-full w-full place-items-center text-xl">↻</span>}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-black text-white">{offer.title || "Oferta sin título"}</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{offer.categories?.join(", ") || "Sin categoría"}</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">Vendidos: {offer.sold_count || 0}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${outOfStock ? "bg-coral text-white" : "bg-white/10 text-slate-200"}`}>
+                {outOfStock ? "Agotado" : `${remaining} disponibles`}
+              </span>
+              <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">Editar stock</p>
+            </div>
+          </a>
+        );
+      }
+
       function App() {
         const [mode, setMode] = React.useState("purchases");
         const [purchases, setPurchases] = React.useState([]);
         const [incomingPurchases, setIncomingPurchases] = React.useState([]);
         const [scannedTickets, setScannedTickets] = React.useState([]);
+        const [businessOffers, setBusinessOffers] = React.useState([]);
         const [accountType, setAccountType] = React.useState("user");
         const [status, setStatus] = React.useState("Cargando historial...");
         const [incomingStatus, setIncomingStatus] = React.useState("");
         const [scannedStatus, setScannedStatus] = React.useState("");
         const [search, setSearch] = React.useState("");
         const [incomingFilter, setIncomingFilter] = React.useState("all");
+        const [stockFilter, setStockFilter] = React.useState(0);
 
         React.useEffect(() => {
           loadPurchases();
@@ -259,9 +298,20 @@
               });
               const scannedData = await scannedResponse.json().catch(() => ({}));
               if (!scannedResponse.ok) throw new Error(scannedData.error || "scanned_tickets_failed");
-              setScannedTickets(scannedData.scans || []);
-              setScannedStatus("");
-            }
+	              setScannedTickets(scannedData.scans || []);
+	              setScannedStatus("");
+
+                const { data: userData } = await supabaseClient.auth.getUser();
+                const userId = userData.user?.id;
+                if (userId) {
+                  const { data: offersData } = await supabaseClient
+                    .from("business_offers")
+                    .select("*")
+                    .eq("business_id", userId)
+                    .order("created_at", { ascending: false });
+                  setBusinessOffers(offersData || []);
+                }
+	            }
           } catch (error) {
             setStatus(
               error.message === "purchases_table_missing"
@@ -339,6 +389,24 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
+        const stockWatchOffers = businessOffers
+          .filter((offer) => {
+            const remaining = getRemainingStock(offer);
+            return remaining !== null && remaining <= stockFilter;
+          })
+          .filter((offer) => {
+            const query = search.trim().toLowerCase();
+            if (!query) return true;
+            return [
+              offer.title,
+              offer.address,
+              offer.categories?.join(" "),
+              offer.sold_count,
+              getRemainingStock(offer),
+            ].filter(Boolean).join(" ").toLowerCase().includes(query);
+          })
+          .sort((a, b) => getRemainingStock(a) - getRemainingStock(b));
+
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-28 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between gap-3">
@@ -359,7 +427,7 @@
               <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donos</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
-              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-4" : "min-[390px]:grid-cols-2"}`}>
+	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-5" : "min-[390px]:grid-cols-2"}`}>
                 <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("purchases")}
@@ -378,16 +446,24 @@
                       <p className="mt-2 text-base font-black text-white">Ingresos recibidos</p>
                       <p className="mt-1 text-xs font-bold text-slate-400">{incomingPurchases.length} movimientos</p>
                     </button>
-                    <button
-                      className={`rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-                      onClick={() => setMode("scanned")}
+	                    <button
+	                      className={`rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+	                      onClick={() => setMode("scanned")}
                     >
                       <p className="text-2xl">▣</p>
                       <p className="mt-2 text-base font-black text-white">Billetes escaneados</p>
-                      <p className="mt-1 text-xs font-bold text-slate-400">{latestScannedTickets.length} billetes</p>
+	                      <p className="mt-1 text-xs font-bold text-slate-400">{latestScannedTickets.length} billetes</p>
+	                    </button>
+                    <button
+                      className={`rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
+                      onClick={() => setMode("stock")}
+                    >
+                      <p className="text-2xl">↻</p>
+                      <p className="mt-2 text-base font-black text-white">Stock crítico</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{businessOffers.filter(isOutOfStock).length} agotados</p>
                     </button>
-                  </>
-                )}
+	                  </>
+	                )}
                 <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("debts")}
@@ -501,8 +577,51 @@
                   )}
                 </div>
               </section>
+	            ) : mode === "stock" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar producto, categoría, stock..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 grid grid-cols-4 gap-2 rounded-[24px] border border-white/10 bg-white/[0.045] p-2">
+                  {[
+                    [0, "Agotado"],
+                    [2, "≤2"],
+                    [3, "≤3"],
+                    [5, "≤5"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={`h-11 rounded-2xl text-xs font-black transition ${
+                        stockFilter === value ? "bg-coral text-white" : "bg-white/[0.055] text-slate-300"
+                      }`}
+                      onClick={() => setStockFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {stockWatchOffers.length > 0 ? (
+                    stockWatchOffers.map((offer) => <StockOfferCard key={offer.id} offer={offer} />)
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      No hay productos en este filtro.
+                    </div>
+                  )}
+                </div>
+              </section>
             ) : (
-              <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6">
+	              <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6">
                 <p className="text-lg font-black text-white">Historial de deudas</p>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Esta parte queda preparada para cuando activemos deudas, pagos pendientes o compromisos entre usuarios.</p>
               </section>

@@ -1010,9 +1010,14 @@ app.post("/api/purchases/offer", async (request, response) => {
 	    }
 
 	    if (hasStockLimit) {
+	      const nextSoldCount = soldCount + 1;
+	      const isNowOutOfStock = nextSoldCount >= stockLimit;
 	      const { data: stockUpdate, error: stockError } = await supabaseAdmin
 	        .from("business_offers")
-	        .update({ sold_count: soldCount + 1 })
+	        .update({
+	          sold_count: nextSoldCount,
+	          out_of_stock_since: isNowOutOfStock ? (offer.out_of_stock_since || new Date().toISOString()) : null,
+	        })
 	        .eq("id", offer.id)
 	        .eq("sold_count", soldCount)
 	        .select("id")
@@ -1042,7 +1047,7 @@ app.post("/api/purchases/offer", async (request, response) => {
 	      console.error("Purchase points update error:", buyerError || receiverUpdateError);
 	      await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
 	      if (hasStockLimit) {
-	        await supabaseAdmin.from("business_offers").update({ sold_count }).eq("id", offer.id);
+	        await supabaseAdmin.from("business_offers").update({ sold_count, out_of_stock_since: offer.out_of_stock_since || null }).eq("id", offer.id);
 	      }
 	      return response.status(500).json({
         error: "points_update_failed",

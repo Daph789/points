@@ -186,6 +186,7 @@
         const [cartButtonText, setCartButtonText] = React.useState("Poner en la cesta");
         const [receiverMode, setReceiverMode] = React.useState("business");
         const [businessProfile, setBusinessProfile] = React.useState(null);
+        const [soldCount, setSoldCount] = React.useState(0);
         const [isProfileLoading, setIsProfileLoading] = React.useState(true);
         const [receiverId, setReceiverId] = React.useState("");
         const [receiverName, setReceiverName] = React.useState("");
@@ -206,6 +207,7 @@
         const requiredPoints = Number.isFinite(reduced) ? Math.max(Math.round(reduced * 10), 0) : 0;
         const deliveryPrice = Number.parseFloat(homeDeliveryPrice.replace(",", "."));
         const deliveryPoints = Number.isFinite(deliveryPrice) ? Math.round(deliveryPrice * 10) : 0;
+        const soldItemsCount = Number.parseInt(String(soldCount || "0"), 10) || 0;
 
         React.useEffect(() => {
           if (editId) {
@@ -294,7 +296,8 @@
             setHomeDeliveryEnabled(Boolean(data.delivery_home_enabled));
             setHomeDeliveryPrice(data.delivery_home_price === null || data.delivery_home_price === undefined ? "" : String(data.delivery_home_price));
             setPickupEnabled(data.delivery_pickup_enabled !== false);
-            setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(data.stock_quantity));
+            setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(Math.max(Number(data.stock_quantity || 0) - Number(data.sold_count || 0), 0)));
+            setSoldCount(Number(data.sold_count || 0));
             setIsOfferLoading(false);
           }
 
@@ -601,7 +604,8 @@
               delivery_home_price: homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: homeDeliveryEnabled ? deliveryPoints : null,
               delivery_pickup_enabled: pickupEnabled,
-              stock_quantity: stockQuantity === "" ? null : Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
+              stock_quantity: stockQuantity === "" ? null : soldItemsCount + Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
+              out_of_stock_since: stockQuantity !== "" && Math.max(Number.parseInt(stockQuantity, 10) || 0, 0) <= 0 ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
             };
 
@@ -847,15 +851,22 @@
                 </div>
 
                 <Field label="Stock disponible">
-                  <input
-                    className={inputClass}
-                    inputMode="numeric"
-                    min="0"
-                    type="number"
-                    value={stockQuantity}
-                    onChange={(event) => setStockQuantity(event.target.value.replace(/[^0-9]/g, ""))}
-                    placeholder="Ej. 15, deja vacío si no hay límite"
-                  />
+                  <div>
+                    <input
+                      className={inputClass}
+                      inputMode="numeric"
+                      min="0"
+                      type="number"
+                      value={stockQuantity}
+                      onChange={(event) => setStockQuantity(event.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="Ej. 15, deja vacío si no hay límite"
+                    />
+                    {editId && (
+                      <p className="mt-2 text-xs font-semibold text-slate-500">
+                        Vendidos: {soldItemsCount}. Este campo muestra solo las unidades disponibles ahora.
+                      </p>
+                    )}
+                  </div>
                 </Field>
 
                 <Field label="Edad">

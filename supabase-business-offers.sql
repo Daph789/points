@@ -30,6 +30,7 @@ create table if not exists public.business_offers (
   qr_valid_until date,
   stock_quantity integer,
   sold_count integer not null default 0,
+  out_of_stock_since timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -126,6 +127,9 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists sold_count integer not null default 0;
+
+alter table public.business_offers
+  add column if not exists out_of_stock_since timestamptz;
 
 update public.business_offers
 set sold_count = 0
