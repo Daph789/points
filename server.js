@@ -920,11 +920,23 @@ app.post("/api/purchases/offer", async (request, response) => {
       .eq("transaction_id", receiverId)
       .maybeSingle();
 
-    if (receiverError || !receiverProfile) {
-      return response.status(400).json({ error: "receiver_not_found" });
-    }
+	    if (receiverError || !receiverProfile) {
+	      return response.status(400).json({ error: "receiver_not_found" });
+	    }
 
-    const offerPoints = Math.max(Number(offer.required_points || 0), 0);
+	    if (offer.business_id === user.id || receiverProfile.id === user.id) {
+	      return response.status(400).json({ error: "own_offer_not_allowed" });
+	    }
+
+	    const hasStockLimit = offer.stock_quantity !== null && offer.stock_quantity !== undefined && Number.isFinite(Number(offer.stock_quantity));
+	    const stockLimit = hasStockLimit ? Math.max(Math.floor(Number(offer.stock_quantity)), 0) : null;
+	    const soldCount = Math.max(Number(offer.sold_count || 0), 0);
+
+	    if (hasStockLimit && soldCount >= stockLimit) {
+	      return response.status(400).json({ error: "out_of_stock" });
+	    }
+
+	    const offerPoints = Math.max(Number(offer.required_points || 0), 0);
     const deliveryPoints = deliveryMethod === "home" ? Math.max(Number(offer.delivery_home_points || 0), 0) : 0;
     const totalPoints = offerPoints + deliveryPoints;
     const buyerPoints = Number(buyerProfile?.points || 0);
@@ -968,15 +980,31 @@ app.post("/api/purchases/offer", async (request, response) => {
       if (!error || error.code !== "23505") break;
     }
 
-    if (purchaseError) {
-      console.error("Purchase insert error:", purchaseError);
+	    if (purchaseError) {
+	      console.error("Purchase insert error:", purchaseError);
       return response.status(500).json({
         error: purchaseError.code === "42P01" ? "purchases_table_missing" : "purchase_insert_failed",
         detail: purchaseError.message || "",
-      });
-    }
+	      });
+	    }
 
-    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
+	    if (hasStockLimit) {
+	      const { data: stockUpdate, error: stockError } = await supabaseAdmin
+	        .from("business_offers")
+	        .update({ sold_count: soldCount + 1 })
+	        .eq("id", offer.id)
+	        .eq("sold_count", soldCount)
+	        .select("id")
+	        .maybeSingle();
+
+	      if (stockError || !stockUpdate) {
+	        if (stockError) console.error("Purchase stock update error:", stockError);
+	        await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
+	        return response.status(400).json({ error: "out_of_stock" });
+	      }
+	    }
+
+	    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
       supabaseAdmin
         .from("profiles")
         .update({ points: buyerPoints - totalPoints })
@@ -989,10 +1017,13 @@ app.post("/api/purchases/offer", async (request, response) => {
         .eq("id", receiverProfile.id),
     ]);
 
-    if (buyerError || receiverUpdateError) {
-      console.error("Purchase points update error:", buyerError || receiverUpdateError);
-      await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
-      return response.status(500).json({
+	    if (buyerError || receiverUpdateError) {
+	      console.error("Purchase points update error:", buyerError || receiverUpdateError);
+	      await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
+	      if (hasStockLimit) {
+	        await supabaseAdmin.from("business_offers").update({ sold_count }).eq("id", offer.id);
+	      }
+	      return response.status(500).json({
         error: "points_update_failed",
         detail: buyerError?.message || receiverUpdateError?.message || "",
       });

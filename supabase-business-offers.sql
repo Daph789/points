@@ -28,6 +28,8 @@ create table if not exists public.business_offers (
   delivery_pickup_enabled boolean not null default true,
   qr_valid_from date,
   qr_valid_until date,
+  stock_quantity integer,
+  sold_count integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -118,6 +120,16 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists qr_valid_until date;
+
+alter table public.business_offers
+  add column if not exists stock_quantity integer;
+
+alter table public.business_offers
+  add column if not exists sold_count integer not null default 0;
+
+update public.business_offers
+set sold_count = 0
+where sold_count is null;
 
 alter table public.business_offers enable row level security;
 

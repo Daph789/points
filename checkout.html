@@ -62,6 +62,10 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
+      function cleanDonosId(value) {
+        return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const offerId = params.get("id");
@@ -126,10 +130,21 @@
         const totalPoints = offerPoints + deliveryPoints;
         const deliveryLabel = delivery === "home" ? "Entrega a domicilio" : "Recogida en tienda";
         const userPoints = Number(profile?.points || 0);
+        const hasStockLimit = offer.stock_quantity !== null && offer.stock_quantity !== undefined && offer.stock_quantity !== "" && Number.isFinite(Number(offer.stock_quantity));
+        const stockLimit = hasStockLimit ? Math.max(Math.floor(Number(offer.stock_quantity)), 0) : null;
+        const soldCount = Math.max(Number(offer.sold_count || 0), 0);
+        const remainingStock = hasStockLimit ? Math.max(stockLimit - soldCount, 0) : null;
+        const isOutOfStock = hasStockLimit && remainingStock <= 0;
+        const isOwnOffer = Boolean(
+          userId && (
+            offer.business_id === userId ||
+            (cleanDonosId(profile?.transaction_id) && cleanDonosId(profile?.transaction_id) === cleanDonosId(offer.receiver_transaction_id))
+          )
+        );
         const hasEnoughPoints = userPoints >= totalPoints;
         const needsDeliveryAddress = delivery === "home";
         const hasDeliveryAddress = !needsDeliveryAddress || deliveryAddress.trim().length >= 4;
-        const canConfirmPurchase = hasEnoughPoints && hasDeliveryAddress;
+        const canConfirmPurchase = hasEnoughPoints && hasDeliveryAddress && !isOwnOffer && !isOutOfStock;
 
         async function saveDeliveryAddress() {
           if (!deliveryAddress.trim() || !userId) return;
@@ -160,6 +175,16 @@
 
           if (!hasDeliveryAddress) {
             setPurchaseStatus({ type: "error", message: "Añade una dirección para la entrega a domicilio." });
+            return;
+          }
+
+          if (isOwnOffer) {
+            setPurchaseStatus({ type: "error", message: "No puedes comprar tu propia publicación." });
+            return;
+          }
+
+          if (isOutOfStock) {
+            setPurchaseStatus({ type: "error", message: "Esta oferta está agotada." });
             return;
           }
 
@@ -200,6 +225,7 @@
               deliveryLabel,
               receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donos",
             });
+            setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
             setProfile((current) => ({ ...current, points: updatedPoints, address: deliveryAddress.trim() || current?.address }));
           } catch (error) {
             const message = error.message || "";
@@ -209,13 +235,17 @@
                 ? "No tienes puntos suficientes para esta compra."
                 : message.includes("delivery_address_missing")
                   ? "Añade una dirección para la entrega a domicilio."
+                  : message.includes("own_offer_not_allowed")
+                    ? "No puedes comprar tu propia publicación."
+                  : message.includes("out_of_stock")
+                    ? "Esta oferta está agotada."
                   : message.includes("receiver")
                     ? "No se ha encontrado la cuenta que debe recibir los puntos."
-                    : message.includes("purchases_table_missing") || message.includes("purchase_insert_failed")
-                      ? "Falta activar el SQL de pagos en Supabase."
-                      : message.includes("points_update_failed")
-                        ? "Supabase no ha podido mover los puntos. Revisa la tabla profiles."
-                        : "No se ha podido completar la compra.",
+                  : message.includes("purchases_table_missing") || message.includes("purchase_insert_failed")
+                    ? "Falta activar el SQL de pagos en Supabase."
+                  : message.includes("points_update_failed")
+                    ? "Supabase no ha podido mover los puntos. Revisa la tabla profiles."
+                  : "No se ha podido completar la compra.",
             });
           } finally {
             setIsBuying(false);
@@ -274,6 +304,17 @@
                   <p className="mt-1 text-sm font-bold text-slate-400">{formatDonosId(offer.receiver_transaction_id)}</p>
                 </div>
 
+                {hasStockLimit && (
+                  <div className={`rounded-3xl border p-4 ${
+                    isOutOfStock ? "border-coral/25 bg-coral/10" : "border-white/10 bg-white/[0.045]"
+                  }`}>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Disponibilidad</p>
+                    <p className={`mt-2 text-base font-black ${isOutOfStock ? "text-coral" : "text-white"}`}>
+                      {isOutOfStock ? "Agotado" : `${remainingStock} disponibles`}
+                    </p>
+                  </div>
+                )}
+
                 {needsDeliveryAddress && (
                   <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -319,6 +360,18 @@
                 {needsDeliveryAddress && !hasDeliveryAddress && (
                   <p className="rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">
                     Añade una dirección para recibir la entrega a domicilio.
+                  </p>
+                )}
+
+                {isOwnOffer && (
+                  <p className="rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">
+                    No puedes comprar tu propia publicación porque los puntos volverían a tu misma cuenta.
+                  </p>
+                )}
+
+                {isOutOfStock && (
+                  <p className="rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">
+                    Esta oferta está agotada.
                   </p>
                 )}
 

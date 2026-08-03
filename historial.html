@@ -203,6 +203,7 @@
         const [incomingStatus, setIncomingStatus] = React.useState("");
         const [scannedStatus, setScannedStatus] = React.useState("");
         const [search, setSearch] = React.useState("");
+        const [incomingFilter, setIncomingFilter] = React.useState("all");
 
         React.useEffect(() => {
           loadPurchases();
@@ -281,7 +282,20 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
-        const filteredIncoming = incomingPurchases.filter((purchase) => {
+        const incomingBase = incomingFilter === "unscanned"
+          ? incomingPurchases.filter((purchase) => Number(purchase.verification_count || 0) === 0)
+          : incomingPurchases;
+
+        const latestScannedTickets = Object.values(scannedTickets.reduce((items, scan) => {
+          const key = scan.purchase_id || scan.purchase?.id || scan.id;
+          const current = items[key];
+          if (!current || new Date(scan.checked_at || 0) > new Date(current.checked_at || 0)) {
+            items[key] = scan;
+          }
+          return items;
+        }, {})).sort((a, b) => new Date(b.checked_at || 0) - new Date(a.checked_at || 0));
+
+        const filteredIncoming = incomingBase.filter((purchase) => {
           const query = search.trim().toLowerCase();
           if (!query) return true;
           const offer = purchase.offer || {};
@@ -297,7 +311,7 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
-        const filteredScannedTickets = scannedTickets.filter((scan) => {
+        const filteredScannedTickets = latestScannedTickets.filter((scan) => {
           const query = search.trim().toLowerCase();
           if (!query) return true;
           const purchase = scan.purchase || {};
@@ -361,7 +375,7 @@
                     >
                       <p className="text-2xl">▣</p>
                       <p className="mt-2 text-base font-black text-white">Billetes escaneados</p>
-                      <p className="mt-1 text-xs font-bold text-slate-400">{scannedTickets.length} controles</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{latestScannedTickets.length} billetes</p>
                     </button>
                   </>
                 )}
@@ -423,6 +437,23 @@
                   </p>
                 </div>
 
+                <div className="mt-4 grid grid-cols-2 gap-2 rounded-[24px] border border-white/10 bg-white/[0.045] p-2">
+                  {[
+                    ["all", "Todos"],
+                    ["unscanned", "Sin escanear"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      className={`h-11 rounded-2xl text-sm font-black transition ${
+                        incomingFilter === value ? "bg-mint text-ink shadow-glow" : "bg-white/[0.055] text-slate-300"
+                      }`}
+                      onClick={() => setIncomingFilter(value)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="mt-5 space-y-3">
                   {incomingStatus ? (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{incomingStatus}</div>
@@ -430,7 +461,7 @@
                     filteredIncoming.map((purchase) => <IncomingCard key={purchase.id} purchase={purchase} />)
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                      {incomingPurchases.length === 0 ? "Todavía no has recibido compras." : "No hay resultados para esta búsqueda."}
+                      {incomingPurchases.length === 0 ? "Todavía no has recibido compras." : "No hay resultados para este filtro."}
                     </div>
                   )}
                 </div>
@@ -456,7 +487,7 @@
                     filteredScannedTickets.map((scan) => <ScannedTicketCard key={scan.id} scan={scan} />)
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                      {scannedTickets.length === 0 ? "Todavía no has escaneado billetes." : "No hay resultados para esta búsqueda."}
+                      {latestScannedTickets.length === 0 ? "Todavía no has escaneado billetes." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>

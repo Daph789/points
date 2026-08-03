@@ -193,6 +193,7 @@
         const [homeDeliveryEnabled, setHomeDeliveryEnabled] = React.useState(false);
         const [homeDeliveryPrice, setHomeDeliveryPrice] = React.useState("");
         const [pickupEnabled, setPickupEnabled] = React.useState(true);
+        const [stockQuantity, setStockQuantity] = React.useState("");
         const [status, setStatus] = React.useState({ type: "", message: "" });
         const [isSaving, setIsSaving] = React.useState(false);
         const [isDeleting, setIsDeleting] = React.useState(false);
@@ -242,6 +243,7 @@
             setHomeDeliveryEnabled(Boolean(draft.homeDeliveryEnabled));
             setHomeDeliveryPrice(draft.homeDeliveryPrice || "");
             setPickupEnabled(draft.pickupEnabled !== false);
+            setStockQuantity(draft.stockQuantity || "");
             setLastDraftSavedAt(draft.savedAt || "");
           } catch (error) {
             localStorage.removeItem(draftKey);
@@ -292,6 +294,7 @@
             setHomeDeliveryEnabled(Boolean(data.delivery_home_enabled));
             setHomeDeliveryPrice(data.delivery_home_price === null || data.delivery_home_price === undefined ? "" : String(data.delivery_home_price));
             setPickupEnabled(data.delivery_pickup_enabled !== false);
+            setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(data.stock_quantity));
             setIsOfferLoading(false);
           }
 
@@ -386,6 +389,7 @@
             homeDeliveryEnabled,
             homeDeliveryPrice,
             pickupEnabled,
+            stockQuantity,
             savedAt,
           };
 
@@ -415,6 +419,7 @@
           homeDeliveryEnabled,
           homeDeliveryPrice,
           pickupEnabled,
+          stockQuantity,
         ]);
 
         React.useEffect(() => {
@@ -519,6 +524,7 @@
           setHomeDeliveryEnabled(false);
           setHomeDeliveryPrice("");
           setPickupEnabled(true);
+          setStockQuantity("");
           setStatus({ type: "", message: "Borrador limpiado." });
         }
 
@@ -533,6 +539,33 @@
 
             if (!userId) {
               redirectToLogin();
+              return;
+            }
+
+            const today = todayDateString();
+            const effectiveQrUntil = qrValidUntil || endDate || "";
+            if (startDate && startDate < today) {
+              setStatus({ type: "error", message: "La fecha de inicio no puede ser anterior a hoy." });
+              return;
+            }
+            if (endDate && endDate < today) {
+              setStatus({ type: "error", message: "La fecha de fin no puede ser anterior a hoy." });
+              return;
+            }
+            if (startDate && endDate && endDate < startDate) {
+              setStatus({ type: "error", message: "La fecha de fin no puede ser anterior a la fecha de inicio." });
+              return;
+            }
+            if (qrValidFrom && qrValidFrom < today) {
+              setStatus({ type: "error", message: "La fecha de inicio del QR no puede ser anterior a hoy." });
+              return;
+            }
+            if (effectiveQrUntil && effectiveQrUntil < today) {
+              setStatus({ type: "error", message: "La fecha de fin del QR no puede ser anterior a hoy." });
+              return;
+            }
+            if (qrValidFrom && effectiveQrUntil && effectiveQrUntil < qrValidFrom) {
+              setStatus({ type: "error", message: "La fecha final del QR no puede ser anterior a su fecha de inicio." });
               return;
             }
 
@@ -568,6 +601,7 @@
               delivery_home_price: homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: homeDeliveryEnabled ? deliveryPoints : null,
               delivery_pickup_enabled: pickupEnabled,
+              stock_quantity: stockQuantity === "" ? null : Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
               updated_at: new Date().toISOString(),
             };
 
@@ -782,10 +816,14 @@
 
                 <div className="grid gap-4 min-[430px]:grid-cols-2">
                   <Field label="Fecha de inicio">
-                    <input className={inputClass} type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+                    <input className={inputClass} type="date" min={todayDateString()} value={startDate} onChange={(event) => {
+                        const value = event.target.value;
+                        setStartDate(value);
+                        if (endDate && value && endDate < value) setEndDate(value);
+                      }} />
                   </Field>
                   <Field label="Fecha de fin">
-                    <input className={inputClass} type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+                    <input className={inputClass} type="date" min={startDate || todayDateString()} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                   </Field>
                 </div>
 
@@ -796,13 +834,29 @@
                   </p>
                   <div className="mt-4 grid gap-4 min-[430px]:grid-cols-2">
                     <Field label="QR válido desde">
-                      <input className={inputClass} type="date" value={qrValidFrom} onChange={(event) => setQrValidFrom(event.target.value)} />
+                      <input className={inputClass} type="date" min={todayDateString()} value={qrValidFrom} onChange={(event) => {
+                          const value = event.target.value;
+                          setQrValidFrom(value);
+                          if (qrValidUntil && value && qrValidUntil < value) setQrValidUntil(value);
+                        }} />
                     </Field>
                     <Field label="QR válido hasta">
-                      <input className={inputClass} type="date" value={qrValidUntil} onChange={(event) => setQrValidUntil(event.target.value)} />
+                      <input className={inputClass} type="date" min={qrValidFrom || todayDateString()} value={qrValidUntil} onChange={(event) => setQrValidUntil(event.target.value)} />
                     </Field>
                   </div>
                 </div>
+
+                <Field label="Stock disponible">
+                  <input
+                    className={inputClass}
+                    inputMode="numeric"
+                    min="0"
+                    type="number"
+                    value={stockQuantity}
+                    onChange={(event) => setStockQuantity(event.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="Ej. 15, deja vacío si no hay límite"
+                  />
+                </Field>
 
                 <Field label="Edad">
                   <input className={inputClass} value={age} onChange={(event) => setAge(event.target.value)} placeholder="Ej. Todos los públicos, +16..." />
