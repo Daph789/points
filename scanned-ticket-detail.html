@@ -67,6 +67,17 @@
         );
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       function App() {
         const [scan, setScan] = React.useState(null);
         const [scanHistory, setScanHistory] = React.useState([]);
@@ -116,6 +127,8 @@
         const purchase = scan.purchase || {};
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donos";
+        const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -128,6 +141,10 @@
               <div className="bg-gradient-to-br from-[#10241f] via-[#12182b] to-[#2d2441] p-5 sm:p-7">
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Control de acceso</p>
                 <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">{statusLabel(scan.status)}</h1>
+                <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-black/25 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10">
+                  <span className="truncate">{businessName}</span>
+                  {isBusinessVerified && <VerifiedBadge />}
+                </div>
                 <p className="mt-3 text-sm font-bold text-slate-300">{formatDateTime(scan.checked_at)} · {scan.method === "qr" ? "Escaneo QR" : "Validación manual"}</p>
               </div>
 

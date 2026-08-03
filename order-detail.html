@@ -142,6 +142,7 @@
 
         const offer = purchase.offer || {};
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
+        const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
 
         return (
@@ -160,7 +161,7 @@
                 <div className="absolute bottom-5 left-5 right-5">
                   <div className="inline-flex items-center gap-2 rounded-full bg-black/35 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur">
                     <span>{businessName}</span>
-                    {offer.business_is_verified && <VerifiedBadge />}
+                    {isBusinessVerified && <VerifiedBadge />}
                   </div>
                   <h1 className="mt-3 break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Pedido Donos"}</h1>
                   <p className="mt-2 text-sm font-bold text-slate-300">{formatDateTime(purchase.created_at)}</p>

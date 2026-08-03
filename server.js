@@ -429,7 +429,27 @@ async function enrichPurchases(purchases) {
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
-    offersById = Object.fromEntries((offers || []).map((offer) => [offer.id, offer]));
+    const businessIds = [...new Set((offers || []).map((offer) => offer.business_id).filter(Boolean))];
+    let businessesById = {};
+
+    if (businessIds.length > 0) {
+      const { data: businesses, error: businessesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, is_verified")
+        .in("id", businessIds);
+
+      if (businessesError) console.error("Purchase history businesses error:", businessesError);
+      businessesById = Object.fromEntries((businesses || []).map((profile) => [profile.id, profile]));
+    }
+
+    offersById = Object.fromEntries((offers || []).map((offer) => {
+      const business = businessesById[offer.business_id];
+      return [offer.id, {
+        ...offer,
+        business_display_name: business?.display_name || offer.business_display_name,
+        business_is_verified: Boolean(business?.is_verified || offer.business_is_verified),
+      }];
+    }));
   }
 
   if (receiverIds.length > 0) {
@@ -766,6 +786,7 @@ app.post("/api/business/tickets/verify", async (request, response) => {
       business: {
         display_name: businessProfile.display_name,
         transaction_id: businessProfile.transaction_id,
+        is_verified: Boolean(businessProfile.is_verified),
       },
       verifications: verificationLog || [
         {

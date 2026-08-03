@@ -86,6 +86,17 @@
         );
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       function VerificationOverlay({ verifications, onClose }) {
         return (
           <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-xl">
@@ -123,6 +134,8 @@
         const verifications = result.verifications || [];
         const lastVerification = verifications[0]?.checked_at || purchase.last_verified_at || purchase.verified_at;
         const toneClass = copy.tone === "mint" ? "border-mint/25 bg-mint/10 text-mint" : copy.tone === "sun" ? "border-sun/25 bg-sun/10 text-sun" : "border-coral/25 bg-coral/10 text-coral";
+        const businessName = offer.business_display_name || result.business?.display_name || "Comercio Donos";
+        const isBusinessVerified = Boolean(offer.business_is_verified || result.business?.is_verified);
 
         return (
           <section ref={resultRef} className="mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30">
@@ -134,10 +147,13 @@
 
             <div className="space-y-5 p-5">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Compra</p>
-                <h3 className="mt-2 break-words text-2xl font-black text-white">{offer.title || "Pedido Donos"}</h3>
-                <p className="mt-1 text-sm font-bold text-slate-400">{offer.business_display_name || result.business?.display_name || "Comercio Donos"}</p>
-              </div>
+	                <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Compra</p>
+	                <h3 className="mt-2 break-words text-2xl font-black text-white">{offer.title || "Pedido Donos"}</h3>
+	                <p className="mt-1 inline-flex max-w-full items-center gap-2 rounded-full bg-white/[0.06] px-3 py-1.5 text-sm font-bold text-slate-200 ring-1 ring-white/10">
+                    <span className="truncate">{businessName}</span>
+                    {isBusinessVerified && <VerifiedBadge />}
+                  </p>
+	              </div>
 
               <div className="grid gap-3 min-[430px]:grid-cols-3">
                 <Detail label="Total" value={`${purchase.total_points || 0} pts`} />

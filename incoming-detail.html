@@ -56,6 +56,17 @@
         );
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       function App() {
         const [purchase, setPurchase] = React.useState(null);
         const [status, setStatus] = React.useState("Cargando ingreso...");
@@ -100,6 +111,8 @@
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donos";
+        const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -115,6 +128,10 @@
                 <div className="absolute bottom-5 left-5 right-5">
                   <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Movimiento</p>
                   <h1 className="mt-2 text-5xl font-black leading-none text-white">+{purchase.total_points || 0} pts</h1>
+                  <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full bg-black/35 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur">
+                    <span className="truncate">{businessName}</span>
+                    {isBusinessVerified && <VerifiedBadge />}
+                  </div>
                   <p className="mt-3 break-words text-lg font-black text-white">De {buyer.display_name || buyer.email || "Cliente Donos"}</p>
                   <p className="mt-1 text-sm font-bold text-slate-300">{offer.title || "Pedido Donos"}</p>
                 </div>
