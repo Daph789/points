@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Billete escaneado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 15% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 86% 8%, rgba(255, 209, 102, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      function formatDateTime(value) {
+        if (!value) return "No indicado";
+        return new Date(value).toLocaleString("es-ES", { dateStyle: "full", timeStyle: "short" });
+      }
+
+      function statusLabel(status) {
+        const labels = {
+          valid: "Validado correctamente",
+          already_verified: "Ya estaba validado",
+          expired: "Billete caducado",
+          not_started: "Todavía no válido",
+        };
+        return labels[status] || status || "Comprobado";
+      }
+
+      function Detail({ label, value }) {
+        return (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{label}</p>
+            <p className="mt-2 break-words text-base font-black text-white">{value || "No indicado"}</p>
+          </div>
+        );
+      }
+
+      function App() {
+        const [scan, setScan] = React.useState(null);
+        const [status, setStatus] = React.useState("Cargando billete escaneado...");
+        const scanId = new URLSearchParams(window.location.search).get("id");
+
+        React.useEffect(() => {
+          loadScan();
+        }, []);
+
+        async function loadScan() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+            return;
+          }
+
+          try {
+            const response = await fetch("/api/business/scanned-tickets", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "scans_failed");
+            const item = (data.scans || []).find((entry) => entry.id === scanId);
+            if (!item) throw new Error("not_found");
+            setScan(item);
+            setStatus("");
+          } catch (error) {
+            setStatus(error.message === "ticket_verifications_table_missing" ? "Falta ejecutar el SQL de validación QR." : "No se ha podido cargar este scan.");
+          }
+        }
+
+        if (status) {
+          return (
+            <main className="mx-auto min-h-screen w-full max-w-3xl px-3 py-4 sm:px-6">
+              <a className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="historial.html">Volver</a>
+              <div className="mt-6 rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+            </main>
+          );
+        }
+
+        const purchase = scan.purchase || {};
+        const offer = purchase.offer || {};
+        const buyer = purchase.buyer || {};
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
+            <header className="flex items-center justify-between gap-3">
+              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="historial.html">Volver</a>
+              <span className="rounded-full bg-mint/10 px-4 py-2 text-xs font-black text-mint ring-1 ring-mint/20">Billete escaneado</span>
+            </header>
+
+            <section className="mt-6 overflow-hidden rounded-[36px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30">
+              <div className="bg-gradient-to-br from-[#10241f] via-[#12182b] to-[#2d2441] p-5 sm:p-7">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Control de acceso</p>
+                <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">{statusLabel(scan.status)}</h1>
+                <p className="mt-3 text-sm font-bold text-slate-300">{formatDateTime(scan.checked_at)} · {scan.method === "qr" ? "Escaneo QR" : "Validación manual"}</p>
+              </div>
+
+              <div className="space-y-5 p-4 sm:p-7">
+                <div className="grid gap-3 min-[430px]:grid-cols-3">
+                  <Detail label="Producto" value={offer.title} />
+                  <Detail label="Comprador" value={buyer.display_name || buyer.email} />
+                  <Detail label="Total compra" value={`${purchase.total_points || 0} pts`} />
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Detail label="Fecha del scan" value={formatDateTime(scan.checked_at)} />
+                  <Detail label="Método" value={scan.method === "qr" ? "Escaneo QR" : "Manual"} />
+                  <Detail label="Estado registrado" value={scan.status} />
+                  <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
+                  <Detail label="Email cliente" value={buyer.email} />
+                  <Detail label="Teléfono cliente" value={buyer.phone} />
+                  <Detail label="ID Donos cliente" value={buyer.transaction_id} />
+                  <Detail label="Entrega" value={purchase.delivery_method === "home" ? "Entrega a domicilio" : "Recogida en tienda"} />
+                  <Detail label="Dirección entrega" value={purchase.delivery_address || "Recogida en tienda"} />
+                  <Detail label="Veces comprobado total" value={`${purchase.verification_count || 0}`} />
+                  <Detail label="Última comprobación" value={formatDateTime(purchase.last_verified_at)} />
+                  <Detail label="Código validación" value={purchase.validation_code} />
+                  <Detail label="Código seguridad" value={purchase.security_code} />
+                </div>
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

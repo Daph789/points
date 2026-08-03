@@ -126,10 +126,82 @@
         );
       }
 
+      function IncomingCard({ purchase }) {
+        const offer = purchase.offer || {};
+        const buyer = purchase.buyer || {};
+        const buyerName = buyer.display_name || buyer.email || "Cliente Donos";
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        return (
+          <a
+            href={`incoming-detail.html?id=${purchase.id}`}
+            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto]"
+          >
+            <div className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-mint/10 text-lg font-black text-mint ring-1 ring-mint/20">
+              {image ? <img className="absolute inset-0 h-full w-full object-cover opacity-80" src={image} alt="" /> : "↑"}
+              <span className="relative grid h-7 w-7 place-items-center rounded-full bg-[#060914]/80 text-sm">+</span>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-black text-white">+{purchase.total_points || 0} puntos de {buyerName}</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{offer.title || "Pedido Donos"}</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(purchase.created_at)} · {formatTime(purchase.created_at)}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              <span className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">+{purchase.total_points || 0}</span>
+              <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">
+                {purchase.verified_at ? "Validado" : "Pendiente QR"}
+              </p>
+            </div>
+          </a>
+        );
+      }
+
+      function scanStatusLabel(status) {
+        const labels = {
+          valid: "Validado",
+          already_verified: "Ya validado",
+          expired: "Caducado",
+          not_started: "No activo",
+        };
+        return labels[status] || status || "Comprobado";
+      }
+
+      function ScannedTicketCard({ scan }) {
+        const purchase = scan.purchase || {};
+        const offer = purchase.offer || {};
+        const buyer = purchase.buyer || {};
+        const buyerName = buyer.display_name || buyer.email || "Cliente Donos";
+        return (
+          <a
+            href={`scanned-ticket-detail.html?id=${scan.id}`}
+            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto]"
+          >
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/10 text-lg font-black text-white ring-1 ring-white/10">
+              {scan.method === "qr" ? "▣" : "⌨"}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-black text-white">{offer.title || "Billete Donos"}</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{buyerName} · {purchase.total_points || 0} pts</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(scan.checked_at)} · {formatTime(scan.checked_at)}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              <span className={`rounded-full px-3 py-1 text-xs font-black ${scan.status === "valid" ? "bg-mint text-ink" : "bg-white/10 text-slate-200"}`}>
+                {scanStatusLabel(scan.status)}
+              </span>
+              <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">{scan.method === "qr" ? "QR" : "Manual"}</p>
+            </div>
+          </a>
+        );
+      }
+
       function App() {
         const [mode, setMode] = React.useState("purchases");
         const [purchases, setPurchases] = React.useState([]);
+        const [incomingPurchases, setIncomingPurchases] = React.useState([]);
+        const [scannedTickets, setScannedTickets] = React.useState([]);
+        const [accountType, setAccountType] = React.useState("user");
         const [status, setStatus] = React.useState("Cargando historial...");
+        const [incomingStatus, setIncomingStatus] = React.useState("");
+        const [scannedStatus, setScannedStatus] = React.useState("");
         const [search, setSearch] = React.useState("");
 
         React.useEffect(() => {
@@ -145,6 +217,13 @@
           }
 
           try {
+            const profileResponse = await fetch("/api/me/profile", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const profileData = await profileResponse.json().catch(() => ({}));
+            const type = profileData.profile?.account_type === "business" ? "business" : "user";
+            setAccountType(type);
+
             const response = await fetch("/api/me/purchases", {
               headers: { Authorization: `Bearer ${token}` },
             });
@@ -153,12 +232,36 @@
 
             setPurchases(data.purchases || []);
             setStatus("");
+
+            if (type === "business") {
+              setIncomingStatus("Cargando ingresos...");
+              const incomingResponse = await fetch("/api/business/incoming-purchases", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const incomingData = await incomingResponse.json().catch(() => ({}));
+              if (!incomingResponse.ok) throw new Error(incomingData.error || "incoming_history_failed");
+              setIncomingPurchases(incomingData.purchases || []);
+              setIncomingStatus("");
+
+              setScannedStatus("Cargando billetes escaneados...");
+              const scannedResponse = await fetch("/api/business/scanned-tickets", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const scannedData = await scannedResponse.json().catch(() => ({}));
+              if (!scannedResponse.ok) throw new Error(scannedData.error || "scanned_tickets_failed");
+              setScannedTickets(scannedData.scans || []);
+              setScannedStatus("");
+            }
           } catch (error) {
             setStatus(
               error.message === "purchases_table_missing"
                 ? "Falta activar el SQL de pagos para ver el historial."
+                : error.message === "ticket_verifications_table_missing"
+                  ? "Falta ejecutar el SQL de validación QR para ver los billetes escaneados."
                 : "No se ha podido cargar tu historial."
             );
+            setIncomingStatus("");
+            setScannedStatus("");
           }
         }
 
@@ -175,6 +278,41 @@
             purchase.total_points,
             purchase.delivery_method,
             purchase.id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        const filteredIncoming = incomingPurchases.filter((purchase) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          const offer = purchase.offer || {};
+          const buyer = purchase.buyer || {};
+          return [
+            buyer.display_name,
+            buyer.email,
+            buyer.phone,
+            buyer.transaction_id,
+            offer.title,
+            purchase.total_points,
+            purchase.id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        const filteredScannedTickets = scannedTickets.filter((scan) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          const purchase = scan.purchase || {};
+          const offer = purchase.offer || {};
+          const buyer = purchase.buyer || {};
+          return [
+            buyer.display_name,
+            buyer.email,
+            buyer.phone,
+            buyer.transaction_id,
+            offer.title,
+            purchase.total_points,
+            scan.status,
+            scan.method,
+            scan.id,
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
@@ -198,7 +336,7 @@
               <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donos</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
-              <div className="mt-5 grid gap-2 min-[390px]:grid-cols-2">
+              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-4" : "min-[390px]:grid-cols-2"}`}>
                 <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("purchases")}
@@ -207,6 +345,26 @@
                   <p className="mt-2 text-base font-black text-white">Historial de compras</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">{purchases.length} pedidos</p>
                 </button>
+                {accountType === "business" && (
+                  <>
+                    <button
+                      className={`rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      onClick={() => setMode("incoming")}
+                    >
+                      <p className="text-2xl">↗</p>
+                      <p className="mt-2 text-base font-black text-white">Ingresos recibidos</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{incomingPurchases.length} movimientos</p>
+                    </button>
+                    <button
+                      className={`rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      onClick={() => setMode("scanned")}
+                    >
+                      <p className="text-2xl">▣</p>
+                      <p className="mt-2 text-base font-black text-white">Billetes escaneados</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{scannedTickets.length} controles</p>
+                    </button>
+                  </>
+                )}
                 <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("debts")}
@@ -240,6 +398,65 @@
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {purchases.length === 0 ? "Todavía no tienes compras." : "No hay resultados para esta búsqueda."}
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : mode === "incoming" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar comprador, producto, puntos..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 rounded-[30px] border border-mint/20 bg-mint/10 p-5 shadow-glow">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Total recibido</p>
+                  <p className="mt-2 text-4xl font-black text-white">
+                    +{incomingPurchases.reduce((sum, item) => sum + Number(item.total_points || 0), 0).toLocaleString("es-ES")} pts
+                  </p>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {incomingStatus ? (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{incomingStatus}</div>
+                  ) : filteredIncoming.length > 0 ? (
+                    filteredIncoming.map((purchase) => <IncomingCard key={purchase.id} purchase={purchase} />)
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      {incomingPurchases.length === 0 ? "Todavía no has recibido compras." : "No hay resultados para esta búsqueda."}
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : mode === "scanned" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar cliente, producto, estado..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {scannedStatus ? (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{scannedStatus}</div>
+                  ) : filteredScannedTickets.length > 0 ? (
+                    filteredScannedTickets.map((scan) => <ScannedTicketCard key={scan.id} scan={scan} />)
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      {scannedTickets.length === 0 ? "Todavía no has escaneado billetes." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>

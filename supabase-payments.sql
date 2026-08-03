@@ -70,6 +70,28 @@ create unique index if not exists purchases_validation_code_key
 create unique index if not exists purchases_qr_token_key
   on public.purchases(qr_token);
 
+create table if not exists public.ticket_verifications (
+  id uuid primary key default gen_random_uuid(),
+  purchase_id uuid not null references public.purchases(id) on delete cascade,
+  business_id uuid not null references auth.users(id) on delete cascade,
+  method text not null default 'manual',
+  status text not null,
+  checked_at timestamptz not null default now()
+);
+
+alter table public.ticket_verifications enable row level security;
+
+drop policy if exists "Businesses can read their ticket verifications" on public.ticket_verifications;
+
+create policy "Businesses can read their ticket verifications"
+  on public.ticket_verifications
+  for select
+  to authenticated
+  using (auth.uid() = business_id);
+
+create index if not exists ticket_verifications_purchase_id_checked_at_idx
+  on public.ticket_verifications(purchase_id, checked_at desc);
+
 alter table public.purchases enable row level security;
 
 drop policy if exists "Users can read their own purchases" on public.purchases;

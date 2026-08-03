@@ -86,16 +86,46 @@
         );
       }
 
-      function Result({ result }) {
+      function VerificationOverlay({ verifications, onClose }) {
+        return (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-xl">
+            <section className="mx-auto max-w-lg rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl shadow-black/50">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Comprobaciones</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Historial completo</h2>
+                </div>
+                <button className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-2xl font-black text-white" onClick={onClose}>×</button>
+              </div>
+              <div className="mt-5 space-y-2">
+                {(verifications || []).map((item, index) => (
+                  <div key={item.id || `${item.checked_at}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                    <div>
+                      <p className="text-sm font-black text-white">{formatDateTime(item.checked_at)}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{item.method === "qr" ? "Escaneo QR" : "Manual"} · {item.status}</p>
+                    </div>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200">#{(verifications || []).length - index}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        );
+      }
+
+      function Result({ result, resultRef }) {
+        const [showVerificationLog, setShowVerificationLog] = React.useState(false);
         if (!result) return null;
         const copy = statusCopy(result.status);
         const purchase = result.purchase || {};
         const offer = purchase.offer || {};
         const buyer = result.buyer || {};
+        const verifications = result.verifications || [];
+        const lastVerification = verifications[0]?.checked_at || purchase.last_verified_at || purchase.verified_at;
         const toneClass = copy.tone === "mint" ? "border-mint/25 bg-mint/10 text-mint" : copy.tone === "sun" ? "border-sun/25 bg-sun/10 text-sun" : "border-coral/25 bg-coral/10 text-coral";
 
         return (
-          <section className="mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30">
+          <section ref={resultRef} className="mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30">
             <div className={`border-b p-5 ${toneClass}`}>
               <p className="text-xs font-black uppercase tracking-[0.18em] opacity-80">Validación</p>
               <h2 className="mt-2 text-3xl font-black text-white">{copy.title}</h2>
@@ -122,12 +152,23 @@
                 <Detail label="ID Donos cliente" value={buyer.transaction_id} />
                 <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
                 <Detail label="Fecha de validación" value={formatDateTime(purchase.verified_at)} />
-                <Detail label="Veces comprobado" value={`${purchase.verification_count || 0}`} />
+                <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Veces comprobado</p>
+                  <p className="mt-1 text-sm font-black text-white">{purchase.verification_count || 0}</p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">Última vez: {formatDateTime(lastVerification)}</p>
+                  <button
+                    className="mt-3 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
+                    onClick={() => setShowVerificationLog(true)}
+                  >
+                    Más
+                  </button>
+                </div>
                 <Detail label="Validez QR" value={`${purchase.qr_valid_from || "Hoy"}${purchase.qr_valid_until ? ` → ${purchase.qr_valid_until}` : ""}`} />
                 <Detail label="Dirección entrega" value={purchase.delivery_address || "Recogida en tienda"} />
                 <Detail label="Dirección oferta" value={offer.address} />
               </div>
             </div>
+            {showVerificationLog && <VerificationOverlay verifications={verifications} onClose={() => setShowVerificationLog(false)} />}
           </section>
         );
       }
@@ -140,12 +181,20 @@
         const [scanner, setScanner] = React.useState(null);
         const [isScanning, setIsScanning] = React.useState(false);
         const [isVerifying, setIsVerifying] = React.useState(false);
+        const resultRef = React.useRef(null);
 
         React.useEffect(() => {
           const token = new URLSearchParams(window.location.search).get("ticket");
           if (token) verifyTicket({ qrToken: token });
           return () => stopScanner();
         }, []);
+
+        React.useEffect(() => {
+          if (!result) return;
+          setTimeout(() => {
+            resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 120);
+        }, [result]);
 
         async function getTokenOrRedirect() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -301,7 +350,7 @@
             </section>
 
             {status && <p className="mt-5 rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">{status}</p>}
-            <Result result={result} />
+            <Result result={result} resultRef={resultRef} />
           </main>
         );
       }

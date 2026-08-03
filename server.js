@@ -481,6 +481,136 @@ app.get("/api/me/purchases", async (request, response) => {
   }
 });
 
+app.get("/api/business/incoming-purchases", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const businessProfile = await ensureProfileForUser(auth.user);
+    if (businessProfile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data: purchases, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, validation_code, security_code, qr_token, qr_valid_from, qr_valid_until, verified_at, last_verified_at, verification_count, created_at")
+      .eq("receiver_profile_id", auth.user.id)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Business incoming purchases error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "purchases_table_missing" : "incoming_history_failed",
+      });
+    }
+
+    const buyerIds = [...new Set((purchases || []).map((purchase) => purchase.buyer_id).filter(Boolean))];
+    let buyersById = {};
+
+    if (buyerIds.length > 0) {
+      const { data: buyers, error: buyersError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, neighborhood, address, transaction_id")
+        .in("id", buyerIds);
+
+      if (buyersError) console.error("Business incoming buyers error:", buyersError);
+      buyersById = Object.fromEntries((buyers || []).map((buyer) => [buyer.id, buyer]));
+    }
+
+    const enriched = await enrichPurchases(purchases || []);
+
+    response.json({
+      purchases: enriched.map((purchase) => ({
+        ...purchase,
+        buyer: buyersById[purchase.buyer_id] || null,
+      })),
+    });
+  } catch (error) {
+    console.error("Business incoming purchases fatal error:", error);
+    response.status(500).json({ error: "incoming_history_failed" });
+  }
+});
+
+app.get("/api/business/scanned-tickets", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const businessProfile = await ensureProfileForUser(auth.user);
+    if (businessProfile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data: scans, error } = await supabaseAdmin
+      .from("ticket_verifications")
+      .select("id, purchase_id, business_id, method, status, checked_at")
+      .eq("business_id", auth.user.id)
+      .order("checked_at", { ascending: false })
+      .limit(300);
+
+    if (error) {
+      console.error("Business scanned tickets error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "ticket_verifications_table_missing" : "scanned_tickets_failed",
+      });
+    }
+
+    const purchaseIds = [...new Set((scans || []).map((scan) => scan.purchase_id).filter(Boolean))];
+    let purchases = [];
+
+    if (purchaseIds.length > 0) {
+      const { data: purchaseRows, error: purchasesError } = await supabaseAdmin
+        .from("purchases")
+        .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, delivery_address, total_points, receiver_transaction_id, receiver_profile_id, validation_code, security_code, qr_token, qr_valid_from, qr_valid_until, verified_at, last_verified_at, verification_count, created_at")
+        .in("id", purchaseIds);
+
+      if (purchasesError) {
+        console.error("Business scanned purchases error:", purchasesError);
+      }
+
+      purchases = purchaseRows || [];
+    }
+
+    const buyerIds = [...new Set(purchases.map((purchase) => purchase.buyer_id).filter(Boolean))];
+    let buyersById = {};
+
+    if (buyerIds.length > 0) {
+      const { data: buyers, error: buyersError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, neighborhood, address, transaction_id")
+        .in("id", buyerIds);
+
+      if (buyersError) console.error("Business scanned buyers error:", buyersError);
+      buyersById = Object.fromEntries((buyers || []).map((buyer) => [buyer.id, buyer]));
+    }
+
+    const enrichedPurchases = await enrichPurchases(purchases);
+    const purchasesById = Object.fromEntries(enrichedPurchases.map((purchase) => [purchase.id, purchase]));
+
+    response.json({
+      scans: (scans || []).map((scan) => {
+        const purchase = purchasesById[scan.purchase_id] || null;
+        return {
+          ...scan,
+          purchase: purchase ? { ...purchase, buyer: buyersById[purchase.buyer_id] || null } : null,
+        };
+      }),
+    });
+  } catch (error) {
+    console.error("Business scanned tickets fatal error:", error);
+    response.status(500).json({ error: "scanned_tickets_failed" });
+  }
+});
+
 app.get("/api/me/purchases/:id", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -592,6 +722,32 @@ app.post("/api/business/tickets/verify", async (request, response) => {
       return response.status(500).json({ error: "ticket_verify_failed" });
     }
 
+    const checkedAt = updatedPurchase?.last_verified_at || new Date().toISOString();
+    const { error: logError } = await supabaseAdmin
+      .from("ticket_verifications")
+      .insert({
+        purchase_id: purchase.id,
+        business_id: auth.user.id,
+        method,
+        status: ticketStatus,
+        checked_at: checkedAt,
+      });
+
+    if (logError && logError.code !== "42P01") {
+      console.error("Ticket verification log error:", logError);
+    }
+
+    const { data: verificationLog, error: verificationLogError } = await supabaseAdmin
+      .from("ticket_verifications")
+      .select("id, method, status, checked_at")
+      .eq("purchase_id", purchase.id)
+      .order("checked_at", { ascending: false })
+      .limit(50);
+
+    if (verificationLogError && verificationLogError.code !== "42P01") {
+      console.error("Ticket verification log read error:", verificationLogError);
+    }
+
     const { data: buyer } = await supabaseAdmin
       .from("profiles")
       .select("id, display_name, email, phone, neighborhood, address, transaction_id")
@@ -611,6 +767,14 @@ app.post("/api/business/tickets/verify", async (request, response) => {
         display_name: businessProfile.display_name,
         transaction_id: businessProfile.transaction_id,
       },
+      verifications: verificationLog || [
+        {
+          id: "latest",
+          method,
+          status: ticketStatus,
+          checked_at: checkedAt,
+        },
+      ],
     });
   } catch (error) {
     console.error("Ticket verification fatal error:", error);
