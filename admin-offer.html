@@ -183,7 +183,7 @@
         const [age, setAge] = React.useState("");
         const [author, setAuthor] = React.useState("");
         const [description, setDescription] = React.useState("");
-        const [cartButtonText, setCartButtonText] = React.useState("Poner en la cesta");
+        const [cartButtonText, setCartButtonText] = React.useState("Comprar");
         const [receiverMode, setReceiverMode] = React.useState("business");
         const [businessProfile, setBusinessProfile] = React.useState(null);
         const [soldCount, setSoldCount] = React.useState(0);
@@ -237,7 +237,7 @@
             setAge(draft.age || "");
             setAuthor(draft.author || "");
             setDescription(draft.description || "");
-            setCartButtonText(draft.cartButtonText || "Poner en la cesta");
+            setCartButtonText(draft.cartButtonText || "Comprar");
             setReceiverMode(draft.receiverMode || "business");
             setReceiverId(draft.receiverId || "");
             setReceiverName(draft.receiverName || "");
@@ -288,7 +288,7 @@
             setAge(data.age || "");
             setAuthor(data.author || "");
             setDescription(data.description || "");
-            setCartButtonText(data.cart_button_text || "Poner en la cesta");
+            setCartButtonText(data.cart_button_text || "Comprar");
             setReceiverId(data.receiver_transaction_id || "");
             setReceiverName(data.receiver_display_name || "");
             setReceiverMode("custom");
@@ -519,7 +519,7 @@
           setAge("");
           setAuthor("");
           setDescription("");
-          setCartButtonText("Poner en la cesta");
+          setCartButtonText("Comprar");
           setReceiverMode("business");
           setReceiverId(businessProfile?.transaction_id || "");
           setReceiverName(businessProfile?.display_name || "");
@@ -595,7 +595,7 @@
               age: age.trim() || null,
               author: author.trim() || null,
               description: description.trim() || null,
-              cart_button_text: cartButtonText.trim() || "Poner en la cesta",
+              cart_button_text: cartButtonText.trim() || "Comprar",
               receiver_transaction_id: cleanDonosId(receiverId) || null,
               receiver_display_name: receiverName || null,
               business_display_name: businessProfile?.display_name || null,
@@ -881,8 +881,8 @@
                   <textarea className={textareaClass} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Cuenta qué incluye la oferta..." />
                 </Field>
 
-                <Field label="Botón poner en la cesta">
-                  <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Poner en la cesta" />
+                <Field label="Botón de acción">
+                  <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Comprar, reservar, apuntarme..." />
                 </Field>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">

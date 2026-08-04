@@ -405,7 +405,7 @@
 	                  disabled={!canBuy}
 	                  onClick={goToCheckout}
 	                >
-	                  {outOfStock ? "Agotado" : "Comprar"}
+	                  {outOfStock ? "Agotado" : (offer.cart_button_text || "Comprar")}
 	                </button>
               </div>
             </div>

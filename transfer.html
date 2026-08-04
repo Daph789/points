@@ -82,6 +82,14 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "";
       }
 
+      function cleanDonosId(value) {
+        return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+      }
+
+      function accountTypeLabel(value) {
+        return value === "business" ? "Comercio / Empresa" : "Usuario";
+      }
+
       function redirectToLogin() {
         const next = window.location.pathname + window.location.search;
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
@@ -118,6 +126,16 @@
         const [expandedPack, setExpandedPack] = React.useState(null);
         const [isRedirecting, setIsRedirecting] = React.useState(false);
         const [status, setStatus] = React.useState("");
+        const [activeAction, setActiveAction] = React.useState("");
+        const [targetId, setTargetId] = React.useState("");
+        const [targetProfile, setTargetProfile] = React.useState(null);
+        const [targetStatus, setTargetStatus] = React.useState("");
+        const [movementPoints, setMovementPoints] = React.useState("");
+        const [movementNote, setMovementNote] = React.useState("");
+        const [isLookingUp, setIsLookingUp] = React.useState(false);
+        const [isSubmittingMovement, setIsSubmittingMovement] = React.useState(false);
+        const [confirmMovement, setConfirmMovement] = React.useState(null);
+        const [successMovement, setSuccessMovement] = React.useState(null);
         const euros = points / 10;
         const displayedDonosId = formatDonosId(transactionId);
         const fixedFee = 1.2;
@@ -169,6 +187,14 @@
           }
           return Number(data?.points || 0);
         }, []);
+
+        function openAction(action) {
+          setActiveAction((current) => current === action ? "" : action);
+          setTargetStatus("");
+          setTargetProfile(null);
+          setConfirmMovement(null);
+          setSuccessMovement(null);
+        }
 
         React.useEffect(() => {
           loadProfile();
@@ -291,6 +317,134 @@
           }
         }
 
+        async function lookupTarget() {
+          const cleanId = cleanDonosId(targetId);
+          setTargetStatus("");
+          setTargetProfile(null);
+
+          if (cleanId.length !== 12) {
+            setTargetStatus("Introduce un ID Donos válido de 12 caracteres.");
+            return;
+          }
+
+          setIsLookingUp(true);
+          try {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) {
+              redirectToLogin();
+              return;
+            }
+
+            const response = await fetch(`/api/points/lookup?donos_id=${encodeURIComponent(cleanId)}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "lookup_failed");
+            if (data.is_self) {
+              setTargetStatus("No puedes usar tu propio ID Donos para esta operación.");
+              return;
+            }
+            setTargetProfile(data.profile);
+            setTargetStatus("Cuenta encontrada. Revisa los datos antes de continuar.");
+          } catch (error) {
+            setTargetStatus(
+              error.message?.includes("profile_not_found")
+                ? "No encontramos ninguna cuenta con este ID Donos."
+                : "No se ha podido verificar este ID Donos."
+            );
+          } finally {
+            setIsLookingUp(false);
+          }
+        }
+
+        function prepareMovement() {
+          const pointsToMove = Math.floor(Number(movementPoints || 0));
+          setStatus("");
+
+          if (!activeAction) return;
+          if (!targetProfile) {
+            setTargetStatus("Primero verifica el ID Donos.");
+            return;
+          }
+          if (!Number.isFinite(pointsToMove) || pointsToMove <= 0) {
+            setStatus("Introduce una cantidad de puntos válida.");
+            return;
+          }
+          if (activeAction === "send" && points < pointsToMove) {
+            setStatus("No tienes puntos suficientes para enviar esta cantidad.");
+            return;
+          }
+
+          setConfirmMovement({
+            type: activeAction,
+            points: pointsToMove,
+            note: movementNote.trim(),
+            target: targetProfile,
+          });
+        }
+
+        async function submitMovement() {
+          if (!confirmMovement) return;
+          setIsSubmittingMovement(true);
+          setStatus("");
+
+          try {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) {
+              redirectToLogin();
+              return;
+            }
+
+            const isRequest = confirmMovement.type === "request";
+            const response = await fetch(isRequest ? "/api/points/request" : "/api/points/send", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                receiverDonosId: isRequest ? undefined : cleanDonosId(targetId),
+                payerDonosId: isRequest ? cleanDonosId(targetId) : undefined,
+                points: confirmMovement.points,
+                note: confirmMovement.note,
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "movement_failed");
+
+            if (!isRequest && typeof data.sender_points === "number") setPoints(data.sender_points);
+            setSuccessMovement({
+              ...confirmMovement,
+              title: isRequest ? "Solicitud enviada" : "Puntos enviados",
+              text: isRequest
+                ? `${confirmMovement.target.display_name} recibirá tu solicitud y podrá pagarla desde su historial.`
+                : `Transferencia completada. Tu nuevo saldo es ${formatNumber(data.sender_points)} pts.`,
+            });
+            setConfirmMovement(null);
+            setTargetId("");
+            setTargetProfile(null);
+            setTargetStatus("");
+            setMovementPoints("");
+            setMovementNote("");
+            await loadProfile();
+          } catch (error) {
+            const message = error.message || "";
+            setStatus(
+              message.includes("point_transfers_table_missing")
+                ? "Falta activar el SQL de transferencias en Supabase."
+                : message.includes("insufficient_points")
+                  ? "No tienes puntos suficientes."
+                  : message.includes("self")
+                    ? "No puedes hacer esta operación contigo mismo."
+                    : "No se ha podido completar la operación."
+            );
+          } finally {
+            setIsSubmittingMovement(false);
+          }
+        }
+
         return (
           <main className="mx-auto min-h-screen w-full max-w-3xl px-3 pb-28 pt-4 sm:px-6">
             <header className="flex items-center justify-between gap-3">
@@ -402,11 +556,181 @@
                   {isRedirecting && <p className="mt-3 text-sm font-bold text-mint">Abriendo Stripe...</p>}
                 </div>
               )}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ActionButton icon="send" title="Enviar puntos" detail="Transfiere puntos a otro ID Donos." />
-                <ActionButton icon="request" title="Pedir puntos" detail="Solicita puntos a una persona o comercio." />
+	              <div className="grid gap-3 sm:grid-cols-2">
+	                <ActionButton icon="send" title="Enviar puntos" detail="Transfiere puntos a otro ID Donos." onClick={() => openAction("send")} />
+	                <ActionButton icon="request" title="Pedir puntos" detail="Solicita puntos a una persona o comercio." onClick={() => openAction("request")} />
+	              </div>
+                {activeAction && (
+                  <section className="rounded-[34px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">
+                          {activeAction === "send" ? "Enviar" : "Pedir"}
+                        </p>
+                        <h2 className="mt-2 text-2xl font-black text-white">
+                          {activeAction === "send" ? "Enviar puntos" : "Pedir puntos"}
+                        </h2>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-slate-400">
+                          {activeAction === "send"
+                            ? "Busca a la persona por su ID Donos y confirma antes de transferir."
+                            : "Crea una solicitud para que otra cuenta te envíe puntos."}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 text-xl font-black text-white ring-1 ring-white/10"
+                        onClick={() => setActiveAction("")}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="mt-5 grid gap-4">
+                      <label>
+                        <span className="text-sm font-bold text-slate-300">ID Donos</span>
+                        <div className="mt-2 grid gap-2 min-[430px]:grid-cols-[1fr_auto]">
+                          <input
+                            className="h-14 rounded-2xl border border-white/10 bg-[#0D111D] px-4 font-mono text-base font-black uppercase text-white outline-none placeholder:text-slate-600 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                            value={formatDonosId(targetId)}
+                            onChange={(event) => {
+                              setTargetId(cleanDonosId(event.target.value));
+                              setTargetProfile(null);
+                              setTargetStatus("");
+                            }}
+                            placeholder="3B8K-1940-A27Z"
+                          />
+                          <button
+                            type="button"
+                            className="h-14 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                            disabled={isLookingUp}
+                            onClick={lookupTarget}
+                          >
+                            {isLookingUp ? "Buscando..." : "Verificar"}
+                          </button>
+                        </div>
+                      </label>
+
+                      {(targetStatus || targetProfile) && (
+                        <div className={`rounded-3xl border p-4 ${
+                          targetProfile ? "border-mint/25 bg-mint/10" : "border-coral/25 bg-coral/10"
+                        }`}>
+                          {targetProfile ? (
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-lg font-black text-white">{targetProfile.display_name || "Cuenta Donos"}</p>
+                                <p className="mt-1 text-sm font-bold text-slate-300">{targetProfile.email || "Email no visible"}</p>
+                                <p className="mt-1 text-xs font-black text-mint">{accountTypeLabel(targetProfile.account_type)}</p>
+                              </div>
+                              <span className="rounded-full bg-black/25 px-3 py-1 text-xs font-black text-white ring-1 ring-white/10">
+                                {formatDonosId(targetProfile.transaction_id)}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="text-sm font-bold text-coral">{targetStatus}</p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="grid gap-4 min-[430px]:grid-cols-2">
+                        <label>
+                          <span className="text-sm font-bold text-slate-300">Cantidad</span>
+                          <input
+                            className="mt-2 h-14 w-full rounded-2xl border border-white/10 bg-[#0D111D] px-4 text-base font-black text-white outline-none placeholder:text-slate-600 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                            inputMode="numeric"
+                            value={movementPoints}
+                            onChange={(event) => setMovementPoints(event.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="Ej. 50"
+                          />
+                        </label>
+                        <label>
+                          <span className="text-sm font-bold text-slate-300">Mensaje opcional</span>
+                          <input
+                            className="mt-2 h-14 w-full rounded-2xl border border-white/10 bg-[#0D111D] px-4 text-base font-bold text-white outline-none placeholder:text-slate-600 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                            value={movementNote}
+                            maxLength="180"
+                            onChange={(event) => setMovementNote(event.target.value)}
+                            placeholder="Ej. Cine, cena, ayuda..."
+                          />
+                        </label>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="h-14 rounded-2xl bg-mint text-base font-black text-ink shadow-glow transition hover:bg-[#66ffd0] disabled:bg-white/10 disabled:text-slate-500 disabled:shadow-none"
+                        disabled={!targetProfile || !movementPoints || isSubmittingMovement}
+                        onClick={prepareMovement}
+                      >
+                        {activeAction === "send" ? "Continuar envío" : "Continuar solicitud"}
+                      </button>
+                    </div>
+                  </section>
+                )}
+	            </section>
+
+            {confirmMovement && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-2xl">
+                <section className="w-full max-w-md rounded-[36px] border border-white/10 bg-[#0D111D] p-6 shadow-2xl shadow-black/50">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Confirmación</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">
+                    {confirmMovement.type === "send" ? "Enviar puntos" : "Pedir puntos"}
+                  </h2>
+                  <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-sm font-bold text-slate-400">Cuenta</p>
+                    <p className="mt-1 text-xl font-black text-white">{confirmMovement.target.display_name}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-400">{confirmMovement.target.email || accountTypeLabel(confirmMovement.target.account_type)}</p>
+                  </div>
+                  <div className="mt-3 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                    <p className="text-sm font-bold text-mint">Total</p>
+                    <p className="mt-1 text-4xl font-black text-white">{formatNumber(confirmMovement.points)} pts</p>
+                  </div>
+                  {confirmMovement.note && (
+                    <p className="mt-3 rounded-2xl bg-white/[0.055] p-3 text-sm font-semibold text-slate-300">{confirmMovement.note}</p>
+                  )}
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button
+                      className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white"
+                      onClick={() => setConfirmMovement(null)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                      disabled={isSubmittingMovement}
+                      onClick={submitMovement}
+                    >
+                      {isSubmittingMovement ? "Procesando..." : confirmMovement.type === "send" ? "Enviar ahora" : "Enviar solicitud"}
+                    </button>
+                  </div>
+                </section>
               </div>
-            </section>
+            )}
+
+            {successMovement && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-2xl">
+                <section className="w-full max-w-md rounded-[36px] border border-mint/25 bg-[#0D111D] p-6 text-center shadow-2xl shadow-mint/10">
+                  <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-mint text-ink shadow-glow">
+                    <svg viewBox="0 0 24 24" className="h-10 w-10" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3">
+                      <path d="m5 12 4 4L19 6" />
+                    </svg>
+                  </div>
+                  <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-mint">Operación completada</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">{successMovement.title}</h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">{successMovement.text}</p>
+                  <a
+                    className="mt-5 grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow"
+                    href="historial.html"
+                  >
+                    Ver historial
+                  </a>
+                  <button
+                    className="mt-3 text-sm font-black text-slate-400"
+                    onClick={() => setSuccessMovement(null)}
+                  >
+                    Cerrar
+                  </button>
+                </section>
+              </div>
+            )}
 
             <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">

@@ -58,6 +58,19 @@ function cleanValidDonosId(value) {
   return clean.length === 12 && letters === 4 && digits === 8 ? clean : "";
 }
 
+function transferPublicProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.display_name,
+    email: profile.email,
+    phone: profile.phone,
+    account_type: profile.account_type,
+    transaction_id: profile.transaction_id,
+    is_verified: Boolean(profile.is_verified),
+  };
+}
+
 function generateTicketValidationCode() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   return Array.from({ length: 7 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -1064,6 +1077,308 @@ app.post("/api/purchases/offer", async (request, response) => {
   } catch (error) {
     console.error("Purchase error:", error);
     response.status(500).json({ error: "purchase_failed" });
+  }
+});
+
+app.get("/api/points/lookup", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const donosId = cleanValidDonosId(request.query?.donos_id);
+  if (!donosId) return response.status(400).json({ error: "invalid_donos_id" });
+
+  try {
+    await ensureProfileForUser(auth.user);
+    const { data: profile, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, account_type, transaction_id, is_verified")
+      .eq("transaction_id", donosId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!profile) return response.status(404).json({ error: "profile_not_found" });
+
+    response.json({ profile: transferPublicProfile(profile), is_self: profile.id === auth.user.id });
+  } catch (error) {
+    console.error("Point lookup error:", error);
+    response.status(500).json({ error: "lookup_failed" });
+  }
+});
+
+app.get("/api/me/point-movements", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const { data, error } = await supabaseAdmin
+      .from("point_transfers")
+      .select("id, from_profile_id, to_profile_id, points, transfer_type, status, note, completed_at, created_at")
+      .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Point movements error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "point_transfers_table_missing" : "point_movements_failed",
+      });
+    }
+
+    const profileIds = [...new Set((data || []).flatMap((item) => [item.from_profile_id, item.to_profile_id]).filter(Boolean))];
+    let profilesById = {};
+
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, account_type, transaction_id, is_verified")
+        .in("id", profileIds);
+
+      if (profilesError) console.error("Point movements profiles error:", profilesError);
+      profilesById = Object.fromEntries((profiles || []).map((item) => [item.id, transferPublicProfile(item)]));
+    }
+
+    response.json({
+      profile_id: profile.id,
+      movements: (data || []).map((item) => ({
+        ...item,
+        from_profile: profilesById[item.from_profile_id] || null,
+        to_profile: profilesById[item.to_profile_id] || null,
+        direction: item.from_profile_id === profile.id ? "out" : "in",
+      })),
+    });
+  } catch (error) {
+    console.error("Point movements fatal error:", error);
+    response.status(500).json({ error: "point_movements_failed" });
+  }
+});
+
+app.post("/api/points/send", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const receiverDonosId = cleanValidDonosId(request.body?.receiverDonosId);
+  const points = Math.floor(Number(request.body?.points || 0));
+  const note = String(request.body?.note || "").trim().slice(0, 180);
+
+  if (!receiverDonosId) return response.status(400).json({ error: "invalid_donos_id" });
+  if (!Number.isFinite(points) || points <= 0) return response.status(400).json({ error: "invalid_points" });
+
+  try {
+    const sender = await ensureProfileForUser(auth.user);
+    const { data: receiver, error: receiverError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, account_type, transaction_id, points, is_verified")
+      .eq("transaction_id", receiverDonosId)
+      .maybeSingle();
+
+    if (receiverError) throw receiverError;
+    if (!receiver) return response.status(404).json({ error: "receiver_not_found" });
+    if (receiver.id === sender.id) return response.status(400).json({ error: "self_transfer_not_allowed" });
+
+    const senderPoints = Number(sender.points || 0);
+    if (senderPoints < points) return response.status(400).json({ error: "insufficient_points" });
+
+    const [{ data: updatedSender, error: senderError }, { error: receiverUpdateError }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: senderPoints - points })
+        .eq("id", sender.id)
+        .select("points")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: Number(receiver.points || 0) + points })
+        .eq("id", receiver.id),
+    ]);
+
+    if (senderError || receiverUpdateError) {
+      console.error("Point send update error:", senderError || receiverUpdateError);
+      return response.status(500).json({ error: "points_update_failed" });
+    }
+
+    const { data: movement, error: movementError } = await supabaseAdmin
+      .from("point_transfers")
+      .insert({
+        from_profile_id: sender.id,
+        to_profile_id: receiver.id,
+        points,
+        transfer_type: "send",
+        status: "completed",
+        note: note || null,
+        completed_at: new Date().toISOString(),
+      })
+      .select("id, created_at")
+      .maybeSingle();
+
+    if (movementError) {
+      console.error("Point send log error:", movementError);
+      await Promise.all([
+        supabaseAdmin.from("profiles").update({ points: senderPoints }).eq("id", sender.id),
+        supabaseAdmin.from("profiles").update({ points: Number(receiver.points || 0) }).eq("id", receiver.id),
+      ]);
+      return response.status(500).json({ error: movementError.code === "42P01" ? "point_transfers_table_missing" : "movement_log_failed" });
+    }
+
+    response.json({
+      movement_id: movement?.id || null,
+      sender_points: Number(updatedSender?.points || 0),
+      receiver: transferPublicProfile(receiver),
+      points,
+    });
+  } catch (error) {
+    console.error("Point send fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "point_transfers_table_missing" : "send_failed" });
+  }
+});
+
+app.post("/api/points/request", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const payerDonosId = cleanValidDonosId(request.body?.payerDonosId);
+  const points = Math.floor(Number(request.body?.points || 0));
+  const note = String(request.body?.note || "").trim().slice(0, 180);
+
+  if (!payerDonosId) return response.status(400).json({ error: "invalid_donos_id" });
+  if (!Number.isFinite(points) || points <= 0) return response.status(400).json({ error: "invalid_points" });
+
+  try {
+    const requester = await ensureProfileForUser(auth.user);
+    const { data: payer, error: payerError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, account_type, transaction_id, points, is_verified")
+      .eq("transaction_id", payerDonosId)
+      .maybeSingle();
+
+    if (payerError) throw payerError;
+    if (!payer) return response.status(404).json({ error: "payer_not_found" });
+    if (payer.id === requester.id) return response.status(400).json({ error: "self_request_not_allowed" });
+
+    const { data: movement, error } = await supabaseAdmin
+      .from("point_transfers")
+      .insert({
+        from_profile_id: payer.id,
+        to_profile_id: requester.id,
+        points,
+        transfer_type: "request",
+        status: "pending",
+        note: note || null,
+      })
+      .select("id, created_at")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    response.json({
+      movement_id: movement?.id || null,
+      payer: transferPublicProfile(payer),
+      points,
+    });
+  } catch (error) {
+    console.error("Point request fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "point_transfers_table_missing" : "request_failed" });
+  }
+});
+
+app.post("/api/points/requests/:id/respond", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const action = request.body?.action === "decline" ? "decline" : "pay";
+
+  try {
+    const payer = await ensureProfileForUser(auth.user);
+    const { data: movement, error: movementError } = await supabaseAdmin
+      .from("point_transfers")
+      .select("id, from_profile_id, to_profile_id, points, transfer_type, status")
+      .eq("id", request.params.id)
+      .maybeSingle();
+
+    if (movementError) throw movementError;
+    if (!movement) return response.status(404).json({ error: "request_not_found" });
+    if (movement.from_profile_id !== payer.id) return response.status(403).json({ error: "request_not_for_you" });
+    if (movement.transfer_type !== "request" || movement.status !== "pending") {
+      return response.status(400).json({ error: "request_not_pending" });
+    }
+
+    if (action === "decline") {
+      const { error } = await supabaseAdmin
+        .from("point_transfers")
+        .update({ status: "declined" })
+        .eq("id", movement.id);
+
+      if (error) throw error;
+      return response.json({ status: "declined", points: Number(payer.points || 0) });
+    }
+
+    const points = Number(movement.points || 0);
+    if (Number(payer.points || 0) < points) return response.status(400).json({ error: "insufficient_points" });
+
+    const { data: receiver, error: receiverError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, points")
+      .eq("id", movement.to_profile_id)
+      .maybeSingle();
+
+    if (receiverError || !receiver) return response.status(400).json({ error: "receiver_not_found" });
+
+    const [{ data: updatedPayer, error: payerError }, { error: receiverUpdateError }] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: Number(payer.points || 0) - points })
+        .eq("id", payer.id)
+        .select("points")
+        .maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .update({ points: Number(receiver.points || 0) + points })
+        .eq("id", receiver.id),
+    ]);
+
+    if (payerError || receiverUpdateError) {
+      console.error("Point request pay update error:", payerError || receiverUpdateError);
+      return response.status(500).json({ error: "points_update_failed" });
+    }
+
+    const { error: completeError } = await supabaseAdmin
+      .from("point_transfers")
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", movement.id);
+
+    if (completeError) {
+      console.error("Point request complete error:", completeError);
+      await Promise.all([
+        supabaseAdmin.from("profiles").update({ points: payerPoints }).eq("id", payer.id),
+        supabaseAdmin.from("profiles").update({ points: Number(receiver.points || 0) }).eq("id", receiver.id),
+      ]);
+      return response.status(500).json({ error: "request_complete_failed" });
+    }
+
+    response.json({ status: "completed", points: Number(updatedPayer?.points || 0) });
+  } catch (error) {
+    console.error("Point request respond fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "point_transfers_table_missing" : "request_response_failed" });
   }
 });
 

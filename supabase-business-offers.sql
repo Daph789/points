@@ -224,7 +224,7 @@ begin
     nullif(offer ->> 'age', ''),
     nullif(offer ->> 'author', ''),
     nullif(offer ->> 'description', ''),
-    coalesce(nullif(offer ->> 'cart_button_text', ''), 'Poner en la cesta'),
+    coalesce(nullif(offer ->> 'cart_button_text', ''), 'Comprar'),
     nullif(offer ->> 'receiver_transaction_id', ''),
     nullif(offer ->> 'receiver_display_name', ''),
     coalesce((offer ->> 'delivery_home_enabled')::boolean, false),

@@ -91,6 +91,11 @@
         return remaining !== null && remaining <= 0;
       }
 
+      function formatDonosId(value) {
+        const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "";
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
@@ -239,16 +244,75 @@
         );
       }
 
+      function PointMovementCard({ movement, profileId, onRespond, isResponding }) {
+        const isOut = movement.from_profile_id === profileId;
+        const other = isOut ? movement.to_profile : movement.from_profile;
+        const isRequest = movement.transfer_type === "request";
+        const isPendingRequestToMe = isRequest && movement.status === "pending" && isOut;
+        const title = isRequest
+          ? isOut
+            ? `${movement.to_profile?.display_name || "Alguien"} te pide puntos`
+            : `Pediste puntos a ${movement.from_profile?.display_name || "alguien"}`
+          : isOut
+            ? `Enviado a ${other?.display_name || "Cuenta Donos"}`
+            : `Recibido de ${other?.display_name || "Cuenta Donos"}`;
+        const tone = movement.status === "declined" ? "coral" : movement.status === "pending" ? "sun" : isOut ? "coral" : "mint";
+        const pointsLabel = `${isOut && movement.status !== "declined" ? "-" : "+"}${movement.points || 0} pts`;
+        return (
+          <article className="rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-base font-black text-white">{title}</p>
+                <p className="mt-1 text-sm font-bold text-slate-400">
+                  {other?.email || formatDonosId(other?.transaction_id) || "Cuenta Donos"} · {formatDate(movement.created_at)} · {formatTime(movement.created_at)}
+                </p>
+                {movement.note && <p className="mt-2 rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
+              </div>
+              <div className="text-right">
+                <p className={`rounded-full px-3 py-1 text-sm font-black ${
+                  tone === "mint" ? "bg-mint text-ink" : tone === "sun" ? "bg-sun text-ink" : "bg-coral/15 text-coral ring-1 ring-coral/25"
+                }`}>
+                  {movement.status === "declined" ? "Rechazado" : movement.status === "pending" ? "Pendiente" : pointsLabel}
+                </p>
+                {movement.status === "completed" && <p className="mt-2 text-xs font-black text-slate-500">Completado</p>}
+              </div>
+            </div>
+            {isPendingRequestToMe && (
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  className="h-11 rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral disabled:opacity-60"
+                  disabled={isResponding}
+                  onClick={() => onRespond(movement.id, "decline")}
+                >
+                  Rechazar
+                </button>
+                <button
+                  className="h-11 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                  disabled={isResponding}
+                  onClick={() => onRespond(movement.id, "pay")}
+                >
+                  Pagar ahora
+                </button>
+              </div>
+            )}
+          </article>
+        );
+      }
+
       function App() {
         const [mode, setMode] = React.useState("purchases");
         const [purchases, setPurchases] = React.useState([]);
         const [incomingPurchases, setIncomingPurchases] = React.useState([]);
         const [scannedTickets, setScannedTickets] = React.useState([]);
         const [businessOffers, setBusinessOffers] = React.useState([]);
+        const [pointMovements, setPointMovements] = React.useState([]);
+        const [profileId, setProfileId] = React.useState("");
         const [accountType, setAccountType] = React.useState("user");
         const [status, setStatus] = React.useState("Cargando historial...");
         const [incomingStatus, setIncomingStatus] = React.useState("");
         const [scannedStatus, setScannedStatus] = React.useState("");
+        const [movementStatus, setMovementStatus] = React.useState("");
+        const [respondingMovementId, setRespondingMovementId] = React.useState("");
         const [search, setSearch] = React.useState("");
         const [incomingFilter, setIncomingFilter] = React.useState("all");
         const [stockFilter, setStockFilter] = React.useState(0);
@@ -272,6 +336,7 @@
             const profileData = await profileResponse.json().catch(() => ({}));
             const type = profileData.profile?.account_type === "business" ? "business" : "user";
             setAccountType(type);
+            setProfileId(profileData.profile?.id || "");
 
             const response = await fetch("/api/me/purchases", {
               headers: { Authorization: `Bearer ${token}` },
@@ -281,6 +346,23 @@
 
             setPurchases(data.purchases || []);
             setStatus("");
+
+            setMovementStatus("Cargando movimientos...");
+            const movementsResponse = await fetch("/api/me/point-movements", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const movementsData = await movementsResponse.json().catch(() => ({}));
+            if (movementsResponse.ok) {
+              setPointMovements(movementsData.movements || []);
+              setProfileId((current) => current || movementsData.profile_id || "");
+              setMovementStatus("");
+            } else {
+              setMovementStatus(
+                movementsData.error === "point_transfers_table_missing"
+                  ? "Falta activar el SQL de transferencias para ver estos movimientos."
+                  : "No se han podido cargar los movimientos de puntos."
+              );
+            }
 
             if (type === "business") {
               setIncomingStatus("Cargando ingresos...");
@@ -407,6 +489,54 @@
           })
           .sort((a, b) => getRemainingStock(a) - getRemainingStock(b));
 
+        const filteredPointMovements = pointMovements.filter((movement) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            movement.from_profile?.display_name,
+            movement.from_profile?.email,
+            movement.to_profile?.display_name,
+            movement.to_profile?.email,
+            movement.points,
+            movement.status,
+            movement.transfer_type,
+            movement.note,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        async function respondToPointRequest(movementId, action) {
+          setRespondingMovementId(movementId);
+          setMovementStatus("");
+          try {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) {
+              window.location.href = `login.html?next=${encodeURIComponent("historial.html")}`;
+              return;
+            }
+            const response = await fetch(`/api/points/requests/${movementId}/respond`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ action }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "request_response_failed");
+            setMovementStatus(action === "pay" ? "Solicitud pagada correctamente." : "Solicitud rechazada.");
+            await loadPurchases();
+          } catch (error) {
+            setMovementStatus(
+              error.message?.includes("insufficient_points")
+                ? "No tienes puntos suficientes para pagar esta solicitud."
+                : "No se ha podido responder a esta solicitud."
+            );
+          } finally {
+            setRespondingMovementId("");
+          }
+        }
+
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-28 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between gap-3">
@@ -427,7 +557,7 @@
               <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donos</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
-	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-5" : "min-[390px]:grid-cols-2"}`}>
+	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-6" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
                 <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("purchases")}
@@ -436,7 +566,7 @@
                   <p className="mt-2 text-base font-black text-white">Historial de compras</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">{purchases.length} pedidos</p>
                 </button>
-                {accountType === "business" && (
+	                {accountType === "business" && (
                   <>
                     <button
                       className={`rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
@@ -465,6 +595,14 @@
 	                  </>
 	                )}
                 <button
+                  className={`rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  onClick={() => setMode("points")}
+                >
+                  <p className="text-2xl">⇄</p>
+                  <p className="mt-2 text-base font-black text-white">Puntos</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">{pointMovements.length} movimientos</p>
+                </button>
+	                <button
                   className={`rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("debts")}
                 >
@@ -616,6 +754,48 @@
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       No hay productos en este filtro.
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : mode === "points" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar persona, email, estado..."
+                    />
+                  </label>
+                </div>
+
+                {movementStatus && (
+                  <div className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${
+                    movementStatus.includes("correctamente") || movementStatus.includes("rechazada")
+                      ? "border-mint/25 bg-mint/10 text-mint"
+                      : "border-coral/25 bg-coral/10 text-coral"
+                  }`}>
+                    {movementStatus}
+                  </div>
+                )}
+
+                <div className="mt-5 space-y-3">
+                  {filteredPointMovements.length > 0 ? (
+                    filteredPointMovements.map((movement) => (
+                      <PointMovementCard
+                        key={movement.id}
+                        movement={movement}
+                        profileId={profileId}
+                        isResponding={respondingMovementId === movement.id}
+                        onRespond={respondToPointRequest}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      {pointMovements.length === 0 ? "Todavía no tienes movimientos de puntos." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>
