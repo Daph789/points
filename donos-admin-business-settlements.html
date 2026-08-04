@@ -73,6 +73,7 @@
         const [isLoading, setIsLoading] = React.useState(false);
         const [isPaying, setIsPaying] = React.useState(false);
         const [pointsToRemove, setPointsToRemove] = React.useState("");
+        const [bankFeeEuros, setBankFeeEuros] = React.useState("");
         const [periodStart, setPeriodStart] = React.useState("");
         const [periodEnd, setPeriodEnd] = React.useState("");
         const [note, setNote] = React.useState("");
@@ -109,6 +110,7 @@
           setDetail(null);
           setDetailSearch("");
           setPointsToRemove(String(business.current_points || 0));
+          setBankFeeEuros("");
           setPeriodStart("");
           setPeriodEnd("");
           setNote("");
@@ -158,10 +160,11 @@
           setIsPaying(true);
           setStatus("");
           try {
+            const bankFeeCents = Math.max(Math.round(Number(String(bankFeeEuros || "0").replace(",", ".")) * 100), 0);
             const response = await fetch(`/api/admin/business-settlements/${selected.id}/pay`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password, points, periodStart, periodEnd, note }),
+              body: JSON.stringify({ password, points, bankFeeCents, periodStart, periodEnd, note }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "No se ha podido registrar la liquidación.");
@@ -228,6 +231,7 @@
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
+                <a className="flex-1 rounded-full border border-coral/25 bg-coral/10 px-4 py-2 text-center text-sm font-black text-coral sm:flex-none" href="donos-admin-bank-fee-debts.html">Deudas banco</a>
                 <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadBusinesses}>Actualizar</button>
               </div>
             </header>
@@ -294,14 +298,20 @@
 
                   <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.045] p-4">
                     <p className="text-sm font-black text-white">Registrar dinero enviado fuera de Donos</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes.</p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-5">
+                    <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes. Si tu banco te cobra comisión, apúntala como gasto Donos.</p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="number" min="1" value={pointsToRemove} onChange={(event) => setPointsToRemove(event.target.value)} placeholder="Puntos" />
+                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" inputMode="decimal" value={bankFeeEuros} onChange={(event) => setBankFeeEuros(event.target.value)} placeholder="Frais banco € (0)" />
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
                       <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-xs font-black text-slate-200" onClick={setToday}>Hoy</button>
                       <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-xs font-black text-slate-200" onClick={setYesterday}>Ayer</button>
                     </div>
+                    {Number(String(bankFeeEuros || "0").replace(",", ".")) > 0 && (
+                      <p className="mt-3 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-xs font-black text-coral">
+                        Esta comisión se sumará a Deudas bancarias Donos: {money(Math.round(Number(String(bankFeeEuros || "0").replace(",", ".")) * 100))}
+                      </p>
+                    )}
                     <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota: pago Stripe, llamada, etc." />
                       <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-slate-200" onClick={setDetailSalesPoints}>Usar ventas del periodo</button>

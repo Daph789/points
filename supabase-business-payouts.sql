@@ -11,6 +11,9 @@ create table if not exists public.business_payouts (
 
 create index if not exists business_payouts_business_idx on public.business_payouts(business_id, created_at desc);
 
+alter table public.business_payouts
+  add column if not exists bank_fee_cents integer not null default 0;
+
 notify pgrst, 'reload schema';
 
 select 'business_payouts listo' as status;

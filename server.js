@@ -452,6 +452,57 @@ app.post("/api/admin/stripe-debts", async (request, response) => {
   });
 });
 
+app.post("/api/admin/bank-fee-debts", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("business_payouts")
+    .select("id, business_id, points, amount_cents, bank_fee_cents, note, period_start, period_end, created_at")
+    .gt("bank_fee_cents", 0)
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error("Admin bank fee debts error:", error);
+    return response.status(500).json({
+      error: error.code === "42P01" || error.code === "42703"
+        ? "Falta ejecutar el SQL de liquidaciones actualizado."
+        : "No se han podido cargar las deudas bancarias",
+    });
+  }
+
+  const businessIds = [...new Set((data || []).map((item) => item.business_id).filter(Boolean))];
+  let businessesById = {};
+
+  if (businessIds.length > 0) {
+    const { data: businesses, error: businessesError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, address, account_type, transaction_id, points, is_verified")
+      .in("id", businessIds);
+
+    if (businessesError) console.error("Admin bank fee debt profiles error:", businessesError);
+    businessesById = Object.fromEntries((businesses || []).map((business) => [business.id, business]));
+  }
+
+  response.json({
+    debts: (data || []).map((item) => ({
+      ...item,
+      business: businessesById[item.business_id] || null,
+    })),
+    summary: {
+      total_debt_cents: (data || []).reduce((sum, item) => sum + Number(item.bank_fee_cents || 0), 0),
+      total_items: (data || []).length,
+      total_paid_to_businesses_cents: (data || []).reduce((sum, item) => sum + Number(item.amount_cents || 0), 0),
+    },
+  });
+});
+
 app.post("/api/admin/accounts", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -461,7 +512,11 @@ app.post("/api/admin/accounts", async (request, response) => {
     return response.status(401).json({ error: "Mot de passe incorrect" });
   }
 
-  const [{ data: accounts, error: accountsError }, { data: recharges, error: rechargesError }] = await Promise.all([
+  const [
+    { data: accounts, error: accountsError },
+    { data: recharges, error: rechargesError },
+    { data: payoutFees, error: payoutFeesError },
+  ] = await Promise.all([
     supabaseAdmin
       .from("profiles")
       .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, created_at")
@@ -469,6 +524,9 @@ app.post("/api/admin/accounts", async (request, response) => {
     supabaseAdmin
       .from("stripe_point_recharges")
       .select("amount_total, stripe_fee_amount, net_amount, points"),
+    supabaseAdmin
+      .from("business_payouts")
+      .select("bank_fee_cents"),
   ]);
 
   if (accountsError) {
@@ -478,6 +536,9 @@ app.post("/api/admin/accounts", async (request, response) => {
 
   if (rechargesError) {
     console.error("Admin accounts recharges error:", rechargesError);
+  }
+  if (payoutFeesError && payoutFeesError.code !== "42P01" && payoutFeesError.code !== "42703") {
+    console.error("Admin accounts payout fees error:", payoutFeesError);
   }
 
   const enrichedAccounts = (accounts || []).map((account) => {
@@ -495,6 +556,7 @@ app.post("/api/admin/accounts", async (request, response) => {
   const totalNet = enrichedRecharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
   const donosCompanyMoney = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
   const donosDebt = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
+  const bankFeeDebt = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.bank_fee_cents || 0), 0);
   const totalLiability = totalPoints * 10;
 
   response.json({
@@ -512,6 +574,8 @@ app.post("/api/admin/accounts", async (request, response) => {
       reserve_margin_cents: totalNet - totalLiability,
       donos_company_money_cents: donosCompanyMoney,
       donos_debt_cents: donosDebt,
+      bank_fee_debt_cents: bankFeeDebt,
+      total_operational_debt_cents: donosDebt + bankFeeDebt,
     },
   });
 });
@@ -577,7 +641,7 @@ async function enrichBusinessesForSettlement(businesses) {
       .in("user_id", businessIds),
     supabaseAdmin
       .from("business_payouts")
-      .select("id, business_id, points, amount_cents, note, period_start, period_end, created_at")
+      .select("id, business_id, points, amount_cents, bank_fee_cents, note, period_start, period_end, created_at")
       .in("business_id", businessIds),
   ]);
 
@@ -676,7 +740,7 @@ app.post("/api/admin/business-settlements/:businessId", async (request, response
       .limit(500),
     supabaseAdmin
       .from("business_payouts")
-      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+      .select("id, points, amount_cents, bank_fee_cents, note, period_start, period_end, created_at")
       .eq("business_id", businessId)
       .order("created_at", { ascending: false })
       .limit(250),
@@ -735,6 +799,7 @@ app.post("/api/admin/business-settlements/:businessId/pay", async (request, resp
   const note = String(request.body?.note || "").trim().slice(0, 180);
   const periodStart = String(request.body?.periodStart || "").trim() || null;
   const periodEnd = String(request.body?.periodEnd || "").trim() || null;
+  const bankFeeCents = Math.max(Math.round(Number(request.body?.bankFeeCents || 0)), 0);
 
   if (!Number.isFinite(points) || points <= 0) {
     return response.status(400).json({ error: "Cantidad de puntos inválida" });
@@ -771,11 +836,12 @@ app.post("/api/admin/business-settlements/:businessId/pay", async (request, resp
         business_id: businessId,
         points,
         amount_cents: points * 10,
+        bank_fee_cents: bankFeeCents,
         note: note || null,
         period_start: periodStart,
         period_end: periodEnd,
       })
-      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+      .select("id, points, amount_cents, bank_fee_cents, note, period_start, period_end, created_at")
       .maybeSingle();
     payout = payoutResult.data;
     payoutError = payoutResult.error;
@@ -786,7 +852,9 @@ app.post("/api/admin/business-settlements/:businessId/pay", async (request, resp
     if (!updateError) await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", businessId);
     if (payout?.id) await supabaseAdmin.from("business_payouts").delete().eq("id", payout.id);
     return response.status(500).json({
-      error: payoutError?.code === "42P01" ? "Falta ejecutar el SQL de liquidaciones." : "No se ha podido registrar la liquidación",
+      error: payoutError?.code === "42P01" || payoutError?.code === "42703"
+        ? "Falta ejecutar el SQL de liquidaciones actualizado."
+        : "No se ha podido registrar la liquidación",
     });
   }
 
@@ -1325,7 +1393,7 @@ app.get("/api/business/payouts", async (request, response) => {
 
     const { data: payouts, error } = await supabaseAdmin
       .from("business_payouts")
-      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+        .select("id, points, amount_cents, bank_fee_cents, note, period_start, period_end, created_at")
       .eq("business_id", auth.user.id)
       .order("created_at", { ascending: false })
       .limit(250);

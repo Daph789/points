@@ -211,12 +211,17 @@
               <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" />
             </section>
 
-            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2">
+            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-3">
               <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" />
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deuda por comisiones</p>
                 <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.donos_debt_cents)}</p>
                 <p className="mt-2 text-xs font-black text-coral/80">Ver detalle</p>
+              </a>
+              <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-bank-fee-debts.html">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deudas bancarias</p>
+                <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.bank_fee_debt_cents)}</p>
+                <p className="mt-2 text-xs font-black text-coral/80">Transferencias a empresas</p>
               </a>
             </section>
 
