@@ -229,9 +229,10 @@
               <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" info={{ title: "Certificadas", text: "Cuentas que marcaste como verificadas para mostrar badge de confianza.", example: "Certificas una empresa y aparece el check azul." }} />
             </section>
 
-            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-3">
+            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
               <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donos", text: "Parte de los gastos Donos que queda para la empresa Donos tras estimar cortes Stripe.", example: "Cobras 1,20 € extra y Stripe corta 0,61 €: quedan 0,59 €." }} />
               <StatCard label="Beneficio Donos disponible" value={money(summary.donos_available_profit_cents)} tone={Number(summary.donos_available_profit_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Beneficio Donos disponible", text: "Este es el contador que debes mirar para saber si el dinero propio de Donos puede cubrir sus deudas operativas.", example: "Dinero Donos 15 € - deudas 2,45 € = 12,55 € disponibles." }} />
+              <StatCard label="Falta para estar en verde" value={money(summary.missing_to_green_cents)} tone={Number(summary.missing_to_green_cents || 0) > 0 ? "coral" : "mint"} info={{ title: "Falta para estar en verde", text: "Cantidad que Donos necesita ganar o añadir para que el beneficio disponible vuelva a 0 € o positivo.", example: "Dinero Donos 1,44 €, deudas 3,49 €: faltan 2,05 €." }} />
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-80">
                   <span>Deuda por comisiones</span>
@@ -277,6 +278,9 @@
                 <p className="text-sm font-black">Ejemplo claro</p>
                 <p className="mt-2 text-sm font-bold leading-6">
                   Si Dinero empresa Donos = 15 €, Deuda por comisiones = 2 €, y Deudas bancarias = 0,45 €, entonces Beneficio Donos disponible = 12,55 €. Eso significa que Donos puede cubrir esas deudas y todavía le quedan 12,55 € de beneficio disponible.
+                </p>
+                <p className="mt-3 text-sm font-bold leading-6">
+                  Con tu captura: Dinero empresa Donos = 1,44 €, Deuda por comisiones = 2,84 €, Deudas bancarias = 0,65 €. Total deudas = 3,49 €. Entonces 1,44 € - 3,49 € = -2,05 €. Para volver en verde, Donos necesita 2,05 €.
                 </p>
               </div>
             </section>

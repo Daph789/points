@@ -560,6 +560,7 @@ app.post("/api/admin/accounts", async (request, response) => {
   const businessPayoutsPaid = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
   const totalOperationalDebt = donosDebt + bankFeeDebt;
   const donosAvailableProfit = donosCompanyMoney - totalOperationalDebt;
+  const missingToGreen = Math.max(-donosAvailableProfit, 0);
   const estimatedCash = totalNet - businessPayoutsPaid - bankFeeDebt;
   const totalLiability = totalPoints * 10;
 
@@ -583,6 +584,7 @@ app.post("/api/admin/accounts", async (request, response) => {
       bank_fee_debt_cents: bankFeeDebt,
       total_operational_debt_cents: totalOperationalDebt,
       donos_available_profit_cents: donosAvailableProfit,
+      missing_to_green_cents: missingToGreen,
     },
   });
 });
