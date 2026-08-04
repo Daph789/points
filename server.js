@@ -481,7 +481,7 @@ async function buildNotificationsForProfile(profile) {
           key: `purchase:${purchase.id}:buyer`,
           subsection: "purchases",
           title: `Compra confirmada: ${offer.title || "pedido Donos"}`,
-          detail: `${purchase.total_points || 0} pts · ${offer.business_display_name || "Donos"}`,
+          detail: `${purchase.total_points || 0} ptos. · ${offer.business_display_name || "Donos"}`,
           href: `order-detail.html?id=${purchase.id}`,
           created_at: purchase.created_at,
         });
@@ -505,7 +505,7 @@ async function buildNotificationsForProfile(profile) {
         pushNotification(events, {
           key: `points:${movement.id}:${profile.id}:${movement.status}`,
           subsection: isDebt ? "debts" : "points",
-          title: isDebt ? `Solicitud pendiente de ${movement.points || 0} pts` : `Movimiento de ${movement.points || 0} pts`,
+          title: isDebt ? `Solicitud pendiente de ${movement.points || 0} ptos.` : `Movimiento de ${movement.points || 0} ptos.`,
           detail: movement.transfer_type === "request" ? "Solicitud de puntos" : "Transferencia de puntos",
           href: `historial.html?tab=${isDebt ? "debts" : "points"}`,
           created_at: movement.completed_at || movement.created_at,
@@ -542,7 +542,7 @@ async function buildNotificationsForProfile(profile) {
             key: `sale:${sale.id}:business`,
             subsection: "incoming",
             title: `Nueva venta: ${offer.title || "publicación"}`,
-            detail: `+${sale.total_points || 0} pts recibidos`,
+            detail: `+${sale.total_points || 0} ptos. recibidos`,
             href: `incoming-detail.html?id=${sale.id}`,
             created_at: sale.created_at,
           });

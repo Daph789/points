@@ -118,7 +118,7 @@
         async function deleteRecharge(item) {
           const profile = item.profiles || {};
           const label = profile.display_name || item.customer_email || "este cliente";
-          const confirmed = window.confirm(`¿Eliminar este pago de ${label} y retirar ${item.points} pts de su cuenta?`);
+          const confirmed = window.confirm(`¿Eliminar este pago de ${label} y retirar ${item.points} ptos. de su cuenta?`);
           if (!confirmed) return;
 
           setStatus("");
@@ -257,8 +257,8 @@
                       <p className="text-sm font-black text-white">{money(item.amount_total, item.currency)}</p>
                       <p className="text-sm font-black text-coral">{money(item.stripe_fee_amount, item.currency)}</p>
                       <div>
-                        <p className="text-sm font-black text-mint">+{item.points} pts</p>
-                        <p className="mt-1 text-xs font-bold text-slate-500">Ahora: {profile.points || 0} pts</p>
+                        <p className="text-sm font-black text-mint">+{item.points} ptos.</p>
+                        <p className="mt-1 text-xs font-bold text-slate-500">Ahora: {profile.points || 0} ptos.</p>
                       </div>
                       <div className="grid gap-2 min-[360px]:grid-cols-2 lg:grid-cols-2">
                         <button className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink" onClick={() => setSelected(item)}>
@@ -304,8 +304,8 @@
                     <DetailItem label="Dirección" value={selected.profiles?.address} />
                     <DetailItem label="ID Donos" value={formatDonosId(selected.profiles?.transaction_id)} />
                     <DetailItem label="Tipo de cuenta" value={selected.profiles?.account_type} />
-                    <DetailItem label="Puntos comprados" value={`${selected.points} pts`} />
-                    <DetailItem label="Puntos actuales" value={`${selected.profiles?.points || 0} pts`} />
+                    <DetailItem label="Puntos comprados" value={`${selected.points} ptos.`} />
+                    <DetailItem label="Puntos actuales" value={`${selected.profiles?.points || 0} ptos.`} />
                     <DetailItem label="Pagó" value={money(selected.amount_total, selected.currency)} />
                     <DetailItem label="Stripe cortó" value={money(selected.stripe_fee_amount, selected.currency)} />
                     <DetailItem label="Neto recibido" value={money(selected.net_amount, selected.currency)} />

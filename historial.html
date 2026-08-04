@@ -35,6 +35,11 @@
       }
       #root, main { max-width: 100%; overflow-x: hidden; }
       * { min-width: 0; }
+      @view-transition { navigation: auto; }
+      ::view-transition-old(root), ::view-transition-new(root) {
+        animation-duration: 180ms;
+        animation-timing-function: cubic-bezier(.22,.61,.36,1);
+      }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -150,7 +155,7 @@
 
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
               {isUnread && <UnreadPill />}
-              <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{purchase.total_points || 0} pts</p>
+              <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{purchase.total_points || 0} ptos.</p>
               <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">Ver detalle</p>
             </div>
           </a>
@@ -216,7 +221,7 @@
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-black text-white">{offer.title || "Billete Donos"}</p>
-              <p className="mt-1 truncate text-sm font-bold text-slate-400">{buyerName} · {purchase.total_points || 0} pts</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{buyerName} · {purchase.total_points || 0} ptos.</p>
               {businessName && (
                 <p className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-black text-slate-200 ring-1 ring-white/10">
                   <span className="truncate">{businessName}</span>
@@ -278,28 +283,29 @@
             ? `Enviado a ${other?.display_name || "Cuenta Donos"}`
             : `Recibido de ${other?.display_name || "Cuenta Donos"}`;
         const tone = movement.status === "declined" ? "coral" : movement.status === "pending" ? "sun" : isOut ? "coral" : "mint";
-        const pointsLabel = `${isOut && movement.status !== "declined" ? "-" : "+"}${movement.points || 0} pts`;
+        const pointsSign = isOut && movement.status !== "declined" ? "-" : "+";
+        const pointsToneClass = tone === "mint" ? "bg-mint text-ink" : tone === "sun" ? "bg-sun text-ink" : "bg-coral/15 text-coral ring-1 ring-coral/25";
+        const contact = other?.email || formatDonosId(other?.transaction_id) || "Cuenta Donos";
         return (
           <article
-            className={`rounded-[28px] border p-4 shadow-2xl shadow-black/20 ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
+            className={`rounded-[26px] border p-3 shadow-2xl shadow-black/20 transition active:scale-[0.99] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
             onClick={onRead}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="grid grid-cols-[1fr_auto] items-start gap-3">
               <div className="min-w-0">
-                <p className="truncate text-base font-black text-white">{title}</p>
-                <p className="mt-1 text-sm font-bold text-slate-400">
-                  {other?.email || formatDonosId(other?.transaction_id) || "Cuenta Donos"} · {formatDate(movement.created_at)} · {formatTime(movement.created_at)}
-                </p>
-                {movement.note && <p className="mt-2 rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-[15px] font-black leading-tight text-white sm:text-base">{title}</p>
+                  {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-coral shadow-[0_0_14px_rgba(255,107,107,0.75)]"></span>}
+                </div>
+                <p className="mt-1 truncate text-xs font-bold text-slate-400 sm:text-sm">{contact}</p>
+                <p className="mt-1 text-xs font-bold text-slate-600">{formatDate(movement.created_at)} · {formatTime(movement.created_at)}</p>
+                {movement.note && <p className="mt-2 max-w-full truncate rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
               </div>
-              <div className="text-right">
-                {isUnread && <UnreadPill />}
-                <p className={`rounded-full px-3 py-1 text-sm font-black ${
-                  tone === "mint" ? "bg-mint text-ink" : tone === "sun" ? "bg-sun text-ink" : "bg-coral/15 text-coral ring-1 ring-coral/25"
-                }`}>
-                  {movement.status === "declined" ? "Rechazado" : movement.status === "pending" ? "Pendiente" : pointsLabel}
+              <div className="flex min-w-[74px] flex-col items-end gap-1">
+                <p className={`inline-flex min-h-11 min-w-[70px] items-center justify-center rounded-2xl px-3 text-center text-base font-black ${pointsToneClass}`}>
+                  {movement.status === "declined" ? "No" : movement.status === "pending" ? "Pend." : `${pointsSign}${movement.points || 0}`}
                 </p>
-                {movement.status === "completed" && <p className="mt-2 text-xs font-black text-slate-500">Completado</p>}
+                <p className="text-[11px] font-black text-slate-500">ptos.</p>
               </div>
             </div>
             {isPendingRequestToMe && (
@@ -781,7 +787,7 @@
                 <div className="mt-5 rounded-[30px] border border-mint/20 bg-mint/10 p-5 shadow-glow">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Total recibido</p>
                   <p className="mt-2 text-4xl font-black text-white">
-                    +{incomingPurchases.reduce((sum, item) => sum + Number(item.total_points || 0), 0).toLocaleString("es-ES")} pts
+                    +{incomingPurchases.reduce((sum, item) => sum + Number(item.total_points || 0), 0).toLocaleString("es-ES")} ptos.
                   </p>
                 </div>
                 {unreadCount("incoming") > 0 && (

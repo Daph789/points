@@ -59,6 +59,12 @@
         min-width: 0;
       }
 
+      @view-transition { navigation: auto; }
+      ::view-transition-old(root), ::view-transition-new(root) {
+        animation-duration: 180ms;
+        animation-timing-function: cubic-bezier(.22,.61,.36,1);
+      }
+
       .glass {
         background: rgba(13, 17, 29, 0.78);
         backdrop-filter: blur(24px);
@@ -133,7 +139,7 @@
           title: "Cartelera joven",
           subtitle: "Cine Príncipe · Centro",
           price: "4,90€",
-          points: "+35 pts",
+          points: "+35 ptos.",
           tag: "Hoy",
           visual: "🎬",
           gradient: "from-[#42F2B3] via-[#183047] to-[#FF6B6B]",
@@ -142,7 +148,7 @@
           title: "Chaqueta vintage",
           subtitle: "Ane · Gros",
           price: "18€",
-          points: "+20 pts",
+          points: "+20 ptos.",
           tag: "Barrio",
           visual: "🧥",
           gradient: "from-[#FFD166] via-[#3A2746] to-[#0D111D]",
@@ -151,7 +157,7 @@
           title: "Entrada concierto",
           subtitle: "Dabadaba · Egia",
           price: "9€",
-          points: "+55 pts",
+          points: "+55 ptos.",
           tag: "Últimas",
           visual: "🎤",
           gradient: "from-[#A78BFA] via-[#17213C] to-[#42F2B3]",
@@ -160,7 +166,7 @@
           title: "Pack libros usados",
           subtitle: "Markel · Amara",
           price: "12€",
-          points: "+18 pts",
+          points: "+18 ptos.",
           tag: "Nuevo",
           visual: "📚",
           gradient: "from-[#7DD3FC] via-[#182031] to-[#FFD166]",
@@ -297,7 +303,7 @@
                     <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discountPercent}%</span>
                   )}
                   <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">
-                    {offer.required_points || 0} pts
+                    {offer.required_points || 0} ptos.
                   </span>
                 </div>
               </div>
@@ -350,13 +356,13 @@
           ["Dirección", offer.address],
           ["Categoría", offer.categories?.join(", ")],
           ["Precio base", formatEuro(offer.base_price)],
-          ["Puntos necesarios", `${offer.required_points || 0} pts`],
+          ["Puntos necesarios", `${offer.required_points || 0} ptos.`],
           ["Horarios", offer.hours],
           ["Fecha de inicio", offer.start_date],
           ["Fecha de fin", offer.end_date],
           ["Edad", offer.age],
           ["Autor/a", offer.author],
-          ["Entrega a domicilio", offer.delivery_home_enabled ? `${offer.delivery_home_points || 0} pts extra` : "No disponible"],
+          ["Entrega a domicilio", offer.delivery_home_enabled ? `${offer.delivery_home_points || 0} ptos. extra` : "No disponible"],
           ["Recogida en tienda", offer.delivery_pickup_enabled ? "Disponible" : "No disponible"],
         ];
 
@@ -472,7 +478,7 @@
       function App() {
         const [accountType, setAccountType] = React.useState("");
         const [accountName, setAccountName] = React.useState(localStorage.getItem("donosDisplayName") || "");
-        const [accountPoints, setAccountPoints] = React.useState(0);
+        const [accountPoints, setAccountPoints] = React.useState(Number(localStorage.getItem("donosPoints") || 0));
         const [transactionId, setTransactionId] = React.useState(localStorage.getItem("donosTransactionId") || "");
         const [isLoggedIn, setIsLoggedIn] = React.useState(false);
         const [copyStatus, setCopyStatus] = React.useState("");
@@ -500,7 +506,7 @@
             let type = typeFromUrl || localStorage.getItem("donosAccountType") || "user";
             let name = localStorage.getItem("donosDisplayName") || "";
             let donosId = localStorage.getItem("donosTransactionId") || "";
-            let points = 0;
+            let points = Number(localStorage.getItem("donosPoints") || 0);
 
             const { data: sessionData } = await supabaseClient.auth.getSession();
             const accessToken = sessionData.session?.access_token;
@@ -536,6 +542,7 @@
               if (profile?.transaction_id) donosId = profile.transaction_id;
               points = Number(profile?.points || 0);
               if (profile?.transaction_id) localStorage.setItem("donosTransactionId", profile.transaction_id);
+              if (profile && typeof profile.points !== "undefined") localStorage.setItem("donosPoints", String(points));
             }
 
             setAccountType(type);

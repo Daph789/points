@@ -215,8 +215,9 @@
             const updatedPoints = data?.buyer_points ?? 0;
             setPurchaseStatus({
               type: "success",
-              message: `Compra realizada. Te quedan ${updatedPoints} pts.`,
+              message: `Compra realizada. Te quedan ${updatedPoints} ptos.`,
             });
+            localStorage.setItem("donosPoints", String(updatedPoints));
             setSuccessPurchase({
               id: data?.purchase_id,
               title: offer.title || "Oferta Donos",
@@ -275,26 +276,26 @@
                 <div className="grid gap-3 min-[380px]:grid-cols-2">
                   <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Tus puntos</p>
-                    <p className="mt-2 text-2xl font-black text-white">{userPoints} pts</p>
+                    <p className="mt-2 text-2xl font-black text-white">{userPoints} ptos.</p>
                   </div>
                   <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
                     <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Total</p>
-                    <p className="mt-2 text-2xl font-black text-white">{totalPoints} pts</p>
+                    <p className="mt-2 text-2xl font-black text-white">{totalPoints} ptos.</p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-[#0D111D] p-4">
                   <div className="flex items-center justify-between gap-3 py-2">
                     <span className="text-sm font-bold text-slate-400">Oferta</span>
-                    <span className="text-sm font-black text-white">{offerPoints} pts</span>
+                    <span className="text-sm font-black text-white">{offerPoints} ptos.</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 py-3">
                     <span className="text-sm font-bold text-slate-400">{deliveryLabel}</span>
-                    <span className="text-sm font-black text-white">{deliveryPoints} pts</span>
+                    <span className="text-sm font-black text-white">{deliveryPoints} ptos.</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
                     <span className="text-base font-black text-white">A pagar</span>
-                    <span className="text-xl font-black text-mint">{totalPoints} pts</span>
+                    <span className="text-xl font-black text-mint">{totalPoints} ptos.</span>
                   </div>
                 </div>
 
@@ -430,11 +431,11 @@
                       </div>
                       <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
                         <span className="text-sm font-bold text-slate-400">Pagado</span>
-                        <span className="text-base font-black text-mint">{successPurchase.totalPoints} pts</span>
+                        <span className="text-base font-black text-mint">{successPurchase.totalPoints} ptos.</span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Saldo restante</span>
-                        <span className="text-base font-black text-white">{successPurchase.remainingPoints} pts</span>
+                        <span className="text-base font-black text-white">{successPurchase.remainingPoints} ptos.</span>
                       </div>
                     </div>
 

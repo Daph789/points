@@ -156,7 +156,7 @@
 	              </div>
 
               <div className="grid gap-3 min-[430px]:grid-cols-3">
-                <Detail label="Total" value={`${purchase.total_points || 0} pts`} />
+                <Detail label="Total" value={`${purchase.total_points || 0} ptos.`} />
                 <Detail label="Método" value={purchase.delivery_method === "home" ? "Entrega a domicilio" : "Recogida en tienda"} />
                 <Detail label="Pedido" value={`#${String(purchase.id || "").slice(0, 8).toUpperCase()}`} />
               </div>
