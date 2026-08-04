@@ -29,11 +29,71 @@ const supabaseAdmin =
     : null;
 
 const pointPacks = {
-  "50": { points: 50, amount: 620, baseAmount: 500, feeAmount: 120, label: "50 puntos" },
-  "100": { points: 100, amount: 1120, baseAmount: 1000, feeAmount: 120, label: "100 puntos" },
-  "250": { points: 250, amount: 2620, baseAmount: 2500, feeAmount: 120, label: "250 puntos" },
-  "500": { points: 500, amount: 5120, baseAmount: 5000, feeAmount: 120, label: "500 puntos" },
+  "50": { points: 50, amount: 620, baseAmount: 500, feeAmount: 120, stripeFeeAmount: 45, label: "50 puntos" },
+  "100": { points: 100, amount: 1120, baseAmount: 1000, feeAmount: 120, stripeFeeAmount: 61, label: "100 puntos" },
+  "250": { points: 250, amount: 2620, baseAmount: 2500, feeAmount: 120, stripeFeeAmount: 110, label: "250 puntos" },
+  "500": { points: 500, amount: 5120, baseAmount: 5000, feeAmount: 120, stripeFeeAmount: 191, label: "500 puntos" },
 };
+
+function pointPackFor(points) {
+  return pointPacks[String(points)] || null;
+}
+
+function computedStripeFeeForRecharge(recharge) {
+  const pack = pointPackFor(recharge?.points);
+  return pack ? pack.stripeFeeAmount : Number(recharge?.stripe_fee_amount || 0);
+}
+
+function enrichRechargeAccounting(recharge) {
+  const pack = pointPackFor(recharge?.points);
+  const amountTotal = Number(recharge?.amount_total || pack?.amount || 0);
+  const baseAmount = pack?.baseAmount ?? Number(recharge?.points || 0) * 10;
+  const donosFeeAmount = pack?.feeAmount ?? Math.max(amountTotal - baseAmount, 0);
+  const stripeFeeAmount = computedStripeFeeForRecharge(recharge);
+  const netAmount = amountTotal - stripeFeeAmount;
+  const companyMargin = donosFeeAmount - stripeFeeAmount;
+
+  return {
+    ...recharge,
+    amount_total: amountTotal,
+    stripe_fee_amount: stripeFeeAmount,
+    net_amount: netAmount,
+    point_value_cents: baseAmount,
+    donos_fee_amount: donosFeeAmount,
+    donos_company_margin_cents: Math.max(companyMargin, 0),
+    donos_debt_cents: Math.max(-companyMargin, 0),
+  };
+}
+
+async function getPointPackSettings() {
+  const defaults = Object.values(pointPacks).map((pack) => ({
+    ...pack,
+    is_disabled: false,
+  }));
+
+  if (!supabaseAdmin) return defaults;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("point_pack_settings")
+      .select("points, is_disabled")
+      .in("points", defaults.map((pack) => pack.points));
+
+    if (error) {
+      if (error.code !== "42P01") console.error("Point pack settings error:", error);
+      return defaults;
+    }
+
+    const settingsByPoints = Object.fromEntries((data || []).map((item) => [Number(item.points), Boolean(item.is_disabled)]));
+    return defaults.map((pack) => ({
+      ...pack,
+      is_disabled: Boolean(settingsByPoints[pack.points]),
+    }));
+  } catch (error) {
+    console.error("Point pack settings fatal error:", error);
+    return defaults;
+  }
+}
 
 function generateDonosTransactionId() {
   const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -275,7 +335,7 @@ app.post("/api/admin/recharges", async (request, response) => {
   }
 
   response.json({
-    recharges: (data || []).map((item) => ({
+    recharges: (data || []).map((item) => enrichRechargeAccounting({
       ...item,
       profiles: profilesById[item.user_id] || null,
     })),
@@ -306,6 +366,90 @@ app.post("/api/admin/recharges/delete", async (request, response) => {
   }
 
   response.json({ deleted: data?.[0] || null });
+});
+
+app.get("/api/point-packs", async (_request, response) => {
+  response.json({ packs: await getPointPackSettings() });
+});
+
+app.post("/api/admin/point-packs/toggle", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const points = Number(request.body?.points || 0);
+  const pack = pointPackFor(points);
+  if (!pack) return response.status(400).json({ error: "Pack no válido" });
+
+  const isDisabled = Boolean(request.body?.isDisabled);
+  const { data, error } = await supabaseAdmin
+    .from("point_pack_settings")
+    .upsert({
+      points: pack.points,
+      is_disabled: isDisabled,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "points" })
+    .select("points, is_disabled")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Admin point pack toggle error:", error);
+    return response.status(500).json({
+      error: error.code === "42P01" ? "Falta ejecutar el SQL de packs." : "No se ha podido actualizar el pack",
+    });
+  }
+
+  response.json({ pack: { ...pack, is_disabled: Boolean(data?.is_disabled) } });
+});
+
+app.post("/api/admin/stripe-debts", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("stripe_point_recharges")
+    .select("id, user_id, stripe_session_id, points, amount_total, stripe_fee_amount, net_amount, customer_email, currency, created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    console.error("Admin stripe debts error:", error);
+    return response.status(500).json({ error: "No se han podido cargar las deudas" });
+  }
+
+  const enriched = (data || []).map(enrichRechargeAccounting).filter((item) => Number(item.donos_debt_cents || 0) > 0);
+  const userIds = [...new Set(enriched.map((item) => item.user_id).filter(Boolean))];
+  let profilesById = {};
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified")
+      .in("id", userIds);
+
+    if (profilesError) console.error("Admin stripe debt profiles error:", profilesError);
+    profilesById = Object.fromEntries((profiles || []).map((profile) => [profile.id, profile]));
+  }
+
+  response.json({
+    debts: enriched.map((item) => ({
+      ...item,
+      profiles: profilesById[item.user_id] || null,
+    })),
+    summary: {
+      total_debt_cents: enriched.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0),
+      total_items: enriched.length,
+    },
+  });
 });
 
 app.post("/api/admin/accounts", async (request, response) => {
@@ -345,9 +489,12 @@ app.post("/api/admin/accounts", async (request, response) => {
   });
 
   const totalPoints = enrichedAccounts.reduce((sum, account) => sum + Number(account.points || 0), 0);
-  const totalPaid = (recharges || []).reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
-  const totalFees = (recharges || []).reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
-  const totalNet = (recharges || []).reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+  const enrichedRecharges = (recharges || []).map(enrichRechargeAccounting);
+  const totalPaid = enrichedRecharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
+  const totalFees = enrichedRecharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
+  const totalNet = enrichedRecharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+  const donosCompanyMoney = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
+  const donosDebt = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
   const totalLiability = totalPoints * 10;
 
   response.json({
@@ -363,6 +510,8 @@ app.post("/api/admin/accounts", async (request, response) => {
       total_stripe_fees_cents: totalFees,
       total_net_cents: totalNet,
       reserve_margin_cents: totalNet - totalLiability,
+      donos_company_money_cents: donosCompanyMoney,
+      donos_debt_cents: donosDebt,
     },
   });
 });
@@ -1651,6 +1800,12 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
     return response.status(400).json({ error: "Missing user or invalid points pack" });
   }
 
+  const packSettings = await getPointPackSettings();
+  const selectedPackSettings = packSettings.find((item) => item.points === selectedPack.points);
+  if (selectedPackSettings?.is_disabled) {
+    return response.status(403).json({ error: "point_pack_disabled" });
+  }
+
   const origin = request.headers.origin || `http://localhost:${port}`;
 
   try {
@@ -1692,10 +1847,11 @@ function formatCents(amount) {
 }
 
 async function getStripeAmounts(session) {
+  const pack = pointPackFor(session.metadata?.points);
   const fallback = {
     amountTotal: session.amount_total || 0,
-    feeAmount: 0,
-    netAmount: session.amount_total || 0,
+    feeAmount: pack?.stripeFeeAmount || 0,
+    netAmount: Math.max(Number(session.amount_total || 0) - Number(pack?.stripeFeeAmount || 0), 0),
     currency: session.currency || "eur",
   };
 

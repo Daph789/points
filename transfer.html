@@ -151,16 +151,16 @@
         const [confirmMovement, setConfirmMovement] = React.useState(null);
         const [successMovement, setSuccessMovement] = React.useState(null);
         const [navBadges, setNavBadges] = React.useState({});
+        const [pointPacks, setPointPacks] = React.useState([
+          { points: 50, baseAmount: 500, feeAmount: 120, amount: 620, is_disabled: false },
+          { points: 100, baseAmount: 1000, feeAmount: 120, amount: 1120, is_disabled: false },
+          { points: 250, baseAmount: 2500, feeAmount: 120, amount: 2620, is_disabled: false },
+          { points: 500, baseAmount: 5000, feeAmount: 120, amount: 5120, is_disabled: false },
+        ]);
         const euros = points / 10;
         const displayedDonosId = formatDonosId(transactionId);
-        const fixedFee = 1.2;
-        const pointPacks = [
-          { points: 50, basePrice: 5 },
-          { points: 100, basePrice: 10 },
-          { points: 250, basePrice: 25 },
-          { points: 500, basePrice: 50 },
-        ];
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+        const centsToEuros = (value) => Number(value || 0) / 100;
 
         async function loadNotificationBadges() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -226,6 +226,12 @@
 
         React.useEffect(() => {
           loadProfile();
+          fetch("/api/point-packs")
+            .then((response) => response.json())
+            .then((data) => {
+              if (Array.isArray(data.packs)) setPointPacks(data.packs);
+            })
+            .catch(() => {});
         }, [loadProfile]);
 
         React.useEffect(() => {
@@ -327,6 +333,11 @@
             return;
           }
 
+          if (pack.is_disabled) {
+            setStatus("Esta recarga está temporalmente suspendida.");
+            return;
+          }
+
           setIsRedirecting(true);
           setStatus("");
 
@@ -344,7 +355,7 @@
 
             window.location.href = data.url;
           } catch (error) {
-            setStatus(error.message || "No se ha podido iniciar la recarga.");
+            setStatus(error.message === "point_pack_disabled" ? "Esta recarga está temporalmente suspendida." : (error.message || "No se ha podido iniciar la recarga."));
             setIsRedirecting(false);
           }
         }
@@ -542,22 +553,26 @@
                     {pointPacks.map((pack) => (
                       <article
                         key={pack.points}
-                        className="rounded-3xl border border-white/10 bg-[#0D111D] p-4 transition hover:border-mint/40 hover:bg-mint/10"
+                        className={`rounded-3xl border p-4 transition ${
+                          pack.is_disabled
+                            ? "border-white/10 bg-white/[0.035] opacity-70"
+                            : "border-white/10 bg-[#0D111D] hover:border-mint/40 hover:bg-mint/10"
+                        }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-2xl font-black text-white">{pack.points} ptos.</p>
-                            <p className="mt-1 text-sm font-bold text-slate-400">{formatMoney(pack.basePrice)} de puntos</p>
+                            <p className="mt-1 text-sm font-bold text-slate-400">{formatMoney(centsToEuros(pack.baseAmount))} de puntos</p>
                           </div>
-                          <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">
-                            {formatMoney(pack.basePrice + fixedFee)}
+                          <span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${pack.is_disabled ? "bg-coral/10 text-coral ring-coral/20" : "bg-mint/10 text-mint ring-mint/20"}`}>
+                            {pack.is_disabled ? "Suspendido" : formatMoney(centsToEuros(pack.amount))}
                           </span>
                         </div>
 
                         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
                           <div className="flex items-center justify-between text-xs font-bold text-slate-400">
                             <span>Gastos Donos</span>
-                            <span>+{formatMoney(fixedFee)}</span>
+                            <span>+{formatMoney(centsToEuros(pack.feeAmount))}</span>
                           </div>
                           {expandedPack === pack.points && (
                             <div className="mt-3 space-y-2 border-t border-white/10 pt-3 text-xs font-bold text-slate-300">
@@ -578,11 +593,13 @@
                           </button>
                           <button
                             type="button"
-                            className="h-11 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0] disabled:opacity-60"
-                            disabled={isRedirecting}
+                            className={`h-11 rounded-2xl text-sm font-black transition disabled:opacity-60 ${
+                              pack.is_disabled ? "bg-white/[0.08] text-slate-500" : "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]"
+                            }`}
+                            disabled={isRedirecting || pack.is_disabled}
                             onClick={() => startRecharge(pack)}
                           >
-                            Recargar
+                            {pack.is_disabled ? "No disponible" : "Recargar"}
                           </button>
                         </div>
                       </article>

@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Deudas Stripe</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(255, 107, 107, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 18% -5%, rgba(255, 107, 107, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(66, 242, 179, 0.10), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function money(cents, currency = "eur") {
+        return new Intl.NumberFormat("es-ES", {
+          style: "currency",
+          currency: (currency || "eur").toUpperCase(),
+        }).format(Number(cents || 0) / 100);
+      }
+
+      function dateTime(value) {
+        return new Date(value).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+      }
+
+      function formatDonosId(value) {
+        const clean = String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
+        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const [debts, setDebts] = React.useState([]);
+        const [summary, setSummary] = React.useState({});
+        const [search, setSearch] = React.useState("");
+        const [status, setStatus] = React.useState("");
+        const [isLoading, setIsLoading] = React.useState(false);
+
+        React.useEffect(() => {
+          if (isUnlocked) loadDebts();
+        }, [isUnlocked]);
+
+        async function loadDebts(event) {
+          event?.preventDefault();
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const response = await fetch("/api/admin/stripe-debts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "No autorizado");
+            sessionStorage.setItem("donosAdminPassword", password);
+            setIsUnlocked(true);
+            setDebts(data.debts || []);
+            setSummary(data.summary || {});
+          } catch (error) {
+            setStatus(error.message || "No se han podido cargar las deudas.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        const filteredDebts = debts.filter((item) => {
+          const profile = item.profiles || {};
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            profile.display_name,
+            profile.email,
+            profile.phone,
+            profile.transaction_id,
+            item.customer_email,
+            item.points,
+            item.stripe_session_id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        if (!isUnlocked) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadDebts}>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donos</p>
+                <h1 className="mt-2 text-3xl font-black text-white">Deudas Stripe</h1>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Recargas donde la comisión Stripe supera los gastos Donos.</p>
+                <input
+                  className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-coral/70 focus:ring-4 focus:ring-coral/10"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Contraseña"
+                />
+                {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
+                <button className="mt-5 h-12 w-full rounded-2xl bg-coral text-base font-black text-white shadow-glow" disabled={isLoading}>
+                  {isLoading ? "Entrando..." : "Entrar"}
+                </button>
+              </form>
+            </main>
+          );
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donos</p>
+                <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Deuda por comisiones</h1>
+              </div>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
+                <button className="flex-1 rounded-full bg-coral px-4 py-2 text-sm font-black text-white shadow-glow sm:flex-none" onClick={loadDebts}>Actualizar</button>
+              </div>
+            </header>
+
+            <section className="mt-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-3xl border border-coral/25 bg-coral/10 p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-coral">Deuda total</p>
+                <p className="mt-2 text-3xl font-black text-white">{money(summary.total_debt_cents)}</p>
+              </div>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Recargas afectadas</p>
+                <p className="mt-2 text-3xl font-black text-white">{summary.total_items || 0}</p>
+              </div>
+            </section>
+
+            <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3">
+              <label className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-coral/10 text-lg text-coral ring-1 ring-coral/20">⌕</span>
+                <input
+                  className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar cuenta, email, ID Donos, pack..."
+                />
+              </label>
+            </section>
+
+            {status && <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">{status}</p>}
+
+            <section className="mt-6 overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055]">
+              <div className="hidden grid-cols-[1.2fr_.7fr_.7fr_.7fr_.7fr_.7fr] gap-3 border-b border-white/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-slate-500 lg:grid">
+                <span>Cuenta</span>
+                <span>Pack</span>
+                <span>Pagó</span>
+                <span>Corte Stripe</span>
+                <span>Gastos Donos</span>
+                <span>Deuda</span>
+              </div>
+              <div className="divide-y divide-white/10">
+                {filteredDebts.map((item) => {
+                  const profile = item.profiles || {};
+                  return (
+                    <article key={item.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[1.2fr_.7fr_.7fr_.7fr_.7fr_.7fr] lg:items-center lg:px-5">
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-white">{profile.display_name || item.customer_email || "Cliente"}</p>
+                        <p className="mt-1 truncate text-sm font-bold text-slate-400">{profile.email || item.customer_email || "Sin email"}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-slate-500">{profile.phone || "Sin teléfono"}</p>
+                        <p className="mt-1 break-all font-mono text-xs font-bold text-slate-500">{formatDonosId(profile.transaction_id)}</p>
+                        <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(item.created_at)}</p>
+                      </div>
+                      <p className="text-sm font-black text-white">{item.points} ptos.</p>
+                      <p className="text-sm font-black text-white">{money(item.amount_total, item.currency)}</p>
+                      <p className="text-sm font-black text-coral">-{money(item.stripe_fee_amount, item.currency)}</p>
+                      <p className="text-sm font-black text-mint">+{money(item.donos_fee_amount, item.currency)}</p>
+                      <p className="text-sm font-black text-coral">{money(item.donos_debt_cents, item.currency)}</p>
+                    </article>
+                  );
+                })}
+              </div>
+              {filteredDebts.length === 0 && (
+                <div className="p-6 text-sm font-bold text-slate-300">
+                  {debts.length === 0 ? "No hay deudas por comisiones." : "No hay resultados."}
+                </div>
+              )}
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

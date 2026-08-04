@@ -85,10 +85,18 @@
         const [isLoading, setIsLoading] = React.useState(false);
         const [deletingId, setDeletingId] = React.useState("");
         const [search, setSearch] = React.useState("");
+        const [packs, setPacks] = React.useState([]);
+        const [savingPack, setSavingPack] = React.useState("");
 
         React.useEffect(() => {
           if (isUnlocked) loadRecharges();
         }, [isUnlocked]);
+
+        async function loadPacks() {
+          const response = await fetch("/api/point-packs");
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) setPacks(data.packs || []);
+        }
 
         async function loadRecharges(event) {
           event?.preventDefault();
@@ -108,10 +116,31 @@
             sessionStorage.setItem("donosAdminPassword", password);
             setIsUnlocked(true);
             setRecharges(data.recharges || []);
+            loadPacks();
           } catch (error) {
             setStatus(error.message || "No se han podido cargar los pagos.");
           } finally {
             setIsLoading(false);
+          }
+        }
+
+        async function togglePack(pack) {
+          setSavingPack(String(pack.points));
+          setStatus("");
+          try {
+            const response = await fetch("/api/admin/point-packs/toggle", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, points: pack.points, isDisabled: !pack.is_disabled }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "No se ha podido actualizar el pack.");
+            setPacks((current) => current.map((item) => item.points === pack.points ? data.pack : item));
+            setStatus(data.pack?.is_disabled ? `Pack ${pack.points} ptos. suspendido.` : `Pack ${pack.points} ptos. reactivado.`);
+          } catch (error) {
+            setStatus(error.message || "No se ha podido actualizar el pack.");
+          } finally {
+            setSavingPack("");
           }
         }
 
@@ -170,6 +199,8 @@
         const totalPaid = recharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
         const totalFees = recharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
         const totalNet = recharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+        const donosMoney = recharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
+        const donosDebt = recharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
         const filteredRecharges = recharges.filter((item) => {
           const profile = item.profiles || {};
           const query = search.trim().toLowerCase();
@@ -209,11 +240,48 @@
               </div>
               <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-coral">Corte Stripe</p>
-                <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{money(totalFees)}</p>
+                <p className="mt-2 text-2xl font-black text-white sm:text-3xl">-{money(totalFees)}</p>
               </div>
               <div className="rounded-3xl border border-mint/25 bg-mint/10 p-4 sm:p-5">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Neto recibido</p>
                 <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{money(totalNet)}</p>
+              </div>
+            </section>
+
+            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2">
+              <div className="rounded-3xl border border-mint/25 bg-mint/10 p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Dinero empresa Donos</p>
+                <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{money(donosMoney)}</p>
+              </div>
+              <a className="rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deuda por comisiones</p>
+                <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{money(donosDebt)}</p>
+                <p className="mt-2 text-xs font-black text-coral/80">Ver cuentas que la causaron</p>
+              </a>
+            </section>
+
+            <section className="mt-6 rounded-[30px] border border-white/10 bg-white/[0.055] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black text-white">Control de packs</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">Suspende una recarga si genera deuda o quieres revisarla.</p>
+                </div>
+                <span className="rounded-full bg-coral/10 px-3 py-1 text-xs font-black text-coral ring-1 ring-coral/20">Admin</span>
+              </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                {packs.map((pack) => (
+                  <button
+                    key={pack.points}
+                    className={`rounded-2xl border p-3 text-left transition disabled:opacity-60 ${
+                      pack.is_disabled ? "border-coral/25 bg-coral/10 text-coral" : "border-mint/25 bg-mint/10 text-mint"
+                    }`}
+                    disabled={savingPack === String(pack.points)}
+                    onClick={() => togglePack(pack)}
+                  >
+                    <p className="text-lg font-black">{pack.points} ptos.</p>
+                    <p className="mt-1 text-xs font-black">{pack.is_disabled ? "Suspendido" : "Activo"}</p>
+                  </button>
+                ))}
               </div>
             </section>
 
@@ -255,7 +323,7 @@
                       </div>
                       <p className="text-sm font-bold text-slate-300">{dateTime(item.created_at)}</p>
                       <p className="text-sm font-black text-white">{money(item.amount_total, item.currency)}</p>
-                      <p className="text-sm font-black text-coral">{money(item.stripe_fee_amount, item.currency)}</p>
+                      <p className="text-sm font-black text-coral">-{money(item.stripe_fee_amount, item.currency)}</p>
                       <div>
                         <p className="text-sm font-black text-mint">+{item.points} ptos.</p>
                         <p className="mt-1 text-xs font-bold text-slate-500">Ahora: {profile.points || 0} ptos.</p>
@@ -307,8 +375,10 @@
                     <DetailItem label="Puntos comprados" value={`${selected.points} ptos.`} />
                     <DetailItem label="Puntos actuales" value={`${selected.profiles?.points || 0} ptos.`} />
                     <DetailItem label="Pagó" value={money(selected.amount_total, selected.currency)} />
-                    <DetailItem label="Stripe cortó" value={money(selected.stripe_fee_amount, selected.currency)} />
+                    <DetailItem label="Stripe cortó" value={`-${money(selected.stripe_fee_amount, selected.currency)}`} />
                     <DetailItem label="Neto recibido" value={money(selected.net_amount, selected.currency)} />
+                    <DetailItem label="Dinero Donos" value={money(selected.donos_company_margin_cents, selected.currency)} />
+                    <DetailItem label="Deuda generada" value={money(selected.donos_debt_cents, selected.currency)} />
                   </div>
 
                   <button

@@ -210,6 +210,15 @@
               <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" />
             </section>
 
+            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2">
+              <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" />
+              <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deuda por comisiones</p>
+                <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.donos_debt_cents)}</p>
+                <p className="mt-2 text-xs font-black text-coral/80">Ver detalle</p>
+              </a>
+            </section>
+
             <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3 sm:rounded-[30px] sm:p-4">
               <label className="flex items-center gap-3">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
