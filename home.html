@@ -202,6 +202,15 @@
         );
       }
 
+      function NotificationBadge({ count }) {
+        if (!count) return null;
+        return (
+          <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-coral px-1.5 text-[10px] font-black leading-none text-white ring-2 ring-[#101522]">
+            +{count > 9 ? "9" : count}
+          </span>
+        );
+      }
+
       function Category({ category, active, onClick }) {
         return (
           <button className="min-w-[74px] text-center focus:outline-none sm:min-w-[82px]" onClick={onClick}>
@@ -472,6 +481,18 @@
         const [selectedOffer, setSelectedOffer] = React.useState(null);
         const [isLoadingOffers, setIsLoadingOffers] = React.useState(false);
         const [offersStatus, setOffersStatus] = React.useState("");
+        const [navBadges, setNavBadges] = React.useState({});
+
+        async function loadNotificationBadges() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) return;
+          const response = await fetch("/api/me/notifications", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok) setNavBadges(data.counts?.sections || {});
+        }
 
         const loadAccount = React.useCallback(async () => {
             const params = new URLSearchParams(window.location.search);
@@ -523,6 +544,7 @@
             setAccountPoints(points);
             localStorage.setItem("donosAccountType", type);
             if (name) localStorage.setItem("donosDisplayName", name);
+            if (accessToken) loadNotificationBadges();
         }, []);
 
         React.useEffect(() => {
@@ -749,20 +771,24 @@
 
             <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">
-                {navItems.map((item) => (
+                {navItems.map((item) => {
+                  const badgeCount = navBadges[item.href === "historial.html" ? "historial" : ""];
+                  return (
                   <a
                     key={item.label}
                     href={item.href}
-                    className={`flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
+                    className={`relative flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
                       item.active
                         ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]"
                         : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
+                    <NotificationBadge count={badgeCount} />
                     <NavIcon name={item.icon} />
                     <span className="mt-1">{item.label}</span>
                   </a>
-                ))}
+                  );
+                })}
               </div>
             </nav>
 

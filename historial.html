@@ -107,7 +107,20 @@
         );
       }
 
-      function PurchaseCard({ purchase }) {
+      function NotificationBadge({ count }) {
+        if (!count) return null;
+        return (
+          <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-coral px-1.5 text-[10px] font-black leading-none text-white ring-2 ring-[#101522]">
+            +{count > 9 ? "9" : count}
+          </span>
+        );
+      }
+
+      function UnreadPill() {
+        return <span className="mb-2 inline-flex rounded-full bg-coral px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white">Nuevo</span>;
+      }
+
+      function PurchaseCard({ purchase, isUnread, onRead }) {
         const offer = purchase.offer || {};
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
@@ -115,7 +128,8 @@
         return (
           <a
             href={`order-detail.html?id=${purchase.id}`}
-            className="group relative grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[92px_1fr_auto]"
+            onClick={onRead}
+            className={`group relative grid gap-3 rounded-[28px] border p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[92px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
           >
             <div className="relative h-24 overflow-hidden rounded-3xl bg-gradient-to-br from-mint via-[#17213C] to-violet min-[430px]:h-full">
               {image ? <img className="h-full w-full object-cover" src={image} alt="" /> : <span className="absolute bottom-3 right-3 text-4xl">🧾</span>}
@@ -135,6 +149,7 @@
             </div>
 
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              {isUnread && <UnreadPill />}
               <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{purchase.total_points || 0} pts</p>
               <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">Ver detalle</p>
             </div>
@@ -142,7 +157,7 @@
         );
       }
 
-      function IncomingCard({ purchase }) {
+      function IncomingCard({ purchase, isUnread, onRead }) {
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
         const buyerName = buyer.display_name || buyer.email || "Cliente Donos";
@@ -150,7 +165,8 @@
         return (
           <a
             href={`incoming-detail.html?id=${purchase.id}`}
-            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto]"
+            onClick={onRead}
+            className={`group grid gap-3 rounded-[28px] border p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
           >
             <div className="relative grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-mint/10 text-lg font-black text-mint ring-1 ring-mint/20">
               {image ? <img className="absolute inset-0 h-full w-full object-cover opacity-80" src={image} alt="" /> : "↑"}
@@ -162,6 +178,7 @@
               <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(purchase.created_at)} · {formatTime(purchase.created_at)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              {isUnread && <UnreadPill />}
               <span className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">+{purchase.total_points || 0}</span>
               <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">
                 {purchase.verified_at ? "Validado" : "Pendiente QR"}
@@ -181,7 +198,7 @@
         return labels[status] || status || "Comprobado";
       }
 
-      function ScannedTicketCard({ scan }) {
+      function ScannedTicketCard({ scan, isUnread, onRead }) {
         const purchase = scan.purchase || {};
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
@@ -191,7 +208,8 @@
         return (
           <a
             href={`scanned-ticket-detail.html?id=${scan.id}`}
-            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto]"
+            onClick={onRead}
+            className={`group grid gap-3 rounded-[28px] border p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[56px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
           >
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-white/10 text-lg font-black text-white ring-1 ring-white/10">
               {scan.method === "qr" ? "▣" : "⌨"}
@@ -208,6 +226,7 @@
               <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(scan.checked_at)} · {formatTime(scan.checked_at)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              {isUnread && <UnreadPill />}
               <span className={`rounded-full px-3 py-1 text-xs font-black ${scan.status === "valid" ? "bg-mint text-ink" : "bg-white/10 text-slate-200"}`}>
                 {scanStatusLabel(scan.status)}
               </span>
@@ -217,14 +236,15 @@
         );
       }
 
-      function StockOfferCard({ offer }) {
+      function StockOfferCard({ offer, isUnread, onRead }) {
         const remaining = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         return (
           <a
             href={`admin-offer.html?id=${offer.id}`}
-            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[64px_1fr_auto]"
+            onClick={onRead}
+            className={`group grid gap-3 rounded-[28px] border p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[64px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
           >
             <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-gradient-to-br from-coral/40 to-mint/20 ring-1 ring-white/10">
               {image ? <img className="h-full w-full object-cover opacity-80" src={image} alt="" /> : <span className="grid h-full w-full place-items-center text-xl">↻</span>}
@@ -235,6 +255,7 @@
               <p className="mt-1 text-xs font-bold text-slate-500">Vendidos: {offer.sold_count || 0}</p>
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              {isUnread && <UnreadPill />}
               <span className={`rounded-full px-3 py-1 text-xs font-black ${outOfStock ? "bg-coral text-white" : "bg-white/10 text-slate-200"}`}>
                 {outOfStock ? "Agotado" : `${remaining} disponibles`}
               </span>
@@ -244,7 +265,7 @@
         );
       }
 
-      function PointMovementCard({ movement, profileId, onRespond, isResponding }) {
+      function PointMovementCard({ movement, profileId, onRespond, isResponding, isUnread, onRead }) {
         const isOut = movement.from_profile_id === profileId;
         const other = isOut ? movement.to_profile : movement.from_profile;
         const isRequest = movement.transfer_type === "request";
@@ -259,7 +280,10 @@
         const tone = movement.status === "declined" ? "coral" : movement.status === "pending" ? "sun" : isOut ? "coral" : "mint";
         const pointsLabel = `${isOut && movement.status !== "declined" ? "-" : "+"}${movement.points || 0} pts`;
         return (
-          <article className="rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20">
+          <article
+            className={`rounded-[28px] border p-4 shadow-2xl shadow-black/20 ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
+            onClick={onRead}
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-base font-black text-white">{title}</p>
@@ -269,6 +293,7 @@
                 {movement.note && <p className="mt-2 rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
               </div>
               <div className="text-right">
+                {isUnread && <UnreadPill />}
                 <p className={`rounded-full px-3 py-1 text-sm font-black ${
                   tone === "mint" ? "bg-mint text-ink" : tone === "sun" ? "bg-sun text-ink" : "bg-coral/15 text-coral ring-1 ring-coral/25"
                 }`}>
@@ -300,7 +325,8 @@
       }
 
       function App() {
-        const [mode, setMode] = React.useState("purchases");
+        const initialTab = new URLSearchParams(window.location.search).get("tab") || "purchases";
+        const [mode, setMode] = React.useState(["purchases", "incoming", "scanned", "stock", "points", "debts"].includes(initialTab) ? initialTab : "purchases");
         const [purchases, setPurchases] = React.useState([]);
         const [incomingPurchases, setIncomingPurchases] = React.useState([]);
         const [scannedTickets, setScannedTickets] = React.useState([]);
@@ -316,6 +342,9 @@
         const [search, setSearch] = React.useState("");
         const [incomingFilter, setIncomingFilter] = React.useState("all");
         const [stockFilter, setStockFilter] = React.useState(0);
+        const [notificationEvents, setNotificationEvents] = React.useState([]);
+        const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
+        const [readKeys, setReadKeys] = React.useState(new Set());
 
         React.useEffect(() => {
           loadPurchases();
@@ -337,6 +366,16 @@
             const type = profileData.profile?.account_type === "business" ? "business" : "user";
             setAccountType(type);
             setProfileId(profileData.profile?.id || "");
+
+            const notificationsResponse = await fetch("/api/me/notifications", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const notificationsData = await notificationsResponse.json().catch(() => ({}));
+            if (notificationsResponse.ok) {
+              setNotificationEvents(notificationsData.events || []);
+              setNotificationCounts(notificationsData.counts || { sections: {}, subsections: {} });
+              setReadKeys(new Set((notificationsData.events || []).filter((event) => event.read).map((event) => event.key)));
+            }
 
             const response = await fetch("/api/me/purchases", {
               headers: { Authorization: `Bearer ${token}` },
@@ -504,6 +543,78 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
+        const filteredDebts = pointMovements
+          .filter((movement) => movement.transfer_type === "request" && movement.status === "pending" && movement.from_profile_id === profileId)
+          .filter((movement) => {
+            const query = search.trim().toLowerCase();
+            if (!query) return true;
+            return [
+              movement.to_profile?.display_name,
+              movement.to_profile?.email,
+              movement.points,
+              movement.note,
+            ].filter(Boolean).join(" ").toLowerCase().includes(query);
+          });
+
+        function unreadEventsFor(subsection) {
+          return notificationEvents.filter((event) => event.subsection === subsection && !readKeys.has(event.key));
+        }
+
+        function unreadCount(subsection) {
+          return unreadEventsFor(subsection).length;
+        }
+
+        function eventKeyFor(type, id, extra = "") {
+          if (!id) return "";
+          if (type === "purchase") return `purchase:${id}:buyer`;
+          if (type === "sale") return `sale:${id}:business`;
+          if (type === "scan") return `scan:${id}`;
+          if (type === "points") {
+            const movement = pointMovements.find((item) => item.id === id);
+            return movement ? `points:${movement.id}:${profileId}:${movement.status}` : "";
+          }
+          if (type === "stock") return `stock:${id}:${extra}`;
+          return "";
+        }
+
+        function isUnreadKey(key) {
+          return Boolean(key) && notificationEvents.some((event) => event.key === key) && !readKeys.has(key);
+        }
+
+        async function markNotificationsRead(keys) {
+          const cleanKeys = [...new Set((keys || []).filter(Boolean))].filter((key) => !readKeys.has(key));
+          if (cleanKeys.length === 0) return;
+          setReadKeys((current) => new Set([...current, ...cleanKeys]));
+          setNotificationCounts((current) => {
+            const nextRead = new Set([...readKeys, ...cleanKeys]);
+            const unread = notificationEvents.filter((event) => !nextRead.has(event.key));
+            const subsections = {};
+            const sections = {};
+            unread.forEach((event) => {
+              sections[event.section] = (sections[event.section] || 0) + 1;
+              subsections[`${event.section}:${event.subsection}`] = (subsections[`${event.section}:${event.subsection}`] || 0) + 1;
+            });
+            return { ...current, sections, subsections, total: unread.length };
+          });
+
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) return;
+          await fetch("/api/me/notifications/read", {
+            method: "POST",
+            keepalive: true,
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ keys: cleanKeys }),
+          });
+        }
+
+        function markSubsectionRead(subsection) {
+          markNotificationsRead(unreadEventsFor(subsection).map((event) => event.key));
+        }
+
         async function respondToPointRequest(movementId, action) {
           setRespondingMovementId(movementId);
           setMovementStatus("");
@@ -559,9 +670,10 @@
 
 	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-6" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
                 <button
-                  className={`rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("purchases")}
                 >
+                  <NotificationBadge count={unreadCount("purchases")} />
                   <p className="text-2xl">🛍️</p>
                   <p className="mt-2 text-base font-black text-white">Historial de compras</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">{purchases.length} pedidos</p>
@@ -569,25 +681,28 @@
 	                {accountType === "business" && (
                   <>
                     <button
-                      className={`rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                       onClick={() => setMode("incoming")}
                     >
+                      <NotificationBadge count={unreadCount("incoming")} />
                       <p className="text-2xl">↗</p>
                       <p className="mt-2 text-base font-black text-white">Ingresos recibidos</p>
                       <p className="mt-1 text-xs font-bold text-slate-400">{incomingPurchases.length} movimientos</p>
                     </button>
-	                    <button
-	                      className={`rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                    <button
+	                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
 	                      onClick={() => setMode("scanned")}
                     >
+                      <NotificationBadge count={unreadCount("scanned")} />
                       <p className="text-2xl">▣</p>
                       <p className="mt-2 text-base font-black text-white">Billetes escaneados</p>
 	                      <p className="mt-1 text-xs font-bold text-slate-400">{latestScannedTickets.length} billetes</p>
 	                    </button>
                     <button
-                      className={`rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
+                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
                       onClick={() => setMode("stock")}
                     >
+                      <NotificationBadge count={unreadCount("stock")} />
                       <p className="text-2xl">↻</p>
                       <p className="mt-2 text-base font-black text-white">Stock crítico</p>
                       <p className="mt-1 text-xs font-bold text-slate-400">{businessOffers.filter(isOutOfStock).length} agotados</p>
@@ -595,17 +710,19 @@
 	                  </>
 	                )}
                 <button
-                  className={`rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("points")}
                 >
+                  <NotificationBadge count={unreadCount("points")} />
                   <p className="text-2xl">⇄</p>
                   <p className="mt-2 text-base font-black text-white">Puntos</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">{pointMovements.length} movimientos</p>
                 </button>
 	                <button
-                  className={`rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
+                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("debts")}
                 >
+                  <NotificationBadge count={unreadCount("debts")} />
                   <p className="text-2xl">📌</p>
                   <p className="mt-2 text-base font-black text-white">Historial de deudas</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">Próximamente</p>
@@ -626,12 +743,20 @@
                     />
                   </label>
                 </div>
+                {unreadCount("purchases") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("purchases")}>
+                    Marcar compras como leídas
+                  </button>
+                )}
 
                 <div className="mt-5 space-y-3">
                   {status ? (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
                   ) : filteredPurchases.length > 0 ? (
-                    filteredPurchases.map((purchase) => <PurchaseCard key={purchase.id} purchase={purchase} />)
+                    filteredPurchases.map((purchase) => {
+                      const key = eventKeyFor("purchase", purchase.id);
+                      return <PurchaseCard key={purchase.id} purchase={purchase} isUnread={isUnreadKey(key)} onRead={() => markNotificationsRead([key])} />;
+                    })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {purchases.length === 0 ? "Todavía no tienes compras." : "No hay resultados para esta búsqueda."}
@@ -659,6 +784,11 @@
                     +{incomingPurchases.reduce((sum, item) => sum + Number(item.total_points || 0), 0).toLocaleString("es-ES")} pts
                   </p>
                 </div>
+                {unreadCount("incoming") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("incoming")}>
+                    Marcar ingresos como leídos
+                  </button>
+                )}
 
                 <div className="mt-4 grid grid-cols-2 gap-2 rounded-[24px] border border-white/10 bg-white/[0.045] p-2">
                   {[
@@ -681,7 +811,10 @@
                   {incomingStatus ? (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{incomingStatus}</div>
                   ) : filteredIncoming.length > 0 ? (
-                    filteredIncoming.map((purchase) => <IncomingCard key={purchase.id} purchase={purchase} />)
+                    filteredIncoming.map((purchase) => {
+                      const key = eventKeyFor("sale", purchase.id);
+                      return <IncomingCard key={purchase.id} purchase={purchase} isUnread={isUnreadKey(key)} onRead={() => markNotificationsRead([key])} />;
+                    })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {incomingPurchases.length === 0 ? "Todavía no has recibido compras." : "No hay resultados para este filtro."}
@@ -702,12 +835,20 @@
                     />
                   </label>
                 </div>
+                {unreadCount("scanned") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("scanned")}>
+                    Marcar billetes como leídos
+                  </button>
+                )}
 
                 <div className="mt-5 space-y-3">
                   {scannedStatus ? (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{scannedStatus}</div>
                   ) : filteredScannedTickets.length > 0 ? (
-                    filteredScannedTickets.map((scan) => <ScannedTicketCard key={scan.id} scan={scan} />)
+                    filteredScannedTickets.map((scan) => {
+                      const key = eventKeyFor("scan", scan.id);
+                      return <ScannedTicketCard key={scan.id} scan={scan} isUnread={isUnreadKey(key)} onRead={() => markNotificationsRead([key])} />;
+                    })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {latestScannedTickets.length === 0 ? "Todavía no has escaneado billetes." : "No hay resultados para esta búsqueda."}
@@ -747,10 +888,18 @@
                     </button>
                   ))}
                 </div>
+                {unreadCount("stock") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("stock")}>
+                    Marcar stock como leído
+                  </button>
+                )}
 
                 <div className="mt-5 space-y-3">
                   {stockWatchOffers.length > 0 ? (
-                    stockWatchOffers.map((offer) => <StockOfferCard key={offer.id} offer={offer} />)
+                    stockWatchOffers.map((offer) => {
+                      const key = eventKeyFor("stock", offer.id, getRemainingStock(offer));
+                      return <StockOfferCard key={offer.id} offer={offer} isUnread={isUnreadKey(key)} onRead={() => markNotificationsRead([key])} />;
+                    })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       No hay productos en este filtro.
@@ -781,18 +930,28 @@
                     {movementStatus}
                   </div>
                 )}
+                {unreadCount("points") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("points")}>
+                    Marcar movimientos como leídos
+                  </button>
+                )}
 
                 <div className="mt-5 space-y-3">
                   {filteredPointMovements.length > 0 ? (
-                    filteredPointMovements.map((movement) => (
-                      <PointMovementCard
-                        key={movement.id}
-                        movement={movement}
-                        profileId={profileId}
-                        isResponding={respondingMovementId === movement.id}
-                        onRespond={respondToPointRequest}
-                      />
-                    ))
+                    filteredPointMovements.map((movement) => {
+                      const key = eventKeyFor("points", movement.id);
+                      return (
+                        <PointMovementCard
+                          key={movement.id}
+                          movement={movement}
+                          profileId={profileId}
+                          isResponding={respondingMovementId === movement.id}
+                          isUnread={isUnreadKey(key)}
+                          onRead={() => markNotificationsRead([key])}
+                          onRespond={respondToPointRequest}
+                        />
+                      );
+                    })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {pointMovements.length === 0 ? "Todavía no tienes movimientos de puntos." : "No hay resultados para esta búsqueda."}
@@ -801,26 +960,66 @@
                 </div>
               </section>
             ) : (
-	              <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6">
-                <p className="text-lg font-black text-white">Historial de deudas</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Esta parte queda preparada para cuando activemos deudas, pagos pendientes o compromisos entre usuarios.</p>
+	              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-sun/10 text-lg text-sun ring-1 ring-sun/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar deuda, persona, puntos..."
+                    />
+                  </label>
+                </div>
+                {unreadCount("debts") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("debts")}>
+                    Marcar deudas como leídas
+                  </button>
+                )}
+                <div className="mt-5 space-y-3">
+                  {filteredDebts.length > 0 ? (
+                    filteredDebts.map((movement) => {
+                      const key = eventKeyFor("points", movement.id);
+                      return (
+                        <PointMovementCard
+                          key={movement.id}
+                          movement={movement}
+                          profileId={profileId}
+                          isResponding={respondingMovementId === movement.id}
+                          isUnread={isUnreadKey(key)}
+                          onRead={() => markNotificationsRead([key])}
+                          onRespond={respondToPointRequest}
+                        />
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      No tienes solicitudes pendientes.
+                    </div>
+                  )}
+                </div>
               </section>
             )}
 
             <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">
-                {navItems.map((item) => (
+                {navItems.map((item) => {
+                  const badgeCount = notificationCounts.sections?.[item.href === "historial.html" ? "historial" : ""];
+                  return (
                   <a
                     key={item.label}
                     href={item.href}
-                    className={`flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
+                    className={`relative flex h-12 flex-col items-center justify-center rounded-2xl text-[10px] font-black transition sm:h-14 sm:rounded-3xl sm:text-xs ${
                       item.active ? "bg-mint text-ink shadow-[0_14px_36px_rgba(66,242,179,0.24)]" : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
+                    <NotificationBadge count={badgeCount} />
                     <NavIcon name={item.icon} />
                     <span className="mt-0.5">{item.label}</span>
                   </a>
-                ))}
+                  );
+                })}
               </div>
             </nav>
           </main>

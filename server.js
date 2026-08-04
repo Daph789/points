@@ -71,6 +71,29 @@ function transferPublicProfile(profile) {
   };
 }
 
+function compactNotificationCounts(events, readKeys) {
+  const unread = events.filter((event) => !readKeys.has(event.key));
+  const sections = {};
+  const subsections = {};
+
+  for (const event of unread) {
+    sections[event.section] = (sections[event.section] || 0) + 1;
+    const subsectionKey = `${event.section}:${event.subsection}`;
+    subsections[subsectionKey] = (subsections[subsectionKey] || 0) + 1;
+  }
+
+  return { total: unread.length, sections, subsections };
+}
+
+function pushNotification(events, event) {
+  if (!event?.key || !event?.created_at) return;
+  events.push({
+    section: "historial",
+    href: "historial.html",
+    ...event,
+  });
+}
+
 function generateTicketValidationCode() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   return Array.from({ length: 7 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -428,6 +451,240 @@ async function getAuthenticatedUser(request) {
 
   return { user };
 }
+
+async function buildNotificationsForProfile(profile) {
+  const events = [];
+  if (!profile?.id) return events;
+
+  try {
+    const { data: purchases, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, offer_id, total_points, created_at")
+      .eq("buyer_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(80);
+
+    if (!error) {
+      const offerIds = [...new Set((purchases || []).map((purchase) => purchase.offer_id).filter(Boolean))];
+      let offersById = {};
+      if (offerIds.length > 0) {
+        const { data: offers } = await supabaseAdmin
+          .from("business_offers")
+          .select("id, title, business_display_name")
+          .in("id", offerIds);
+        offersById = Object.fromEntries((offers || []).map((offer) => [offer.id, offer]));
+      }
+
+      for (const purchase of purchases || []) {
+        const offer = offersById[purchase.offer_id] || {};
+        pushNotification(events, {
+          key: `purchase:${purchase.id}:buyer`,
+          subsection: "purchases",
+          title: `Compra confirmada: ${offer.title || "pedido Donos"}`,
+          detail: `${purchase.total_points || 0} pts · ${offer.business_display_name || "Donos"}`,
+          href: `order-detail.html?id=${purchase.id}`,
+          created_at: purchase.created_at,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Notification purchases error:", error);
+  }
+
+  try {
+    const { data: movements, error } = await supabaseAdmin
+      .from("point_transfers")
+      .select("id, from_profile_id, to_profile_id, points, transfer_type, status, created_at, completed_at")
+      .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (!error) {
+      for (const movement of movements || []) {
+        const isDebt = movement.transfer_type === "request" && movement.status === "pending" && movement.from_profile_id === profile.id;
+        pushNotification(events, {
+          key: `points:${movement.id}:${profile.id}:${movement.status}`,
+          subsection: isDebt ? "debts" : "points",
+          title: isDebt ? `Solicitud pendiente de ${movement.points || 0} pts` : `Movimiento de ${movement.points || 0} pts`,
+          detail: movement.transfer_type === "request" ? "Solicitud de puntos" : "Transferencia de puntos",
+          href: `historial.html?tab=${isDebt ? "debts" : "points"}`,
+          created_at: movement.completed_at || movement.created_at,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Notification movements error:", error);
+  }
+
+  if (profile.account_type === "business") {
+    try {
+      const { data: sales, error } = await supabaseAdmin
+        .from("purchases")
+        .select("id, offer_id, buyer_id, total_points, created_at")
+        .eq("receiver_profile_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (!error) {
+        const offerIds = [...new Set((sales || []).map((purchase) => purchase.offer_id).filter(Boolean))];
+        let offersById = {};
+        if (offerIds.length > 0) {
+          const { data: offers } = await supabaseAdmin
+            .from("business_offers")
+            .select("id, title")
+            .in("id", offerIds);
+          offersById = Object.fromEntries((offers || []).map((offer) => [offer.id, offer]));
+        }
+
+        for (const sale of sales || []) {
+          const offer = offersById[sale.offer_id] || {};
+          pushNotification(events, {
+            key: `sale:${sale.id}:business`,
+            subsection: "incoming",
+            title: `Nueva venta: ${offer.title || "publicación"}`,
+            detail: `+${sale.total_points || 0} pts recibidos`,
+            href: `incoming-detail.html?id=${sale.id}`,
+            created_at: sale.created_at,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Notification sales error:", error);
+    }
+
+    try {
+      const { data: scans, error } = await supabaseAdmin
+        .from("ticket_verifications")
+        .select("id, purchase_id, status, checked_at")
+        .eq("business_id", profile.id)
+        .order("checked_at", { ascending: false })
+        .limit(100);
+
+      if (!error) {
+        for (const scan of scans || []) {
+          pushNotification(events, {
+            key: `scan:${scan.id}`,
+            subsection: "scanned",
+            title: "Billete comprobado",
+            detail: scan.status === "valid" ? "Validación correcta" : `Estado: ${scan.status || "revisado"}`,
+            href: `scanned-ticket-detail.html?id=${scan.id}`,
+            created_at: scan.checked_at,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Notification scans error:", error);
+    }
+
+    try {
+      const { data: offers, error } = await supabaseAdmin
+        .from("business_offers")
+        .select("id, title, stock_quantity, sold_count, out_of_stock_since, created_at")
+        .eq("business_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(250);
+
+      if (!error) {
+        for (const offer of offers || []) {
+          if (offer.stock_quantity === null || offer.stock_quantity === undefined) continue;
+          const remaining = Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
+          if (remaining > 3) continue;
+          pushNotification(events, {
+            key: `stock:${offer.id}:${remaining}`,
+            subsection: "stock",
+            title: remaining === 0 ? `Agotado: ${offer.title || "publicación"}` : `Stock bajo: ${offer.title || "publicación"}`,
+            detail: remaining === 0 ? "Producto en ruptura de stock" : `Quedan ${remaining} unidades`,
+            href: `admin-offer.html?id=${offer.id}`,
+            created_at: offer.out_of_stock_since || offer.created_at,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Notification stock error:", error);
+    }
+  }
+
+  return events.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+app.get("/api/me/notifications", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const events = await buildNotificationsForProfile(profile);
+    const keys = events.map((event) => event.key);
+    let readKeys = new Set();
+
+    if (keys.length > 0) {
+      const { data: reads, error: readsError } = await supabaseAdmin
+        .from("notification_reads")
+        .select("notification_key")
+        .eq("profile_id", profile.id)
+        .in("notification_key", keys);
+
+      if (readsError) {
+        return response.status(500).json({
+          error: readsError.code === "42P01" ? "notification_reads_table_missing" : "notifications_failed",
+        });
+      }
+      readKeys = new Set((reads || []).map((read) => read.notification_key));
+    }
+
+    response.json({
+      counts: compactNotificationCounts(events, readKeys),
+      events: events.map((event) => ({ ...event, read: readKeys.has(event.key) })),
+      unread_keys: events.filter((event) => !readKeys.has(event.key)).map((event) => event.key),
+    });
+  } catch (error) {
+    console.error("Notifications fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "notification_reads_table_missing" : "notifications_failed" });
+  }
+});
+
+app.post("/api/me/notifications/read", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const keys = Array.isArray(request.body?.keys)
+      ? [...new Set(request.body.keys.map((key) => String(key || "").trim()).filter(Boolean))]
+      : [];
+
+    if (keys.length === 0) return response.json({ read: 0 });
+
+    const rows = keys.map((key) => ({
+      profile_id: profile.id,
+      notification_key: key,
+      read_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabaseAdmin
+      .from("notification_reads")
+      .upsert(rows, { onConflict: "profile_id,notification_key" });
+
+    if (error) {
+      return response.status(500).json({
+        error: error.code === "42P01" ? "notification_reads_table_missing" : "notification_read_failed",
+      });
+    }
+
+    response.json({ read: rows.length });
+  } catch (error) {
+    console.error("Notification read fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "notification_reads_table_missing" : "notification_read_failed" });
+  }
+});
 
 async function enrichPurchases(purchases) {
   const offerIds = [...new Set((purchases || []).map((purchase) => purchase.offer_id).filter(Boolean))];
