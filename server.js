@@ -561,6 +561,241 @@ app.post("/api/admin/accounts/verify", async (request, response) => {
   response.json({ profile });
 });
 
+async function enrichBusinessesForSettlement(businesses) {
+  const businessIds = (businesses || []).map((business) => business.id).filter(Boolean);
+  if (businessIds.length === 0) return [];
+
+  const [{ data: sales, error: salesError }, { data: recharges, error: rechargesError }, { data: payouts, error: payoutsError }] = await Promise.all([
+    supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, receiver_profile_id, offer_id, total_points, created_at")
+      .in("receiver_profile_id", businessIds)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("stripe_point_recharges")
+      .select("id, user_id, points, amount_total, created_at")
+      .in("user_id", businessIds),
+    supabaseAdmin
+      .from("business_payouts")
+      .select("id, business_id, points, amount_cents, note, period_start, period_end, created_at")
+      .in("business_id", businessIds),
+  ]);
+
+  if (salesError && salesError.code !== "42P01") console.error("Admin settlement sales error:", salesError);
+  if (rechargesError && rechargesError.code !== "42P01") console.error("Admin settlement recharges error:", rechargesError);
+  if (payoutsError && payoutsError.code !== "42P01") console.error("Admin settlement payouts error:", payoutsError);
+
+  const salesRows = salesError ? [] : (sales || []);
+  const rechargeRows = rechargesError ? [] : (recharges || []);
+  const payoutRows = payoutsError ? [] : (payouts || []);
+
+  return (businesses || []).map((business) => {
+    const businessSales = salesRows.filter((item) => item.receiver_profile_id === business.id);
+    const businessRecharges = rechargeRows.filter((item) => item.user_id === business.id);
+    const businessPayouts = payoutRows.filter((item) => item.business_id === business.id);
+    const soldPoints = businessSales.reduce((sum, item) => sum + Number(item.total_points || 0), 0);
+    const rechargedPoints = businessRecharges.reduce((sum, item) => sum + Number(item.points || 0), 0);
+    const paidOutPoints = businessPayouts.reduce((sum, item) => sum + Number(item.points || 0), 0);
+    const currentPoints = Number(business.points || 0);
+
+    return {
+      ...business,
+      sold_points: soldPoints,
+      recharged_points: rechargedPoints,
+      paid_out_points: paidOutPoints,
+      current_points: currentPoints,
+      current_value_cents: currentPoints * 10,
+      gross_total_points: soldPoints + rechargedPoints,
+      gross_total_value_cents: (soldPoints + rechargedPoints) * 10,
+      payout_count: businessPayouts.length,
+      last_payout_at: businessPayouts[0]?.created_at || null,
+    };
+  });
+}
+
+app.post("/api/admin/business-settlements", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const { data: businesses, error } = await supabaseAdmin
+    .from("profiles")
+    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, created_at")
+    .eq("account_type", "business")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Admin business settlements error:", error);
+    return response.status(500).json({ error: "No se han podido cargar las empresas" });
+  }
+
+  const enriched = await enrichBusinessesForSettlement(businesses || []);
+  response.json({
+    businesses: enriched,
+    summary: {
+      total_businesses: enriched.length,
+      total_current_points: enriched.reduce((sum, item) => sum + Number(item.current_points || 0), 0),
+      total_current_value_cents: enriched.reduce((sum, item) => sum + Number(item.current_value_cents || 0), 0),
+      total_sold_points: enriched.reduce((sum, item) => sum + Number(item.sold_points || 0), 0),
+      total_recharged_points: enriched.reduce((sum, item) => sum + Number(item.recharged_points || 0), 0),
+    },
+  });
+});
+
+app.post("/api/admin/business-settlements/:businessId", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const businessId = String(request.params.businessId || "");
+  const { data: business, error: businessError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, created_at")
+    .eq("id", businessId)
+    .eq("account_type", "business")
+    .maybeSingle();
+
+  if (businessError || !business) {
+    return response.status(404).json({ error: "Empresa no encontrada" });
+  }
+
+  const [{ data: purchases, error: purchasesError }, { data: payouts, error: payoutsError }] = await Promise.all([
+    supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, total_points, delivery_method, created_at")
+      .eq("receiver_profile_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabaseAdmin
+      .from("business_payouts")
+      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+      .eq("business_id", businessId)
+      .order("created_at", { ascending: false })
+      .limit(250),
+  ]);
+
+  if (purchasesError && purchasesError.code !== "42P01") {
+    console.error("Admin business settlement purchases error:", purchasesError);
+  }
+  if (payoutsError && payoutsError.code !== "42P01") {
+    console.error("Admin business settlement payouts error:", payoutsError);
+  }
+
+  const buyerIds = [...new Set((purchases || []).map((purchase) => purchase.buyer_id).filter(Boolean))];
+  const offerIds = [...new Set((purchases || []).map((purchase) => purchase.offer_id).filter(Boolean))];
+  let buyersById = {};
+  let offersById = {};
+
+  if (buyerIds.length > 0) {
+    const { data: buyers } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, transaction_id, neighborhood")
+      .in("id", buyerIds);
+    buyersById = Object.fromEntries((buyers || []).map((buyer) => [buyer.id, buyer]));
+  }
+
+  if (offerIds.length > 0) {
+    const { data: offers } = await supabaseAdmin
+      .from("business_offers")
+      .select("id, title")
+      .in("id", offerIds);
+    offersById = Object.fromEntries((offers || []).map((offer) => [offer.id, offer]));
+  }
+
+  response.json({
+    business: (await enrichBusinessesForSettlement([business]))[0],
+    purchases: (purchases || []).map((purchase) => ({
+      ...purchase,
+      buyer: buyersById[purchase.buyer_id] || null,
+      offer: offersById[purchase.offer_id] || null,
+    })),
+    payouts: payoutsError ? [] : (payouts || []),
+  });
+});
+
+app.post("/api/admin/business-settlements/:businessId/pay", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const businessId = String(request.params.businessId || "");
+  const points = Math.floor(Number(request.body?.points || 0));
+  const note = String(request.body?.note || "").trim().slice(0, 180);
+  const periodStart = String(request.body?.periodStart || "").trim() || null;
+  const periodEnd = String(request.body?.periodEnd || "").trim() || null;
+
+  if (!Number.isFinite(points) || points <= 0) {
+    return response.status(400).json({ error: "Cantidad de puntos inválida" });
+  }
+
+  const { data: business, error: businessError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, display_name, points, account_type")
+    .eq("id", businessId)
+    .maybeSingle();
+
+  if (businessError || !business || business.account_type !== "business") {
+    return response.status(404).json({ error: "Empresa no encontrada" });
+  }
+
+  const currentPoints = Number(business.points || 0);
+  if (points > currentPoints) {
+    return response.status(400).json({ error: "La empresa no tiene tantos puntos" });
+  }
+
+  const { data: updatedBusiness, error: updateError } = await supabaseAdmin
+    .from("profiles")
+    .update({ points: currentPoints - points })
+    .eq("id", businessId)
+    .select("points")
+    .maybeSingle();
+
+  let payout = null;
+  let payoutError = null;
+  if (!updateError) {
+    const payoutResult = await supabaseAdmin
+      .from("business_payouts")
+      .insert({
+        business_id: businessId,
+        points,
+        amount_cents: points * 10,
+        note: note || null,
+        period_start: periodStart,
+        period_end: periodEnd,
+      })
+      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+      .maybeSingle();
+    payout = payoutResult.data;
+    payoutError = payoutResult.error;
+  }
+
+  if (updateError || payoutError) {
+    console.error("Admin business payout error:", updateError || payoutError);
+    if (!updateError) await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", businessId);
+    if (payout?.id) await supabaseAdmin.from("business_payouts").delete().eq("id", payout.id);
+    return response.status(500).json({
+      error: payoutError?.code === "42P01" ? "Falta ejecutar el SQL de liquidaciones." : "No se ha podido registrar la liquidación",
+    });
+  }
+
+  response.json({
+    payout,
+    business_points: Number(updatedBusiness?.points || 0),
+  });
+});
+
 app.get("/api/me/profile", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -750,6 +985,30 @@ async function buildNotificationsForProfile(profile) {
       }
     } catch (error) {
       console.error("Notification stock error:", error);
+    }
+
+    try {
+      const { data: payouts, error } = await supabaseAdmin
+        .from("business_payouts")
+        .select("id, points, amount_cents, note, created_at")
+        .eq("business_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      if (!error) {
+        for (const payout of payouts || []) {
+          pushNotification(events, {
+            key: `payout:${payout.id}`,
+            subsection: "payouts",
+            title: `Liquidación recibida: ${payout.points || 0} ptos.`,
+            detail: `${((Number(payout.amount_cents || 0)) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ enviados por Donos`,
+            href: "historial.html?tab=payouts",
+            created_at: payout.created_at,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Notification payouts error:", error);
     }
   }
 
@@ -1047,6 +1306,41 @@ app.get("/api/business/scanned-tickets", async (request, response) => {
   } catch (error) {
     console.error("Business scanned tickets fatal error:", error);
     response.status(500).json({ error: "scanned_tickets_failed" });
+  }
+});
+
+app.get("/api/business/payouts", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const businessProfile = await ensureProfileForUser(auth.user);
+    if (businessProfile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data: payouts, error } = await supabaseAdmin
+      .from("business_payouts")
+      .select("id, points, amount_cents, note, period_start, period_end, created_at")
+      .eq("business_id", auth.user.id)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Business payouts error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "business_payouts_table_missing" : "business_payouts_failed",
+      });
+    }
+
+    response.json({ payouts: payouts || [] });
+  } catch (error) {
+    console.error("Business payouts fatal error:", error);
+    response.status(500).json({ error: "business_payouts_failed" });
   }
 });
 

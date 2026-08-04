@@ -82,6 +82,10 @@
         return new Date(value).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
       }
 
+      function money(cents) {
+        return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(Number(cents || 0) / 100);
+      }
+
       function formatDelivery(value) {
         return value === "home" ? "Entrega a domicilio" : "Recogida en tienda";
       }
@@ -270,6 +274,34 @@
         );
       }
 
+      function PayoutCard({ payout, isUnread, onRead }) {
+        const period = payout.period_start || payout.period_end
+          ? `${payout.period_start ? formatDate(payout.period_start) : "Inicio"} - ${payout.period_end ? formatDate(payout.period_end) : "Hoy"}`
+          : "Sin periodo";
+        return (
+          <article
+            className={`grid gap-3 rounded-[28px] border p-4 shadow-2xl shadow-black/20 transition active:scale-[0.99] min-[430px]:grid-cols-[56px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
+            onClick={onRead}
+          >
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-mint/10 text-xl font-black text-mint ring-1 ring-mint/20">€</div>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="truncate text-base font-black text-white">Pago recibido de Donos</p>
+                {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-coral shadow-[0_0_14px_rgba(255,107,107,0.75)]"></span>}
+              </div>
+              <p className="mt-1 text-sm font-bold text-slate-400">{period}</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(payout.created_at)} · {formatTime(payout.created_at)}</p>
+              {payout.note && <p className="mt-2 max-w-full truncate rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{payout.note}</p>}
+            </div>
+            <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              {isUnread && <UnreadPill />}
+              <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{payout.points || 0} ptos.</p>
+              <p className="mt-1 text-xs font-black text-slate-500">{money(payout.amount_cents)}</p>
+            </div>
+          </article>
+        );
+      }
+
       function PointMovementCard({ movement, profileId, onRespond, isResponding, isUnread, onRead }) {
         const isOut = movement.from_profile_id === profileId;
         const other = isOut ? movement.to_profile : movement.from_profile;
@@ -332,17 +364,19 @@
 
       function App() {
         const initialTab = new URLSearchParams(window.location.search).get("tab") || "purchases";
-        const [mode, setMode] = React.useState(["purchases", "incoming", "scanned", "stock", "points", "debts"].includes(initialTab) ? initialTab : "purchases");
+        const [mode, setMode] = React.useState(["purchases", "incoming", "scanned", "stock", "payouts", "points", "debts"].includes(initialTab) ? initialTab : "purchases");
         const [purchases, setPurchases] = React.useState([]);
         const [incomingPurchases, setIncomingPurchases] = React.useState([]);
         const [scannedTickets, setScannedTickets] = React.useState([]);
         const [businessOffers, setBusinessOffers] = React.useState([]);
+        const [businessPayouts, setBusinessPayouts] = React.useState([]);
         const [pointMovements, setPointMovements] = React.useState([]);
         const [profileId, setProfileId] = React.useState("");
         const [accountType, setAccountType] = React.useState("user");
         const [status, setStatus] = React.useState("Cargando historial...");
         const [incomingStatus, setIncomingStatus] = React.useState("");
         const [scannedStatus, setScannedStatus] = React.useState("");
+        const [payoutStatus, setPayoutStatus] = React.useState("");
         const [movementStatus, setMovementStatus] = React.useState("");
         const [respondingMovementId, setRespondingMovementId] = React.useState("");
         const [search, setSearch] = React.useState("");
@@ -428,6 +462,22 @@
 	              setScannedTickets(scannedData.scans || []);
 	              setScannedStatus("");
 
+              setPayoutStatus("Cargando liquidaciones...");
+              const payoutResponse = await fetch("/api/business/payouts", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+              const payoutData = await payoutResponse.json().catch(() => ({}));
+              if (payoutResponse.ok) {
+                setBusinessPayouts(payoutData.payouts || []);
+                setPayoutStatus("");
+              } else {
+                setPayoutStatus(
+                  payoutData.error === "business_payouts_table_missing"
+                    ? "Falta ejecutar el SQL de liquidaciones para ver los pagos recibidos."
+                    : "No se han podido cargar las liquidaciones."
+                );
+              }
+
                 const { data: userData } = await supabaseClient.auth.getUser();
                 const userId = userData.user?.id;
                 if (userId) {
@@ -449,6 +499,7 @@
             );
             setIncomingStatus("");
             setScannedStatus("");
+            setPayoutStatus("");
           }
         }
 
@@ -562,6 +613,19 @@
             ].filter(Boolean).join(" ").toLowerCase().includes(query);
           });
 
+        const filteredPayouts = businessPayouts.filter((payout) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            payout.points,
+            payout.amount_cents,
+            payout.note,
+            payout.period_start,
+            payout.period_end,
+            payout.created_at,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
         function unreadEventsFor(subsection) {
           return notificationEvents.filter((event) => event.subsection === subsection && !readKeys.has(event.key));
         }
@@ -575,6 +639,7 @@
           if (type === "purchase") return `purchase:${id}:buyer`;
           if (type === "sale") return `sale:${id}:business`;
           if (type === "scan") return `scan:${id}`;
+          if (type === "payout") return `payout:${id}`;
           if (type === "points") {
             const movement = pointMovements.find((item) => item.id === id);
             return movement ? `points:${movement.id}:${profileId}:${movement.status}` : "";
@@ -674,7 +739,7 @@
               <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donos</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
-	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-6" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
+	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-7" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
                 <button
                   className={`relative rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => setMode("purchases")}
@@ -712,6 +777,15 @@
                       <p className="text-2xl">↻</p>
                       <p className="mt-2 text-base font-black text-white">Stock crítico</p>
                       <p className="mt-1 text-xs font-bold text-slate-400">{businessOffers.filter(isOutOfStock).length} agotados</p>
+                    </button>
+                    <button
+                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "payouts" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      onClick={() => setMode("payouts")}
+                    >
+                      <NotificationBadge count={unreadCount("payouts")} />
+                      <p className="text-2xl">€</p>
+                      <p className="mt-2 text-base font-black text-white">Liquidaciones</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">{businessPayouts.length} pagos</p>
                     </button>
 	                  </>
 	                )}
@@ -909,6 +983,50 @@
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       No hay productos en este filtro.
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : mode === "payouts" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar pago, fecha, nota..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 rounded-[30px] border border-mint/20 bg-mint/10 p-5 shadow-glow">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Total liquidado por Donos</p>
+                  <p className="mt-2 text-4xl font-black text-white">
+                    {money(businessPayouts.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0))}
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-slate-400">
+                    {businessPayouts.reduce((sum, item) => sum + Number(item.points || 0), 0).toLocaleString("es-ES")} ptos. retirados de tu saldo interno
+                  </p>
+                </div>
+                {unreadCount("payouts") > 0 && (
+                  <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("payouts")}>
+                    Marcar liquidaciones como leídas
+                  </button>
+                )}
+
+                <div className="mt-5 space-y-3">
+                  {payoutStatus ? (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{payoutStatus}</div>
+                  ) : filteredPayouts.length > 0 ? (
+                    filteredPayouts.map((payout) => {
+                      const key = eventKeyFor("payout", payout.id);
+                      return <PayoutCard key={payout.id} payout={payout} isUnread={isUnreadKey(key)} onRead={() => markNotificationsRead([key])} />;
+                    })
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      {businessPayouts.length === 0 ? "Todavía no has recibido liquidaciones de Donos." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>
