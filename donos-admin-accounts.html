@@ -73,11 +73,27 @@
         ].filter(Boolean).join(" ").toLowerCase().includes(cleanQuery);
       }
 
-      function StatCard({ label, value, tone = "white" }) {
+      function InfoTip({ title, text, example }) {
+        return (
+          <span className="group relative inline-flex">
+            <button className="grid h-5 w-5 place-items-center rounded-full border border-white/15 bg-white/10 text-[11px] font-black text-slate-200" type="button">i</button>
+            <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#111827] p-3 text-left text-white shadow-2xl shadow-black/40 group-hover:block">
+              <span className="block text-xs font-black">{title}</span>
+              <span className="mt-1 block text-xs font-bold leading-5 text-slate-300">{text}</span>
+              {example && <span className="mt-2 block rounded-xl bg-black/25 p-2 text-[11px] font-bold leading-4 text-mint">Ejemplo: {example}</span>}
+            </span>
+          </span>
+        );
+      }
+
+      function StatCard({ label, value, tone = "white", info }) {
         const color = tone === "mint" ? "text-mint border-mint/25 bg-mint/10" : tone === "coral" ? "text-coral border-coral/25 bg-coral/10" : "text-white border-white/10 bg-white/[0.055]";
         return (
           <div className={`rounded-3xl border p-4 sm:p-5 ${color}`}>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-70">{label}</p>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-70">
+              <span>{label}</span>
+              {info && <InfoTip {...info} />}
+            </p>
             <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{value}</p>
           </div>
         );
@@ -199,30 +215,70 @@
             </header>
 
             <section className="mt-6 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Valor total de puntos" value={money(summary.total_point_value_cents)} tone="mint" />
-              <StatCard label="Neto Stripe recibido" value={money(summary.total_net_cents)} />
-              <StatCard label="Margen de reserva" value={money(summary.reserve_margin_cents)} tone={Number(summary.reserve_margin_cents || 0) >= 0 ? "mint" : "coral"} />
-              <StatCard label="Cuentas" value={`${summary.total_accounts || 0}`} />
+              <StatCard label="Valor € puntos existentes" value={money(summary.total_point_value_cents)} tone="mint" info={{ title: "Valor € puntos existentes", text: "En gros, c'est la valeur en € des points total existant todavía en las cuentas. No es beneficio: es una obligación potencial.", example: "1400 ptos. existentes = 140 € que Donos debe poder cubrir." }} />
+              <StatCard label="Caja estimada" value={money(summary.estimated_cash_cents)} info={{ title: "Caja estimada", text: "Neto recibido por Stripe menos lo que ya pagaste a empresas y menos frais bancarios.", example: "238,60 € - 100 € - 0,65 € = 137,95 €." }} />
+              <StatCard label="Cobertura de reserva" value={money(summary.reserve_margin_cents)} tone={Number(summary.reserve_margin_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Cobertura de reserva", text: "No es tu beneficio. Es un test de seguridad: caja estimada menos valor de puntos existentes. Si sale negativo, tu caja no cubre todos los puntos vivos.", example: "Caja 137,95 € - puntos vivos 140 € = -2,05 € de cobertura." }} />
+              <StatCard label="Cuentas" value={`${summary.total_accounts || 0}`} info={{ title: "Cuentas", text: "Total de perfiles registrados en Donos, usuarios y empresas juntos.", example: "1 usuario + 1 empresa = 2 cuentas." }} />
             </section>
 
-            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-3">
-              <StatCard label="Usuarios" value={summary.total_users || 0} />
-              <StatCard label="Empresas" value={summary.total_businesses || 0} />
-              <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" />
+            <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
+              <StatCard label="Neto Stripe recibido" value={money(summary.total_net_cents)} info={{ title: "Neto Stripe recibido", text: "Dinero que Stripe deja después de sus cortes por los pagos de recarga.", example: "Cliente paga 51,20 €, Stripe corta 1,91 €, neto 49,29 €." }} />
+              <StatCard label="Pagado a empresas" value={money(summary.business_payouts_paid_cents)} info={{ title: "Pagado a empresas", text: "Total que registraste como enviado fuera de Donos a empresas.", example: "Retiras 250 ptos. = 25 € pagados." }} />
+              <StatCard label="Usuarios" value={summary.total_users || 0} info={{ title: "Usuarios", text: "Cuentas normales de clientes.", example: "Daphnel se registra como usuario = +1." }} />
+              <StatCard label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Cuentas registradas como comercio/empresa.", example: "Karcharelle se registra como empresa = +1." }} />
+              <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" info={{ title: "Certificadas", text: "Cuentas que marcaste como verificadas para mostrar badge de confianza.", example: "Certificas una empresa y aparece el check azul." }} />
             </section>
 
             <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-3">
-              <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" />
+              <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donos", text: "Parte de los gastos Donos que queda para la empresa Donos tras estimar cortes Stripe.", example: "Cobras 1,20 € extra y Stripe corta 0,61 €: quedan 0,59 €." }} />
+              <StatCard label="Beneficio Donos disponible" value={money(summary.donos_available_profit_cents)} tone={Number(summary.donos_available_profit_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Beneficio Donos disponible", text: "Este es el contador que debes mirar para saber si el dinero propio de Donos puede cubrir sus deudas operativas.", example: "Dinero Donos 15 € - deudas 2,45 € = 12,55 € disponibles." }} />
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deuda por comisiones</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-80">
+                  <span>Deuda por comisiones</span>
+                  <InfoTip title="Deuda por comisiones" text="Casos donde el extra cobrado por Donos no cubre el corte estimado de Stripe." example="Extra Donos 1,20 €, Stripe corta 1,91 €: deuda 0,71 €." />
+                </p>
                 <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.donos_debt_cents)}</p>
                 <p className="mt-2 text-xs font-black text-coral/80">Ver detalle</p>
               </a>
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-bank-fee-debts.html">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-80">Deudas bancarias</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-80">
+                  <span>Deudas bancarias</span>
+                  <InfoTip title="Deudas bancarias" text="Frais que tu banco te cobró cuando enviaste dinero real a una empresa." example="Pagas 15 € a la empresa y el banco cobra 0,45 €: deuda bancaria 0,45 €." />
+                </p>
                 <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.bank_fee_debt_cents)}</p>
                 <p className="mt-2 text-xs font-black text-coral/80">Transferencias a empresas</p>
               </a>
+            </section>
+
+            <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Guía rápida para admin</p>
+              <h2 className="mt-2 text-2xl font-black text-white">Cómo leer la reserva y el beneficio</h2>
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-sm font-black text-mint">1. Valor € puntos existentes</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
+                    En gros, c'est la valeur en € des points total existant en las cuentas. Si usuarios y empresas tienen 1400 ptos., Donos tiene una obligación potencial de 140 €. No es ganancia.
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-sm font-black text-white">2. Cobertura de reserva</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
+                    Sirve para saber si la caja estimada cubre todos los puntos vivos. Fórmula: caja estimada - valor de puntos existentes. Si es negativo, faltaría dinero para cubrir todos los puntos.
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-sm font-black text-mint">3. Beneficio Donos disponible</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
+                    Este sí responde a tu pregunta: si Donos gana dinero, puede cubrir deudas. Fórmula: dinero empresa Donos - deuda Stripe - deudas bancarias.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral">
+                <p className="text-sm font-black">Ejemplo claro</p>
+                <p className="mt-2 text-sm font-bold leading-6">
+                  Si Dinero empresa Donos = 15 €, Deuda por comisiones = 2 €, y Deudas bancarias = 0,45 €, entonces Beneficio Donos disponible = 12,55 €. Eso significa que Donos puede cubrir esas deudas y todavía le quedan 12,55 € de beneficio disponible.
+                </p>
+              </div>
             </section>
 
             <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3 sm:rounded-[30px] sm:p-4">

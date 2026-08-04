@@ -53,6 +53,19 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
+      function InfoTip({ title, text, example }) {
+        return (
+          <span className="group relative inline-flex">
+            <button className="grid h-5 w-5 place-items-center rounded-full border border-white/15 bg-white/10 text-[11px] font-black text-slate-200" type="button">i</button>
+            <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#111827] p-3 text-left text-white shadow-2xl shadow-black/40 group-hover:block">
+              <span className="block text-xs font-black">{title}</span>
+              <span className="mt-1 block text-xs font-bold leading-5 text-slate-300">{text}</span>
+              {example && <span className="mt-2 block rounded-xl bg-black/25 p-2 text-[11px] font-bold leading-4 text-coral">Ejemplo: {example}</span>}
+            </span>
+          </span>
+        );
+      }
+
       function App() {
         const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
         const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
@@ -145,11 +158,17 @@
 
             <section className="mt-6 grid gap-3 sm:grid-cols-2">
               <div className="rounded-3xl border border-coral/25 bg-coral/10 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-coral">Deuda total</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-coral">
+                  <span>Deuda total</span>
+                  <InfoTip title="Deuda total Stripe" text="Suma de los casos donde el extra Donos no alcanza para cubrir el corte Stripe estimado." example="Extra 1,20 €, corte 1,91 €: deuda 0,71 €." />
+                </p>
                 <p className="mt-2 text-3xl font-black text-white">{money(summary.total_debt_cents)}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Recargas afectadas</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <span>Recargas afectadas</span>
+                  <InfoTip title="Recargas afectadas" text="Número de recargas donde Donos salió en negativo por comisión Stripe." example="Si 3 packs generan deuda, aquí verás 3." />
+                </p>
                 <p className="mt-2 text-3xl font-black text-white">{summary.total_items || 0}</p>
               </div>
             </section>

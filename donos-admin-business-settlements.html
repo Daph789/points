@@ -50,11 +50,27 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
-      function Stat({ label, value, tone = "white" }) {
+      function InfoTip({ title, text, example }) {
+        return (
+          <span className="group relative inline-flex">
+            <button className="grid h-5 w-5 place-items-center rounded-full border border-white/15 bg-white/10 text-[11px] font-black text-slate-200" type="button">i</button>
+            <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#111827] p-3 text-left text-white shadow-2xl shadow-black/40 group-hover:block">
+              <span className="block text-xs font-black">{title}</span>
+              <span className="mt-1 block text-xs font-bold leading-5 text-slate-300">{text}</span>
+              {example && <span className="mt-2 block rounded-xl bg-black/25 p-2 text-[11px] font-bold leading-4 text-mint">Ejemplo: {example}</span>}
+            </span>
+          </span>
+        );
+      }
+
+      function Stat({ label, value, tone = "white", info }) {
         const toneClass = tone === "mint" ? "border-mint/25 bg-mint/10 text-mint" : tone === "sun" ? "border-sun/25 bg-sun/10 text-sun" : "border-white/10 bg-white/[0.055] text-white";
         return (
           <div className={`rounded-3xl border p-4 ${toneClass}`}>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] opacity-75">{label}</p>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-75">
+              <span>{label}</span>
+              {info && <InfoTip {...info} />}
+            </p>
             <p className="mt-2 text-2xl font-black">{value}</p>
           </div>
         );
@@ -74,9 +90,8 @@
         const [isPaying, setIsPaying] = React.useState(false);
         const [pointsToRemove, setPointsToRemove] = React.useState("");
         const [bankFeeEuros, setBankFeeEuros] = React.useState("");
-        const [periodStart, setPeriodStart] = React.useState("");
-        const [periodEnd, setPeriodEnd] = React.useState("");
         const [note, setNote] = React.useState("");
+        const [successOverlay, setSuccessOverlay] = React.useState(null);
 
         React.useEffect(() => {
           if (isUnlocked) loadBusinesses();
@@ -111,8 +126,6 @@
           setDetailSearch("");
           setPointsToRemove(String(business.current_points || 0));
           setBankFeeEuros("");
-          setPeriodStart("");
-          setPeriodEnd("");
           setNote("");
           setStatus("");
           const response = await fetch(`/api/admin/business-settlements/${business.id}`, {
@@ -123,32 +136,6 @@
           const data = await response.json().catch(() => ({}));
           if (response.ok) setDetail(data);
           else setStatus(data.error || "No se ha podido cargar el detalle.");
-        }
-
-        function setToday() {
-          const today = new Date().toISOString().slice(0, 10);
-          setPeriodStart(today);
-          setPeriodEnd(today);
-        }
-
-        function setYesterday() {
-          const date = new Date();
-          date.setDate(date.getDate() - 1);
-          const value = date.toISOString().slice(0, 10);
-          setPeriodStart(value);
-          setPeriodEnd(value);
-        }
-
-        function setDetailSalesPoints() {
-          const from = periodStart ? new Date(`${periodStart}T00:00:00`) : null;
-          const to = periodEnd ? new Date(`${periodEnd}T23:59:59`) : null;
-          const sales = (detail?.purchases || []).filter((purchase) => {
-            const created = new Date(purchase.created_at);
-            if (from && created < from) return false;
-            if (to && created > to) return false;
-            return true;
-          });
-          setPointsToRemove(String(sales.reduce((sum, item) => sum + Number(item.total_points || 0), 0)));
         }
 
         async function payBusiness() {
@@ -164,11 +151,18 @@
             const response = await fetch(`/api/admin/business-settlements/${selected.id}/pay`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password, points, bankFeeCents, periodStart, periodEnd, note }),
+              body: JSON.stringify({ password, points, bankFeeCents, note }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "No se ha podido registrar la liquidación.");
             setStatus("Liquidación registrada y puntos retirados.");
+            setSuccessOverlay({
+              businessName: selected.display_name || "Empresa",
+              points,
+              amountCents: points * 10,
+              bankFeeCents,
+              createdAt: new Date().toISOString(),
+            });
             await loadBusinesses();
             await openDetail({ ...selected, current_points: data.business_points });
           } catch (error) {
@@ -206,6 +200,18 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
+        const filteredPayouts = (detail?.payouts || []).filter((payout) => {
+          const query = detailSearch.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            payout.points,
+            payout.amount_cents,
+            payout.bank_fee_cents,
+            payout.note,
+            payout.created_at,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
         if (!isUnlocked) {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -237,11 +243,11 @@
             </header>
 
             <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <Stat label="Empresas" value={summary.total_businesses || 0} />
-              <Stat label="Puntos empresas" value={`${summary.total_current_points || 0} ptos.`} tone="mint" />
-              <Stat label="Equivalente" value={money(summary.total_current_value_cents)} tone="mint" />
-              <Stat label="Ganado en ventas" value={`${summary.total_sold_points || 0} ptos.`} tone="sun" />
-              <Stat label="Recargado empresas" value={`${summary.total_recharged_points || 0} ptos.`} />
+              <Stat label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Número de cuentas comercio/empresa registradas en Donos.", example: "Si hay 4 comercios, verás 4." }} />
+              <Stat label="Puntos empresas" value={`${summary.total_current_points || 0} ptos.`} tone="mint" info={{ title: "Puntos empresas", text: "Puntos que siguen dentro de cuentas empresa y que pueden equivaler a dinero pendiente.", example: "250 ptos. = 25 € pendientes." }} />
+              <Stat label="Equivalente" value={money(summary.total_current_value_cents)} tone="mint" info={{ title: "Equivalente", text: "Conversión de los puntos empresa actuales a euros.", example: "1400 ptos. x 0,10 € = 140 €." }} />
+              <Stat label="Ganado en ventas" value={`${summary.total_sold_points || 0} ptos.`} tone="sun" info={{ title: "Ganado en ventas", text: "Puntos que empresas recibieron por compras de clientes.", example: "3 ventas de 100 ptos. = 300 ptos." }} />
+              <Stat label="Recargado empresas" value={`${summary.total_recharged_points || 0} ptos.`} info={{ title: "Recargado empresas", text: "Puntos que las empresas compraron para su propia cuenta.", example: "Una empresa recarga 500 ptos.; aparece aquí." }} />
             </section>
 
             <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3">
@@ -299,48 +305,94 @@
                   <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.045] p-4">
                     <p className="text-sm font-black text-white">Registrar dinero enviado fuera de Donos</p>
                     <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes. Si tu banco te cobra comisión, apúntala como gasto Donos.</p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_2fr_auto]">
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="number" min="1" value={pointsToRemove} onChange={(event) => setPointsToRemove(event.target.value)} placeholder="Puntos" />
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" inputMode="decimal" value={bankFeeEuros} onChange={(event) => setBankFeeEuros(event.target.value)} placeholder="Frais banco € (0)" />
-                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
-                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} />
-                      <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-xs font-black text-slate-200" onClick={setToday}>Hoy</button>
-                      <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-xs font-black text-slate-200" onClick={setYesterday}>Ayer</button>
+                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota: transferencia, Stripe, llamada..." />
+                      <button className="h-12 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isPaying} onClick={payBusiness}>{isPaying ? "Guardando..." : "Quitar puntos"}</button>
                     </div>
                     {Number(String(bankFeeEuros || "0").replace(",", ".")) > 0 && (
                       <p className="mt-3 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-xs font-black text-coral">
                         Esta comisión se sumará a Deudas bancarias Donos: {money(Math.round(Number(String(bankFeeEuros || "0").replace(",", ".")) * 100))}
                       </p>
                     )}
-                    <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto_auto]">
-                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota: pago Stripe, llamada, etc." />
-                      <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-slate-200" onClick={setDetailSalesPoints}>Usar ventas del periodo</button>
-                      <button className="h-12 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isPaying} onClick={payBusiness}>{isPaying ? "Guardando..." : "Quitar puntos"}</button>
-                    </div>
                   </section>
 
                   <section className="mt-5">
-                    <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-3">
-                      <label className="flex items-center gap-3">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint/10 text-mint">⌕</span>
-                        <input className="h-10 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500" value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Buscar comprador, producto, email..." />
-                      </label>
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-3">
+                        <label className="flex items-center gap-3">
+                          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint/10 text-mint">⌕</span>
+                          <input className="h-10 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500" value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Buscar comprador, producto, virement..." />
+                        </label>
+                      </div>
+                      <div className="rounded-[24px] border border-mint/20 bg-mint/10 p-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">Último virement</p>
+                        <p className="mt-1 truncate text-sm font-black text-white">
+                          {detail?.payouts?.[0] ? `${money(detail.payouts[0].amount_cents)} · ${dateTime(detail.payouts[0].created_at)}` : "Todavía sin virement"}
+                        </p>
+                      </div>
                     </div>
-                    <div className="mt-4 max-h-[42vh] overflow-y-auto rounded-[26px] border border-white/10 bg-black/20">
-                      {(detail ? filteredPurchases : []).map((purchase) => (
-                        <article key={purchase.id} className="grid gap-2 border-b border-white/10 px-4 py-3 sm:grid-cols-[1fr_auto]">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-black text-white">{purchase.buyer?.display_name || purchase.buyer?.email || "Cliente Donos"}</p>
-                            <p className="mt-1 truncate text-xs font-bold text-slate-400">{purchase.offer?.title || "Compra"} · {purchase.buyer?.email || "Sin email"}</p>
-                            <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(purchase.created_at)}</p>
-                          </div>
-                          <p className="text-sm font-black text-mint">{purchase.total_points || 0} ptos.</p>
-                        </article>
-                      ))}
-                      {detail && filteredPurchases.length === 0 && <p className="p-5 text-sm font-bold text-slate-400">No hay compras para esta búsqueda.</p>}
-                      {!detail && <p className="p-5 text-sm font-bold text-slate-400">Cargando detalle...</p>}
+
+                    <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                      <div className="max-h-[42vh] overflow-y-auto rounded-[26px] border border-white/10 bg-black/20">
+                        <p className="border-b border-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Compras recibidas</p>
+                        {(detail ? filteredPurchases : []).map((purchase) => (
+                          <article key={purchase.id} className="grid gap-2 border-b border-white/10 px-4 py-3 sm:grid-cols-[1fr_auto]">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-white">{purchase.buyer?.display_name || purchase.buyer?.email || "Cliente Donos"}</p>
+                              <p className="mt-1 truncate text-xs font-bold text-slate-400">{purchase.offer?.title || "Compra"} · {purchase.buyer?.email || "Sin email"}</p>
+                              <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(purchase.created_at)}</p>
+                            </div>
+                            <p className="text-sm font-black text-mint">{purchase.total_points || 0} ptos.</p>
+                          </article>
+                        ))}
+                        {detail && filteredPurchases.length === 0 && <p className="p-5 text-sm font-bold text-slate-400">No hay compras para esta búsqueda.</p>}
+                        {!detail && <p className="p-5 text-sm font-bold text-slate-400">Cargando detalle...</p>}
+                      </div>
+
+                      <div className="max-h-[42vh] overflow-y-auto rounded-[26px] border border-white/10 bg-black/20">
+                        <p className="border-b border-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Historial de virements enviados</p>
+                        {(detail ? filteredPayouts : []).map((payout) => (
+                          <article key={payout.id} className="grid gap-2 border-b border-white/10 px-4 py-3 sm:grid-cols-[1fr_auto]">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-white">{money(payout.amount_cents)} enviados</p>
+                              <p className="mt-1 truncate text-xs font-bold text-slate-400">{payout.points || 0} ptos. retirados · frais banco {money(payout.bank_fee_cents)}</p>
+                              <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(payout.created_at)}</p>
+                              {payout.note && <p className="mt-2 truncate rounded-2xl bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300">{payout.note}</p>}
+                            </div>
+                            <p className="text-sm font-black text-mint">OK</p>
+                          </article>
+                        ))}
+                        {detail && filteredPayouts.length === 0 && <p className="p-5 text-sm font-bold text-slate-400">No hay virements registrados.</p>}
+                        {!detail && <p className="p-5 text-sm font-bold text-slate-400">Cargando virements...</p>}
+                      </div>
                     </div>
                   </section>
+                </section>
+              </div>
+            )}
+
+            {successOverlay && (
+              <div className="fixed inset-0 z-[60] grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <section className="w-full max-w-md rounded-[34px] border border-mint/25 bg-[#0D111D] p-6 text-center shadow-glow">
+                  <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-mint text-4xl font-black text-ink shadow-glow">✓</div>
+                  <p className="mt-5 text-sm font-black uppercase tracking-[0.16em] text-mint">Virement registrado</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Pago enviado correctamente</h2>
+                  <p className="mt-3 text-sm font-bold leading-6 text-slate-400">
+                    {successOverlay.businessName} recibió {money(successOverlay.amountCents)} y se retiraron {successOverlay.points} ptos.
+                  </p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">
+                      <p className="text-xs font-bold text-slate-500">Frais banco</p>
+                      <p className="mt-1 text-lg font-black text-coral">{money(successOverlay.bankFeeCents)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">
+                      <p className="text-xs font-bold text-slate-500">Fecha</p>
+                      <p className="mt-1 text-sm font-black text-white">{dateTime(successOverlay.createdAt)}</p>
+                    </div>
+                  </div>
+                  <button className="mt-6 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => setSuccessOverlay(null)}>Entendido</button>
                 </section>
               </div>
             )}

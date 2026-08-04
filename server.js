@@ -526,7 +526,7 @@ app.post("/api/admin/accounts", async (request, response) => {
       .select("amount_total, stripe_fee_amount, net_amount, points"),
     supabaseAdmin
       .from("business_payouts")
-      .select("bank_fee_cents"),
+      .select("amount_cents, bank_fee_cents"),
   ]);
 
   if (accountsError) {
@@ -557,6 +557,10 @@ app.post("/api/admin/accounts", async (request, response) => {
   const donosCompanyMoney = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
   const donosDebt = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
   const bankFeeDebt = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.bank_fee_cents || 0), 0);
+  const businessPayoutsPaid = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+  const totalOperationalDebt = donosDebt + bankFeeDebt;
+  const donosAvailableProfit = donosCompanyMoney - totalOperationalDebt;
+  const estimatedCash = totalNet - businessPayoutsPaid - bankFeeDebt;
   const totalLiability = totalPoints * 10;
 
   response.json({
@@ -571,11 +575,14 @@ app.post("/api/admin/accounts", async (request, response) => {
       total_paid_cents: totalPaid,
       total_stripe_fees_cents: totalFees,
       total_net_cents: totalNet,
-      reserve_margin_cents: totalNet - totalLiability,
+      business_payouts_paid_cents: businessPayoutsPaid,
+      estimated_cash_cents: estimatedCash,
+      reserve_margin_cents: estimatedCash - totalLiability,
       donos_company_money_cents: donosCompanyMoney,
       donos_debt_cents: donosDebt,
       bank_fee_debt_cents: bankFeeDebt,
-      total_operational_debt_cents: donosDebt + bankFeeDebt,
+      total_operational_debt_cents: totalOperationalDebt,
+      donos_available_profit_cents: donosAvailableProfit,
     },
   });
 });

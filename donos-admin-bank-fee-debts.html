@@ -50,6 +50,19 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
+      function InfoTip({ title, text, example }) {
+        return (
+          <span className="group relative inline-flex">
+            <button className="grid h-5 w-5 place-items-center rounded-full border border-white/15 bg-white/10 text-[11px] font-black text-slate-200" type="button">i</button>
+            <span className="pointer-events-none absolute left-1/2 top-7 z-30 hidden w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#111827] p-3 text-left text-white shadow-2xl shadow-black/40 group-hover:block">
+              <span className="block text-xs font-black">{title}</span>
+              <span className="mt-1 block text-xs font-bold leading-5 text-slate-300">{text}</span>
+              {example && <span className="mt-2 block rounded-xl bg-black/25 p-2 text-[11px] font-bold leading-4 text-coral">Ejemplo: {example}</span>}
+            </span>
+          </span>
+        );
+      }
+
       function App() {
         const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
         const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
@@ -142,15 +155,24 @@
 
             <section className="mt-6 grid gap-3 sm:grid-cols-3">
               <div className="rounded-3xl border border-coral/25 bg-coral/10 p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-coral">Deuda bancaria total</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-coral">
+                  <span>Deuda bancaria total</span>
+                  <InfoTip title="Deuda bancaria total" text="Suma de todos los frais que tu banco cobró al pagar empresas fuera de Donos." example="0,45 € + 0,20 € = 0,65 €." />
+                </p>
                 <p className="mt-2 text-3xl font-black text-white">{money(summary.total_debt_cents)}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Pagado a empresas</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <span>Pagado a empresas</span>
+                  <InfoTip title="Pagado a empresas" text="Dinero real que registraste como enviado a empresas." example="Retiras 150 ptos. = 15 € pagados." />
+                </p>
                 <p className="mt-2 text-3xl font-black text-white">{money(summary.total_paid_to_businesses_cents)}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Movimientos con frais</p>
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                  <span>Movimientos con frais</span>
+                  <InfoTip title="Movimientos con frais" text="Número de virements donde escribiste un frais bancario mayor que 0." example="Si 2 pagos tuvieron frais, aquí verás 2." />
+                </p>
                 <p className="mt-2 text-3xl font-black text-white">{summary.total_items || 0}</p>
               </div>
             </section>
