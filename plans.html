@@ -64,6 +64,11 @@
           home: <path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5Z" />,
           history: <path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v5l3 2" />,
           users: <path d="M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21a5 5 0 0 0-5-5M17 11a3.5 3.5 0 0 0 0-7" />,
+          compass: <path d="m16.2 7.8-2.4 6-6 2.4 2.4-6 6-2.4ZM22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z" />,
+          ticket: <path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2.2a2.8 2.8 0 0 0 0 5.6V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.2a2.8 2.8 0 0 0 0-5.6V7ZM9 8v8" />,
+          list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />,
+          checkCircle: <path d="M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4 12 14.01l-3-3" />,
+          search: <path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" />,
           transfer: <path d="M7 7h12m0 0-4-4m4 4-4 4M17 17H5m0 0 4 4m-4-4 4-4" />,
           user: <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />,
           plus: <path d="M12 5v14M5 12h14" />,
@@ -107,6 +112,22 @@
         return value === "woman" ? "Chica" : value === "man" ? "Chico" : "Libre";
       }
 
+      function friendlyError(message, fallback = "No se ha podido completar la acción.") {
+        const messages = {
+          social_plans_table_missing: "Falta activar Quedar en Supabase. Ejecuta supabase-social-plans.sql.",
+          purchases_table_missing: "Falta activar el SQL de pagos en Supabase.",
+          purchase_already_has_plan: "Este billete ya tiene un plan activo.",
+          purchase_not_found: "No encontramos este billete en tu cuenta.",
+          invalid_group_size: "Indica entre 1 y 20 plazas para el grupo.",
+          users_only: "Solo los usuarios pueden crear planes para quedar.",
+          already_joined: "Ya pediste entrar en este plan.",
+          plans_failed: "No se han podido cargar los planes.",
+          mine_failed: "No se han podido cargar tus planes.",
+          tickets_failed: "No se han podido cargar tus billetes.",
+        };
+        return messages[message] || `${fallback} Motivo: ${message || "error desconocido"}`;
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20">
@@ -146,6 +167,32 @@
               <p className="mt-2 text-xs font-bold text-slate-500">{formatDate(ticket.created_at)} · {ticket.total_points || 0} ptos.</p>
             </div>
           </button>
+        );
+      }
+
+      function TopModeButton({ value, label, icon, mode, onClick, count }) {
+        const active = mode === value;
+        return (
+          <button
+            type="button"
+            onClick={() => onClick(value)}
+            className={`relative flex h-12 shrink-0 items-center gap-2 rounded-2xl px-3 text-sm font-black transition sm:h-14 sm:px-4 ${active ? "bg-mint text-ink shadow-glow" : "border border-white/10 bg-white/[0.055] text-slate-300"}`}
+          >
+            <NavIcon name={icon} />
+            <span>{label}</span>
+            {count > 0 && <span className={`${active ? "bg-ink text-mint" : "bg-mint text-ink"} rounded-full px-2 py-0.5 text-[10px] font-black`}>{count}</span>}
+          </button>
+        );
+      }
+
+      function SearchBox({ value, onChange, placeholder }) {
+        return (
+          <label className="flex min-h-[52px] items-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.055] px-4">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint/12 text-mint">
+              <NavIcon name="search" />
+            </span>
+            <input className="h-full flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500" value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+          </label>
         );
       }
 
@@ -201,6 +248,8 @@
         const [joinedPlans, setJoinedPlans] = React.useState([]);
         const [tickets, setTickets] = React.useState([]);
         const [selectedTicketId, setSelectedTicketId] = React.useState("");
+        const [ticketPickerOpen, setTicketPickerOpen] = React.useState(false);
+        const [ticketQuery, setTicketQuery] = React.useState("");
         const [title, setTitle] = React.useState("");
         const [message, setMessage] = React.useState("");
         const [photoDataUrl, setPhotoDataUrl] = React.useState("");
@@ -211,7 +260,7 @@
         const [joinGender, setJoinGender] = React.useState("open");
         const [joinNote, setJoinNote] = React.useState("");
         const [detailPlan, setDetailPlan] = React.useState(null);
-        const [status, setStatus] = React.useState("Cargando planes...");
+        const [status, setStatus] = React.useState("");
         const [isSaving, setIsSaving] = React.useState(false);
 
         React.useEffect(() => {
@@ -247,7 +296,7 @@
             }
             await Promise.all([loadPlans(accessToken), loadMine(accessToken), loadTickets(accessToken)]);
           } catch (error) {
-            setStatus("No se ha podido cargar Quedar.");
+            setStatus(friendlyError(error.message, "No se ha podido cargar Quedar."));
           }
         }
 
@@ -318,7 +367,7 @@
             setWantedOpen(0);
             await reloadAll();
           } catch (error) {
-            setStatus(error.message === "purchase_already_has_plan" ? "Este billete ya tiene un plan activo." : "No se ha podido publicar el plan.");
+            setStatus(friendlyError(error.message, "No se ha podido publicar el plan."));
           } finally {
             setIsSaving(false);
           }
@@ -338,7 +387,7 @@
             setJoinNote("");
             await reloadAll();
           } catch (error) {
-            setStatus(error.message === "already_joined" ? "Ya pediste entrar en este plan." : "No se ha podido enviar tu solicitud.");
+            setStatus(friendlyError(error.message, "No se ha podido enviar tu solicitud."));
           } finally {
             setIsSaving(false);
           }
@@ -392,6 +441,25 @@
         }
 
         const visiblePlans = plans.filter((plan) => !plan.is_owner);
+        const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId);
+        const filteredTickets = tickets.filter((ticket) => {
+          const query = ticketQuery.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            ticket.offer?.title,
+            ticket.offer?.business_display_name,
+            ticket.receiver?.display_name,
+            ticket.offer?.category,
+            ticket.delivery_method,
+            formatDate(ticket.created_at),
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+        const modes = [
+          { value: "discover", label: "Planes", icon: "compass", count: visiblePlans.length },
+          { value: "create", label: "Crear", icon: "ticket", count: 0 },
+          { value: "mine", label: "Míos", icon: "list", count: ownedPlans.length },
+          { value: "joined", label: "Voy", icon: "checkCircle", count: joinedPlans.length },
+        ];
 
         if (profile?.account_type === "business") {
           return (
@@ -426,46 +494,61 @@
                   <p className="text-xs font-semibold text-slate-400">Quedar</p>
                 </div>
               </a>
-              <button className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.06]" onClick={reloadAll}>↻</button>
+              <button className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-mint" onClick={reloadAll}>↻</button>
             </header>
 
-            <section className="mt-6 rounded-[34px] border border-white/10 bg-white/[0.055] p-5 shadow-glow sm:p-7">
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Planes reales</p>
-              <h1 className="mt-2 text-3xl font-black leading-tight text-white sm:text-4xl">Encuentra gente para ir con tu billete</h1>
-              <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Solo se puede publicar usando una compra real. Aquí no se muestra ningún QR ni códigos de validación.</p>
-
-              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {[["discover", "Descubrir"], ["create", "Crear"], ["mine", "Mis planes"], ["joined", "Voy"]].map(([value, label]) => (
-                  <button key={value} className={`h-11 rounded-2xl text-sm font-black transition ${mode === value ? "bg-mint text-ink shadow-glow" : "bg-black/20 text-slate-300 ring-1 ring-white/10"}`} onClick={() => setMode(value)}>
-                    {label}
-                  </button>
+            <div className="sticky top-0 z-30 -mx-3 mt-3 overflow-x-auto border-y border-white/5 bg-[#060914]/72 px-3 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+              <div className="flex w-max min-w-full gap-2">
+                {modes.map((item) => (
+                  <TopModeButton key={item.value} {...item} mode={mode} onClick={setMode} />
                 ))}
               </div>
-            </section>
+            </div>
 
-            {status && <p className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${status.includes("correctamente") || status.includes("dentro") || status.includes("confirmado") ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/25 bg-coral/10 text-coral"}`}>{status}</p>}
+            {status && (
+              <p className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${
+                status.includes("correctamente") || status.includes("dentro") || status.includes("confirmado")
+                  ? "border-mint/25 bg-mint/10 text-mint"
+                  : status.includes("Cargando")
+                    ? "border-white/10 bg-white/[0.055] text-slate-300"
+                    : "border-coral/25 bg-coral/10 text-coral"
+              }`}>{status}</p>
+            )}
 
             {mode === "discover" && (
-              <section className="mt-5 grid gap-4 sm:grid-cols-2">
+              <section className="mt-4 grid gap-4 sm:grid-cols-2">
                 {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} />)}
                 {visiblePlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no hay planes abiertos.</p>}
               </section>
             )}
 
             {mode === "create" && (
-              <section className="mt-5 grid gap-5 lg:grid-cols-[1fr_.9fr]">
-                <div>
-                  <p className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-slate-500">Elige un billete</p>
-                  <div className="grid gap-3">
-                    {tickets.map((ticket) => (
-                      <TicketCard key={ticket.id} ticket={ticket} selected={selectedTicketId === ticket.id} onClick={() => setSelectedTicketId(ticket.id)} />
-                    ))}
-                    {tickets.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Compra un billete primero para crear un plan.</p>}
+              <section className="mt-4 grid gap-4 lg:grid-cols-[.9fr_1.1fr]">
+                <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Billete prueba</p>
+                      <p className="mt-1 text-sm font-bold text-slate-400">El QR y los códigos quedan ocultos.</p>
+                    </div>
+                    <button className="h-11 shrink-0 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow" onClick={() => setTicketPickerOpen(true)}>Añadir</button>
                   </div>
+                  {selectedTicket ? (
+                    <div className="mt-4">
+                      <TicketCard ticket={selectedTicket} selected={true} onClick={() => setTicketPickerOpen(true)} />
+                    </div>
+                  ) : (
+                    <button className="mt-4 grid min-h-[150px] w-full place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 p-5 text-center" onClick={() => setTicketPickerOpen(true)}>
+                      <span>
+                        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="ticket" /></span>
+                        <span className="mt-3 block text-lg font-black text-white">Elegir billete</span>
+                        <span className="mt-1 block text-sm font-bold text-slate-400">Abre tu galería con buscador.</span>
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Publicar plan</p>
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Crear plan</p>
                   <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título: Vamos al concierto..." />
                   <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Texto: quién eres, qué plan quieres, punto de encuentro..." />
                   <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
@@ -498,6 +581,43 @@
                 {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
+            )}
+
+            {ticketPickerOpen && (
+              <div className="fixed inset-0 z-50 bg-black/75 px-3 py-5 backdrop-blur-xl">
+                <section className="mx-auto flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl">
+                  <div className="border-b border-white/10 p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Galería de billetes</p>
+                        <h2 className="mt-1 text-2xl font-black text-white">Elige el billete del plan</h2>
+                      </div>
+                      <button className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/10 text-2xl font-black text-white" onClick={() => setTicketPickerOpen(false)}>×</button>
+                    </div>
+                    <div className="mt-4">
+                      <SearchBox value={ticketQuery} onChange={setTicketQuery} placeholder="Buscar por título, empresa, fecha..." />
+                    </div>
+                  </div>
+                  <div className="overflow-y-auto p-4 sm:p-5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {filteredTickets.map((ticket) => (
+                        <TicketCard
+                          key={ticket.id}
+                          ticket={ticket}
+                          selected={selectedTicketId === ticket.id}
+                          onClick={() => {
+                            setSelectedTicketId(ticket.id);
+                            setTicketPickerOpen(false);
+                            setStatus("");
+                          }}
+                        />
+                      ))}
+                    </div>
+                    {tickets.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no tienes billetes comprados.</p>}
+                    {tickets.length > 0 && filteredTickets.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">No encontramos billetes con esa búsqueda.</p>}
+                  </div>
+                </section>
+              </div>
             )}
 
             {joinPlan && (
