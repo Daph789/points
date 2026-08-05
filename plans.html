@@ -132,6 +132,10 @@
         return start || end || "";
       }
 
+      function offerDetailUrl(ticket) {
+        return ticket?.offer?.id ? `offer-detail.html?id=${ticket.offer.id}` : "home.html";
+      }
+
       function statusLabel(value) {
         const labels = { open: "Abierto", confirmed: "Confirmado", cancelled: "Cancelado", accepted: "Aceptado", waiting: "Lista de espera", removed: "Retirado" };
         return labels[value] || value || "";
@@ -153,6 +157,7 @@
           plan_confirmed: "Este grupo ya está confirmado y no se puede editar.",
           plan_cancelled: "Este plan está cancelado.",
           update_plan_failed: "No se ha podido guardar la modificación.",
+          ticket_required: "Para apuntarte tienes que comprar primero este mismo billete.",
           users_only: "Solo los usuarios pueden crear planes para quedar.",
           already_joined: "Ya pediste entrar en este plan.",
           plans_failed: "No se han podido cargar los planes.",
@@ -262,9 +267,7 @@
         const image = ticketImage(plan.purchase);
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
-        const hours = plan.purchase?.offer?.hours || "";
-        const eventDate = offerDateRange(plan.purchase);
-        const category = offerCategories(plan.purchase);
+        const offer = plan.purchase?.offer || {};
         const counts = plan.counts || {};
         const full = Number(plan.wanted_women || 0) + Number(plan.wanted_men || 0) + Number(plan.wanted_open || 0);
         const accepted = Number(counts.accepted || 0);
@@ -295,11 +298,10 @@
                 {plan.creator?.is_verified && <VerifiedBadge />}
               </div>
               <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400">
-                {category && <p className="rounded-2xl bg-black/20 px-3 py-2">Categoría: <span className="text-slate-200">{category}</span></p>}
-                {address && <p className="rounded-2xl bg-black/20 px-3 py-2">Lugar: <span className="text-slate-200">{address}</span></p>}
-                {(eventDate || hours) && <p className="rounded-2xl bg-black/20 px-3 py-2">{eventDate || "Fecha abierta"}{hours ? ` · ${hours}` : ""}</p>}
+                {address && <p className="rounded-2xl bg-black/20 px-3 py-2">Dirección: <span className="text-slate-200">{address}</span></p>}
+                {(offer.start_date || offer.end_date) && <p className="rounded-2xl bg-black/20 px-3 py-2">{offer.start_date ? `Inicio: ${formatDate(offer.start_date)}` : ""}{offer.start_date && offer.end_date ? " · " : ""}{offer.end_date ? `Fin: ${formatDate(offer.end_date)}` : ""}</p>}
               </div>
-              {plan.message && <p className="mt-3 line-clamp-3 text-sm font-semibold leading-6 text-slate-300">{plan.message}</p>}
+              {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
                 <div className="mt-4 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicas</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
@@ -344,6 +346,7 @@
         const [wantedWomen, setWantedWomen] = React.useState(0);
         const [wantedMen, setWantedMen] = React.useState(0);
         const [joinPlan, setJoinPlan] = React.useState(null);
+        const [purchaseRequiredPlan, setPurchaseRequiredPlan] = React.useState(null);
         const [joinGender, setJoinGender] = React.useState("open");
         const [joinNote, setJoinNote] = React.useState("");
         const [detailPlan, setDetailPlan] = React.useState(null);
@@ -499,6 +502,20 @@
           } finally {
             setIsSaving(false);
           }
+        }
+
+        function hasPurchasedOffer(plan) {
+          const offerId = plan?.purchase?.offer_id || plan?.purchase?.offer?.id;
+          if (!offerId) return false;
+          return tickets.some((ticket) => ticket.offer_id === offerId || ticket.offer?.id === offerId);
+        }
+
+        function openJoinFlow(plan) {
+          if (!hasPurchasedOffer(plan)) {
+            setPurchaseRequiredPlan(plan);
+            return;
+          }
+          setJoinPlan(plan);
         }
 
         function startEditPlan(plan) {
@@ -659,7 +676,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -759,14 +776,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -827,6 +844,36 @@
               </div>
             )}
 
+            {purchaseRequiredPlan && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <section className="w-full max-w-md overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl">
+                  <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
+                    {ticketImage(purchaseRequiredPlan.purchase) ? <img className="absolute inset-0 h-full w-full object-cover" src={ticketImage(purchaseRequiredPlan.purchase)} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">🎟️</span>}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent"></div>
+                    <button className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-black/45 text-xl font-black text-white backdrop-blur" onClick={() => setPurchaseRequiredPlan(null)}>×</button>
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Ya casi estás</p>
+                      <h2 className="mt-2 text-3xl font-black leading-tight text-white">Compra el mismo billete para participar</h2>
+                    </div>
+                  </div>
+                  <div className="p-5">
+                    <p className="text-sm font-bold leading-6 text-slate-300">
+                      Para ir con {purchaseRequiredPlan.creator?.display_name || "esta persona"} y garantizar tu presencia, primero tienes que comprar este mismo billete en Donos.
+                    </p>
+                    <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                      <p className="text-lg font-black text-white">{purchaseRequiredPlan.purchase?.offer?.title || "Billete Donos"}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-400">{offerMerchant(purchaseRequiredPlan.purchase)}</p>
+                      {purchaseRequiredPlan.purchase?.offer?.address && <p className="mt-2 text-xs font-bold text-slate-500">{purchaseRequiredPlan.purchase.offer.address}</p>}
+                    </div>
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setPurchaseRequiredPlan(null)}>Ahora no</button>
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" href={offerDetailUrl(purchaseRequiredPlan.purchase)}>Pagar</a>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            )}
+
             {detailPlan && (
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-xl">
                 <section className="mx-auto max-w-3xl rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
@@ -839,6 +886,7 @@
                     const dateRange = offerDateRange(ticket);
                     const images = offerImages(ticket);
                     const mapUrl = offer.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(offer.address)}` : "";
+                    const requiredPoints = Number(offer.required_points || ticket?.offer_points || ticket?.total_points || 0);
                     return (
                       <>
                   <div className="flex items-start justify-between gap-4">
@@ -881,8 +929,14 @@
                       </div>
                     </div>
                     <div className="grid gap-3 p-4 sm:grid-cols-2">
-                      {dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
+                      {offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de inicio</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
+                      {offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de fin</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
+                      {!offer.start_date && !offer.end_date && dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
                       {offer.hours && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Horarios</p><p className="mt-1 text-sm font-black text-white">{offer.hours}</p></div>}
+                      {requiredPoints > 0 && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Puntos necesarios</p><p className="mt-1 text-sm font-black text-white">{requiredPoints} puntos</p></div>}
+                      {offer.age && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Edad</p><p className="mt-1 text-sm font-black text-white">{offer.age}</p></div>}
+                      {offer.author && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Autor/a</p><p className="mt-1 text-sm font-black text-white">{offer.author}</p></div>}
+                      {categories && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Categorías</p><p className="mt-1 text-sm font-black text-white">{categories}</p></div>}
                       {offer.address && (
                         <a className="rounded-2xl bg-black/20 p-3 transition hover:bg-mint/10 sm:col-span-2" href={mapUrl} target="_blank" rel="noreferrer">
                           <p className="text-xs font-bold text-slate-500">Lugar</p>
@@ -891,6 +945,8 @@
                         </a>
                       )}
                       {offer.description && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Descripción del evento</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{offer.description}</p></div>}
+                      {detailPlan.message && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p></div>}
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)}>Ver el billete en detalle</a>
                     </div>
                   </div>
 

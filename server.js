@@ -1648,6 +1648,24 @@ app.post("/api/social-plans/:id/join", async (request, response) => {
     if (plan.creator_id === user.id) return response.status(400).json({ error: "owner_cannot_join" });
     if (plan.status === "confirmed") return response.status(400).json({ error: "plan_confirmed" });
 
+    const { data: planPurchase, error: planPurchaseError } = await supabaseAdmin
+      .from("purchases")
+      .select("id, offer_id")
+      .eq("id", plan.purchase_id)
+      .maybeSingle();
+    if (planPurchaseError) throw planPurchaseError;
+    if (!planPurchase?.offer_id) return response.status(404).json({ error: "purchase_not_found" });
+
+    const { data: matchingPurchase, error: matchingPurchaseError } = await supabaseAdmin
+      .from("purchases")
+      .select("id")
+      .eq("buyer_id", user.id)
+      .eq("offer_id", planPurchase.offer_id)
+      .limit(1)
+      .maybeSingle();
+    if (matchingPurchaseError) throw matchingPurchaseError;
+    if (!matchingPurchase) return response.status(403).json({ error: "ticket_required" });
+
     const gender = ["woman", "man", "open"].includes(request.body?.gender) ? request.body.gender : "open";
     const note = String(request.body?.note || "").trim().slice(0, 160) || null;
     const { data: members } = await supabaseAdmin
