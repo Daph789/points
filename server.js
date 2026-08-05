@@ -1224,6 +1224,106 @@ async function enrichPurchases(purchases) {
   }));
 }
 
+function publicPlanProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.display_name,
+    neighborhood: profile.neighborhood,
+    transaction_id: profile.transaction_id,
+    is_verified: Boolean(profile.is_verified),
+  };
+}
+
+function countPlanMembers(members = []) {
+  const accepted = members.filter((member) => member.status === "accepted");
+  const waiting = members.filter((member) => member.status === "waiting");
+  return {
+    accepted: accepted.length,
+    waiting: waiting.length,
+    women: accepted.filter((member) => member.gender === "woman").length,
+    men: accepted.filter((member) => member.gender === "man").length,
+    open: accepted.filter((member) => member.gender === "open").length,
+  };
+}
+
+function nextPlanMemberStatus(plan, members, gender) {
+  if (plan.status !== "open") return "waiting";
+  const counts = countPlanMembers(members);
+  if (gender === "woman" && counts.women < Number(plan.wanted_women || 0)) return "accepted";
+  if (gender === "man" && counts.men < Number(plan.wanted_men || 0)) return "accepted";
+  if (gender === "open" && counts.open < Number(plan.wanted_open || 0)) return "accepted";
+  return "waiting";
+}
+
+async function enrichSocialPlans(plans, viewerId = "") {
+  const planRows = plans || [];
+  const creatorIds = [...new Set(planRows.map((plan) => plan.creator_id).filter(Boolean))];
+  const purchaseIds = [...new Set(planRows.map((plan) => plan.purchase_id).filter(Boolean))];
+  const planIds = [...new Set(planRows.map((plan) => plan.id).filter(Boolean))];
+  let creatorsById = {};
+  let purchasesById = {};
+  let membersByPlanId = {};
+
+  if (creatorIds.length > 0) {
+    const { data: creators, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, neighborhood, transaction_id, is_verified")
+      .in("id", creatorIds);
+    if (error) console.error("Social plan creators error:", error);
+    creatorsById = Object.fromEntries((creators || []).map((profile) => [profile.id, profile]));
+  }
+
+  if (purchaseIds.length > 0) {
+    const { data: purchases, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, total_points, receiver_profile_id, created_at")
+      .in("id", purchaseIds);
+    if (error) console.error("Social plan purchases error:", error);
+    const enriched = await enrichPurchases(purchases || []);
+    purchasesById = Object.fromEntries(enriched.map((purchase) => [purchase.id, purchase]));
+  }
+
+  if (planIds.length > 0) {
+    const { data: members, error } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, plan_id, user_id, gender, status, note, created_at, updated_at")
+      .in("plan_id", planIds)
+      .order("created_at", { ascending: true });
+    if (error) console.error("Social plan members error:", error);
+    const memberUserIds = [...new Set((members || []).map((member) => member.user_id).filter(Boolean))];
+    let usersById = {};
+    if (memberUserIds.length > 0) {
+      const { data: users, error: usersError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, neighborhood, transaction_id, is_verified")
+        .in("id", memberUserIds);
+      if (usersError) console.error("Social plan member users error:", usersError);
+      usersById = Object.fromEntries((users || []).map((profile) => [profile.id, profile]));
+    }
+    for (const member of members || []) {
+      if (!membersByPlanId[member.plan_id]) membersByPlanId[member.plan_id] = [];
+      membersByPlanId[member.plan_id].push({
+        ...member,
+        user: publicPlanProfile(usersById[member.user_id]),
+      });
+    }
+  }
+
+  return planRows.map((plan) => {
+    const members = membersByPlanId[plan.id] || [];
+    return {
+      ...plan,
+      creator: publicPlanProfile(creatorsById[plan.creator_id]),
+      purchase: purchasesById[plan.purchase_id] || null,
+      members,
+      counts: countPlanMembers(members),
+      viewer_member: members.find((member) => member.user_id === viewerId) || null,
+      is_owner: plan.creator_id === viewerId,
+    };
+  });
+}
+
 app.get("/api/me/purchases", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -1253,6 +1353,305 @@ app.get("/api/me/purchases", async (request, response) => {
   } catch (error) {
     console.error("Purchase history fatal error:", error);
     response.status(500).json({ error: "purchase_history_failed" });
+  }
+});
+
+app.get("/api/me/plan-tickets", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    await ensureProfileForUser(auth.user);
+    const { data: purchases, error } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id, offer_id, delivery_method, offer_points, delivery_points, total_points, receiver_profile_id, created_at")
+      .eq("buyer_id", auth.user.id)
+      .order("created_at", { ascending: false })
+      .limit(120);
+
+    if (error) {
+      console.error("Plan tickets error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "purchases_table_missing" : "plan_tickets_failed",
+      });
+    }
+
+    response.json({ tickets: await enrichPurchases(purchases || []) });
+  } catch (error) {
+    console.error("Plan tickets fatal error:", error);
+    response.status(500).json({ error: "plan_tickets_failed" });
+  }
+});
+
+app.get("/api/social-plans", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const viewer = await ensureProfileForUser(auth.user);
+    const { data: plans, error } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .limit(120);
+
+    if (error) {
+      console.error("Social plans list error:", error);
+      return response.status(500).json({ error: error.code === "42P01" ? "social_plans_table_missing" : "social_plans_failed" });
+    }
+
+    response.json({ plans: await enrichSocialPlans(plans || [], viewer.id) });
+  } catch (error) {
+    console.error("Social plans list fatal error:", error);
+    response.status(500).json({ error: "social_plans_failed" });
+  }
+});
+
+app.get("/api/social-plans/me", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const viewer = await ensureProfileForUser(auth.user);
+    const { data: owned, error: ownedError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .eq("creator_id", viewer.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (ownedError) {
+      console.error("My social plans owned error:", ownedError);
+      return response.status(500).json({ error: ownedError.code === "42P01" ? "social_plans_table_missing" : "social_plans_failed" });
+    }
+
+    const { data: memberRows, error: memberError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("plan_id")
+      .eq("user_id", viewer.id)
+      .in("status", ["accepted", "waiting"])
+      .limit(120);
+
+    if (memberError && memberError.code !== "42P01") console.error("My social plans member error:", memberError);
+    const memberPlanIds = [...new Set((memberRows || []).map((row) => row.plan_id).filter(Boolean))];
+    let joined = [];
+    if (memberPlanIds.length > 0) {
+      const { data: joinedPlans, error: joinedError } = await supabaseAdmin
+        .from("social_plans")
+        .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .in("id", memberPlanIds)
+        .order("created_at", { ascending: false });
+      if (joinedError) console.error("My social plans joined error:", joinedError);
+      joined = joinedError ? [] : (joinedPlans || []);
+    }
+
+    response.json({
+      owned: await enrichSocialPlans(owned || [], viewer.id),
+      joined: await enrichSocialPlans(joined || [], viewer.id),
+    });
+  } catch (error) {
+    console.error("My social plans fatal error:", error);
+    response.status(500).json({ error: "social_plans_failed" });
+  }
+});
+
+app.post("/api/social-plans", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const creator = await ensureProfileForUser(auth.user);
+    if (creator.account_type === "business") return response.status(403).json({ error: "users_only" });
+
+    const purchaseId = String(request.body?.purchaseId || "").trim();
+    const { data: purchase, error: purchaseError } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id")
+      .eq("id", purchaseId)
+      .eq("buyer_id", creator.id)
+      .maybeSingle();
+
+    if (purchaseError) throw purchaseError;
+    if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
+
+    const wantedWomen = Math.max(Math.floor(Number(request.body?.wantedWomen || 0)), 0);
+    const wantedMen = Math.max(Math.floor(Number(request.body?.wantedMen || 0)), 0);
+    const wantedOpen = Math.max(Math.floor(Number(request.body?.wantedOpen || 0)), 0);
+    const totalWanted = wantedWomen + wantedMen + wantedOpen;
+    if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
+
+    const { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .insert({
+        creator_id: creator.id,
+        purchase_id: purchaseId,
+        title: String(request.body?.title || "").trim().slice(0, 90) || null,
+        message: String(request.body?.message || "").trim().slice(0, 420) || null,
+        photo_data_url: String(request.body?.photoDataUrl || "").startsWith("data:image/") ? String(request.body.photoDataUrl).slice(0, 900000) : null,
+        wanted_women: wantedWomen,
+        wanted_men: wantedMen,
+        wanted_open: wantedOpen,
+      })
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Create social plan error:", error);
+      return response.status(500).json({
+        error: error.code === "23505" ? "purchase_already_has_plan" : error.code === "42P01" ? "social_plans_table_missing" : "create_plan_failed",
+      });
+    }
+
+    response.json({ plan: (await enrichSocialPlans([plan], creator.id))[0] });
+  } catch (error) {
+    console.error("Create social plan fatal error:", error);
+    response.status(500).json({ error: "create_plan_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/join", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const user = await ensureProfileForUser(auth.user);
+    if (user.account_type === "business") return response.status(403).json({ error: "users_only" });
+
+    const { data: plan, error: planError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .eq("id", request.params.id)
+      .maybeSingle();
+    if (planError) throw planError;
+    if (!plan || plan.status === "cancelled") return response.status(404).json({ error: "plan_not_found" });
+    if (plan.creator_id === user.id) return response.status(400).json({ error: "owner_cannot_join" });
+    if (plan.status === "confirmed") return response.status(400).json({ error: "plan_confirmed" });
+
+    const gender = ["woman", "man", "open"].includes(request.body?.gender) ? request.body.gender : "open";
+    const note = String(request.body?.note || "").trim().slice(0, 160) || null;
+    const { data: members } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, plan_id, user_id, gender, status")
+      .eq("plan_id", plan.id)
+      .in("status", ["accepted", "waiting"]);
+    const status = nextPlanMemberStatus(plan, members || [], gender);
+
+    const { data: member, error } = await supabaseAdmin
+      .from("social_plan_members")
+      .insert({ plan_id: plan.id, user_id: user.id, gender, status, note })
+      .select("id, plan_id, user_id, gender, status, note, created_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Join social plan error:", error);
+      return response.status(500).json({
+        error: error.code === "23505" ? "already_joined" : error.code === "42P01" ? "social_plans_table_missing" : "join_plan_failed",
+      });
+    }
+
+    response.json({ member, status });
+  } catch (error) {
+    console.error("Join social plan fatal error:", error);
+    response.status(500).json({ error: "join_plan_failed" });
+  }
+});
+
+app.patch("/api/social-plans/:id/members/:memberId", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const owner = await ensureProfileForUser(auth.user);
+    const nextStatus = ["accepted", "waiting", "removed"].includes(request.body?.status) ? request.body.status : "";
+    if (!nextStatus) return response.status(400).json({ error: "invalid_status" });
+
+    const { data: plan, error: planError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, status")
+      .eq("id", request.params.id)
+      .maybeSingle();
+    if (planError) throw planError;
+    if (!plan || plan.creator_id !== owner.id) return response.status(404).json({ error: "plan_not_found" });
+    if (plan.status === "confirmed") return response.status(400).json({ error: "plan_confirmed" });
+
+    const { data: member, error } = await supabaseAdmin
+      .from("social_plan_members")
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq("id", request.params.memberId)
+      .eq("plan_id", plan.id)
+      .select("id, plan_id, user_id, gender, status, note, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (!member) return response.status(404).json({ error: "member_not_found" });
+    response.json({ member });
+  } catch (error) {
+    console.error("Update social plan member fatal error:", error);
+    response.status(500).json({ error: "member_update_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/confirm", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const owner = await ensureProfileForUser(auth.user);
+    const { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .update({ status: "confirmed", confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", request.params.id)
+      .eq("creator_id", owner.id)
+      .neq("status", "cancelled")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .maybeSingle();
+    if (error) throw error;
+    if (!plan) return response.status(404).json({ error: "plan_not_found" });
+    response.json({ plan: (await enrichSocialPlans([plan], owner.id))[0] });
+  } catch (error) {
+    console.error("Confirm social plan fatal error:", error);
+    response.status(500).json({ error: "confirm_plan_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/cancel", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const owner = await ensureProfileForUser(auth.user);
+    const { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .eq("id", request.params.id)
+      .eq("creator_id", owner.id)
+      .neq("status", "confirmed")
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!plan) return response.status(404).json({ error: "plan_not_found" });
+    response.json({ ok: true });
+  } catch (error) {
+    console.error("Cancel social plan fatal error:", error);
+    response.status(500).json({ error: "cancel_plan_failed" });
   }
 });
 
