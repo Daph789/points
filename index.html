@@ -192,7 +192,35 @@
       const inputClass =
         "h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
 
+      function readableSignupError(error) {
+        const rawMessage =
+          typeof error === "string"
+            ? error
+            : error?.message || error?.error_description || error?.msg || "";
+        const message = String(rawMessage || "").trim();
+        const lowerMessage = message.toLowerCase();
+
+        if (!message || message === "{}" || message === "[object Object]") {
+          return "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.";
+        }
+        if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
+          return "Este correo ya tiene una cuenta. Inicia sesión o usa otro correo.";
+        }
+        if (lowerMessage.includes("invalid email")) {
+          return "El correo electrónico no parece válido.";
+        }
+        if (lowerMessage.includes("password")) {
+          return "La contraseña no cumple los requisitos. Usa mínimo 8 caracteres.";
+        }
+        if (lowerMessage.includes("network") || lowerMessage.includes("failed")) {
+          return "No se ha podido conectar. Revisa internet y vuelve a intentarlo.";
+        }
+
+        return message;
+      }
+
       function App() {
+        const formRef = React.useRef(null);
         const [accountType, setAccountType] = React.useState("");
         const [displayName, setDisplayName] = React.useState("");
         const [email, setEmail] = React.useState("");
@@ -225,8 +253,14 @@
 
         function chooseAccountType(type) {
           setAccountType(type);
-          setStatus({ type: "", message: "" });
+          setStatus({
+            type: "info",
+            message: type === "business" ? "Perfil empresa seleccionado. Completa el formulario de abajo." : "Perfil usuario seleccionado. Completa el formulario de abajo.",
+          });
           localStorage.setItem("donosAccountType", type);
+          window.setTimeout(() => {
+            formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 120);
         }
 
         function profilePayload(transactionId) {
@@ -299,7 +333,7 @@
           } catch (error) {
             setStatus({
               type: "error",
-              message: error.message || "No se ha podido crear la cuenta. Inténtalo de nuevo.",
+              message: readableSignupError(error),
             });
           } finally {
             setIsSubmitting(false);
@@ -440,7 +474,14 @@
                   {profileCards}
 
                   {accountType && (
-                    <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                    <form ref={formRef} className="mt-6 scroll-mt-4 space-y-4 rounded-[26px] border border-mint/15 bg-black/10 p-3 sm:p-4" onSubmit={handleSubmit}>
+                      <div className="flex items-center justify-between gap-3 rounded-2xl bg-mint/10 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-black text-white">{isBusiness ? "Formulario empresa" : "Formulario usuario"}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-400">Rellena estos datos para crear tu cuenta Donos.</p>
+                        </div>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
+                      </div>
                       {isUser && (
                         <>
                           <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -635,6 +676,8 @@
                           className={`rounded-2xl border p-3 text-sm font-semibold ${
                             status.type === "success"
                               ? "border-mint/25 bg-mint/10 text-mint"
+                              : status.type === "info"
+                                ? "border-white/10 bg-white/[0.055] text-slate-300"
                               : "border-coral/30 bg-coral/10 text-coral"
                           }`}
                         >
