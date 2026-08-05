@@ -296,7 +296,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   response.json({ received: true });
 });
 
-app.use(express.json({ limit: "3mb" }));
+app.use(express.json({ limit: "6mb" }));
 
 app.post("/api/admin/recharges", async (request, response) => {
   if (!supabaseAdmin) {
@@ -1258,16 +1258,31 @@ function nextPlanMemberStatus(plan, members, gender) {
   return "waiting";
 }
 
-function normalizedSocialPlanPhoto(value) {
-  const photo = String(value || "");
-  if (!photo) return null;
-  if (!photo.startsWith("data:image/")) return null;
-  if (photo.length > 1500000) {
+function parseSocialPlanPhotos(value) {
+  const raw = String(value || "");
+  if (!raw) return [];
+  if (raw.startsWith("data:image/")) return [raw];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => String(item || "").startsWith("data:image/")).slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizedSocialPlanPhotos(values) {
+  const photos = (Array.isArray(values) ? values : [values])
+    .map((value) => String(value || ""))
+    .filter((value) => value.startsWith("data:image/"))
+    .slice(0, 5);
+  if (photos.length === 0) return null;
+  const encoded = JSON.stringify(photos);
+  if (encoded.length > 4200000) {
     const error = new Error("photo_too_large");
     error.code = "photo_too_large";
     throw error;
   }
-  return photo;
+  return encoded;
 }
 
 async function enrichSocialPlans(plans, viewerId = "") {
@@ -1328,6 +1343,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
     const members = membersByPlanId[plan.id] || [];
     return {
       ...plan,
+      photo_data_urls: parseSocialPlanPhotos(plan.photo_data_url),
       creator: publicPlanProfile(creatorsById[plan.creator_id]),
       purchase: purchasesById[plan.purchase_id] || null,
       members,
@@ -1512,7 +1528,7 @@ app.post("/api/social-plans", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: normalizedSocialPlanPhoto(request.body?.photoDataUrl),
+        photo_data_url: normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl),
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
@@ -1586,7 +1602,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: normalizedSocialPlanPhoto(request.body?.photoDataUrl),
+        photo_data_url: normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl),
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
