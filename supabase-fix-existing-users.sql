@@ -141,9 +141,9 @@ $$;
 
 drop trigger if exists on_auth_user_created_profile on auth.users;
 
-create trigger on_auth_user_created_profile
-  after insert on auth.users
-  for each row execute function public.handle_new_user_profile();
+-- Donos crea/rehidrata el perfil desde el servidor con /api/me/profile.
+-- No recreamos el trigger de auth.users porque un error aquí bloquea completamente el registro.
+drop function if exists public.handle_new_user_profile();
 
 select id, display_name, email, account_type, transaction_id
 from public.profiles

@@ -201,7 +201,10 @@
         const lowerMessage = message.toLowerCase();
 
         if (!message || message === "{}" || message === "[object Object]") {
-          return "No se ha podido crear la cuenta. Revisa los datos y vuelve a intentarlo.";
+          return "Supabase está bloqueando la creación de cuentas. Ejecuta supabase-fix-signup-auth.sql.";
+        }
+        if (lowerMessage.includes("database error saving new user") || lowerMessage.includes("unexpected_failure")) {
+          return "Supabase está bloqueando la creación de cuentas. Ejecuta supabase-fix-signup-auth.sql.";
         }
         if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
           return "Este correo ya tiene una cuenta. Inicia sesión o usa otro correo.";
