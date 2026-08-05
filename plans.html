@@ -119,6 +119,10 @@
           purchase_already_has_plan: "Este billete ya tiene un plan activo.",
           purchase_not_found: "No encontramos este billete en tu cuenta.",
           invalid_group_size: "Indica entre 1 y 20 plazas para el grupo.",
+          group_size_below_accepted: "No puedes poner menos plazas que personas ya aceptadas.",
+          plan_confirmed: "Este grupo ya está confirmado y no se puede editar.",
+          plan_cancelled: "Este plan está cancelado.",
+          update_plan_failed: "No se ha podido guardar la modificación.",
           users_only: "Solo los usuarios pueden crear planes para quedar.",
           already_joined: "Ya pediste entrar en este plan.",
           plans_failed: "No se han podido cargar los planes.",
@@ -196,11 +200,12 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin }) {
+      function PlanCard({ plan, onOpen, onJoin, onEdit }) {
         const image = ticketImage(plan.purchase);
         const counts = plan.counts || {};
         const full = Number(plan.wanted_women || 0) + Number(plan.wanted_men || 0) + Number(plan.wanted_open || 0);
         const accepted = Number(counts.accepted || 0);
+        const hasPreference = Number(plan.wanted_women || 0) > 0 || Number(plan.wanted_men || 0) > 0;
         return (
           <article className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
             <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
@@ -223,13 +228,21 @@
                 <p className="text-xs font-bold text-slate-500">· {plan.creator?.neighborhood || "Donostia"}</p>
               </div>
               {plan.message && <p className="mt-3 line-clamp-3 text-sm font-semibold leading-6 text-slate-300">{plan.message}</p>}
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicas</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
-                <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicos</p><p className="text-lg font-black text-white">{counts.men || 0}/{plan.wanted_men || 0}</p></div>
-                <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Libre</p><p className="text-lg font-black text-white">{counts.open || 0}/{plan.wanted_open || 0}</p></div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
+              {hasPreference ? (
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicas</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
+                  <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicos</p><p className="text-lg font-black text-white">{counts.men || 0}/{plan.wanted_men || 0}</p></div>
+                  <div className="rounded-2xl bg-black/20 p-3 text-center"><p className="text-xs font-bold text-slate-500">Sin pref.</p><p className="text-lg font-black text-white">{Math.max(accepted - Math.min(counts.women || 0, plan.wanted_women || 0) - Math.min(counts.men || 0, plan.wanted_men || 0), 0)}/{plan.wanted_open || 0}</p></div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl bg-black/20 p-3">
+                  <p className="text-xs font-bold text-slate-500">Personas aceptadas</p>
+                  <p className="mt-1 text-2xl font-black text-white">{accepted}/{full}</p>
+                </div>
+              )}
+              <div className={`mt-4 grid gap-2 ${plan.is_owner && plan.status === "open" ? "grid-cols-3" : "grid-cols-2"}`}>
                 <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => onOpen(plan)}>Ver grupo</button>
+                {plan.is_owner && plan.status === "open" && <button className="h-12 rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" onClick={() => onEdit(plan)}>Editar</button>}
                 <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={plan.is_owner || plan.viewer_member || plan.status !== "open"} onClick={() => onJoin(plan)}>
                   {plan.viewer_member ? statusLabel(plan.viewer_member.status) : plan.is_owner ? "Tu plan" : "Voy contigo"}
                 </button>
@@ -246,6 +259,7 @@
         const [plans, setPlans] = React.useState([]);
         const [ownedPlans, setOwnedPlans] = React.useState([]);
         const [joinedPlans, setJoinedPlans] = React.useState([]);
+        const [editingPlanId, setEditingPlanId] = React.useState("");
         const [tickets, setTickets] = React.useState([]);
         const [selectedTicketId, setSelectedTicketId] = React.useState("");
         const [ticketPickerOpen, setTicketPickerOpen] = React.useState(false);
@@ -253,9 +267,10 @@
         const [title, setTitle] = React.useState("");
         const [message, setMessage] = React.useState("");
         const [photoDataUrl, setPhotoDataUrl] = React.useState("");
+        const [maxPeople, setMaxPeople] = React.useState("");
+        const [freePreference, setFreePreference] = React.useState(true);
         const [wantedWomen, setWantedWomen] = React.useState(0);
         const [wantedMen, setWantedMen] = React.useState(0);
-        const [wantedOpen, setWantedOpen] = React.useState(0);
         const [joinPlan, setJoinPlan] = React.useState(null);
         const [joinGender, setJoinGender] = React.useState("open");
         const [joinNote, setJoinNote] = React.useState("");
@@ -339,32 +354,39 @@
 
         async function createPlan() {
           if (!selectedTicketId) return setStatus("Elige un billete para crear el plan.");
-          const totalWanted = Number(wantedWomen || 0) + Number(wantedMen || 0) + Number(wantedOpen || 0);
-          if (totalWanted <= 0) return setStatus("Indica al menos una plaza para el grupo.");
+          const totalWanted = Math.max(Math.floor(Number(maxPeople || 0)), 0);
+          const womenWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedWomen || 0)), 0);
+          const menWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedMen || 0)), 0);
+          const openWanted = freePreference ? totalWanted : Math.max(totalWanted - womenWanted - menWanted, 0);
+          if (totalWanted <= 0) return setStatus("Indica cuántas personas pueden apuntarse como máximo.");
+          if (totalWanted > 20) return setStatus("El máximo para un plan es de 20 personas.");
+          if (!freePreference && womenWanted + menWanted > totalWanted) return setStatus("La suma de chicas y chicos no puede superar el máximo de personas.");
           setIsSaving(true);
           setStatus("");
           try {
-            await api("/api/social-plans", {
-              method: "POST",
+            await api(editingPlanId ? `/api/social-plans/${editingPlanId}` : "/api/social-plans", {
+              method: editingPlanId ? "PATCH" : "POST",
               body: JSON.stringify({
                 purchaseId: selectedTicketId,
                 title,
                 message,
                 photoDataUrl,
-                wantedWomen,
-                wantedMen,
-                wantedOpen,
+                wantedWomen: womenWanted,
+                wantedMen: menWanted,
+                wantedOpen: openWanted,
               }),
             });
-            setStatus("Plan publicado correctamente.");
+            setStatus(editingPlanId ? "Plan actualizado correctamente." : "Plan publicado correctamente.");
             setMode("mine");
+            setEditingPlanId("");
             setSelectedTicketId("");
             setTitle("");
             setMessage("");
             setPhotoDataUrl("");
+            setMaxPeople("");
+            setFreePreference(true);
             setWantedWomen(0);
             setWantedMen(0);
-            setWantedOpen(0);
             await reloadAll();
           } catch (error) {
             setStatus(friendlyError(error.message, "No se ha podido publicar el plan."));
@@ -391,6 +413,39 @@
           } finally {
             setIsSaving(false);
           }
+        }
+
+        function startEditPlan(plan) {
+          const women = Number(plan.wanted_women || 0);
+          const men = Number(plan.wanted_men || 0);
+          const open = Number(plan.wanted_open || 0);
+          const total = women + men + open;
+          setEditingPlanId(plan.id);
+          setSelectedTicketId(plan.purchase_id || plan.purchase?.id || "");
+          setTitle(plan.title || "");
+          setMessage(plan.message || "");
+          setPhotoDataUrl(plan.photo_data_url || "");
+          setMaxPeople(total || "");
+          setFreePreference(women === 0 && men === 0);
+          setWantedWomen(women);
+          setWantedMen(men);
+          setDetailPlan(null);
+          setStatus("Editando tu plan. Guarda los cambios cuando termines.");
+          setMode("create");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function cancelEdit() {
+          setEditingPlanId("");
+          setSelectedTicketId("");
+          setTitle("");
+          setMessage("");
+          setPhotoDataUrl("");
+          setMaxPeople("");
+          setFreePreference(true);
+          setWantedWomen(0);
+          setWantedMen(0);
+          setStatus("");
         }
 
         async function updateMember(plan, member, nextStatus) {
@@ -441,7 +496,8 @@
         }
 
         const visiblePlans = plans.filter((plan) => !plan.is_owner);
-        const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId);
+        const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
+        const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
         const filteredTickets = tickets.filter((ticket) => {
           const query = ticketQuery.trim().toLowerCase();
           if (!query) return true;
@@ -509,7 +565,7 @@
               <p className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${
                 status.includes("correctamente") || status.includes("dentro") || status.includes("confirmado")
                   ? "border-mint/25 bg-mint/10 text-mint"
-                  : status.includes("Cargando")
+                  : status.includes("Cargando") || status.includes("Editando")
                     ? "border-white/10 bg-white/[0.055] text-slate-300"
                     : "border-coral/25 bg-coral/10 text-coral"
               }`}>{status}</p>
@@ -517,8 +573,13 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} />)}
-                {visiblePlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no hay planes abiertos.</p>}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
+                {visiblePlans.length === 0 && (
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                    <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
+                    <p className="mt-2 leading-6 text-slate-400">Tus publicaciones aparecen en <span className="text-mint">Míos</span>. En <span className="text-mint">Planes</span> verás los planes creados por otras personas para poder apuntarte.</p>
+                  </div>
+                )}
               </section>
             )}
 
@@ -548,7 +609,13 @@
                 </div>
 
                 <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Crear plan</p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{editingPlanId ? "Editar plan" : "Crear plan"}</p>
+                      {editingPlanId && <p className="mt-1 text-xs font-bold text-slate-500">Estás modificando una publicación existente.</p>}
+                    </div>
+                    {editingPlanId && <button className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-300" onClick={cancelEdit}>Cancelar</button>}
+                  </div>
                   <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título: Vamos al concierto..." />
                   <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Texto: quién eres, qué plan quieres, punto de encuentro..." />
                   <label className="mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
@@ -558,27 +625,53 @@
                   </label>
                   {photoDataUrl && <img className="mt-3 h-28 w-28 rounded-3xl object-cover ring-1 ring-white/10" src={photoDataUrl} alt="" />}
 
-                  <div className="mt-4 grid grid-cols-3 gap-2">
-                    <label className="rounded-2xl bg-black/20 p-3"><span className="text-xs font-bold text-slate-500">Chicas</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedWomen} onChange={(event) => setWantedWomen(event.target.value)} /></label>
-                    <label className="rounded-2xl bg-black/20 p-3"><span className="text-xs font-bold text-slate-500">Chicos</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedMen} onChange={(event) => setWantedMen(event.target.value)} /></label>
-                    <label className="rounded-2xl bg-black/20 p-3"><span className="text-xs font-bold text-slate-500">Libre</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedOpen} onChange={(event) => setWantedOpen(event.target.value)} /></label>
-                  </div>
-                  <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Si un cupo se llena, las siguientes personas pasan automáticamente a lista de espera. Después puedes moverlas manualmente.</p>
-                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Publicando..." : "Publicar plan"}</button>
+                  <label className="mt-4 block rounded-[26px] border border-white/10 bg-black/20 p-4">
+                    <span className="text-sm font-black text-white">¿Cuántas personas máximo pueden apuntarse?</span>
+                    <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">Ejemplo: si quieres ir con 5 personas, escribe 5.</span>
+                    <input className="mt-3 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-2xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="20" value={maxPeople} onChange={(event) => setMaxPeople(event.target.value)} placeholder="5" />
+                  </label>
+
+                  {Number(maxPeople || 0) > 0 && (
+                    <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
+                      <p className="text-sm font-black text-white">¿Tienes preferencia para el grupo?</p>
+                      <label className="mt-3 flex cursor-pointer items-start gap-3 rounded-2xl bg-white/[0.055] p-3">
+                        <input className="mt-1 h-5 w-5 accent-[#42F2B3]" type="checkbox" checked={freePreference} onChange={(event) => setFreePreference(event.target.checked)} />
+                        <span>
+                          <span className="block text-sm font-black text-white">Me da igual, grupo libre</span>
+                          <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">Cualquiera puede apuntarse hasta completar el máximo.</span>
+                        </span>
+                      </label>
+
+                      {!freePreference && (
+                        <>
+                          <p className="mt-4 text-xs font-bold leading-5 text-slate-500">Opcional: indica cuántas chicas y cuántos chicos prefieres dentro del máximo. Las plazas que sobren quedan abiertas para cualquiera.</p>
+                          <div className="mt-3 grid grid-cols-2 gap-2">
+                            <label className="rounded-2xl bg-white/[0.055] p-3"><span className="text-xs font-bold text-slate-500">Chicas preferidas</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedWomen} onChange={(event) => setWantedWomen(event.target.value)} /></label>
+                            <label className="rounded-2xl bg-white/[0.055] p-3"><span className="text-xs font-bold text-slate-500">Chicos preferidos</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedMen} onChange={(event) => setWantedMen(event.target.value)} /></label>
+                          </div>
+                          <p className="mt-3 rounded-2xl bg-mint/10 px-3 py-2 text-xs font-black text-mint">
+                            {Math.max(Number(maxPeople || 0) - Number(wantedWomen || 0) - Number(wantedMen || 0), 0)} plaza(s) sin preferencia.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )}
+                  <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donos lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Guardando..." : editingPlanId ? "Guardar cambios" : "Publicar plan"}</button>
                 </div>
               </section>
             )}
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={setJoinPlan} onEdit={startEditPlan} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -677,7 +770,8 @@
                   </div>
 
                   {detailPlan.is_owner && detailPlan.status === "open" && (
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                      <button className="h-12 rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" disabled={isSaving} onClick={() => startEditPlan(detailPlan)}>Editar plan</button>
                       <button className="h-12 rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral" disabled={isSaving} onClick={() => cancelPlan(detailPlan)}>Cancelar plan</button>
                       <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={() => confirmPlan(detailPlan)}>Confirmar grupo</button>
                     </div>

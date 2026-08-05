@@ -1250,9 +1250,11 @@ function countPlanMembers(members = []) {
 function nextPlanMemberStatus(plan, members, gender) {
   if (plan.status !== "open") return "waiting";
   const counts = countPlanMembers(members);
+  const totalWanted = Number(plan.wanted_women || 0) + Number(plan.wanted_men || 0) + Number(plan.wanted_open || 0);
   if (gender === "woman" && counts.women < Number(plan.wanted_women || 0)) return "accepted";
   if (gender === "man" && counts.men < Number(plan.wanted_men || 0)) return "accepted";
   if (gender === "open" && counts.open < Number(plan.wanted_open || 0)) return "accepted";
+  if (Number(plan.wanted_open || 0) > 0 && counts.accepted < totalWanted) return "accepted";
   return "waiting";
 }
 
@@ -1517,6 +1519,82 @@ app.post("/api/social-plans", async (request, response) => {
   } catch (error) {
     console.error("Create social plan fatal error:", error);
     response.status(500).json({ error: "create_plan_failed" });
+  }
+});
+
+app.patch("/api/social-plans/:id", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const owner = await ensureProfileForUser(auth.user);
+    if (owner.account_type === "business") return response.status(403).json({ error: "users_only" });
+
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, status")
+      .eq("id", request.params.id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing || existing.creator_id !== owner.id) return response.status(404).json({ error: "plan_not_found" });
+    if (existing.status === "confirmed") return response.status(400).json({ error: "plan_confirmed" });
+    if (existing.status === "cancelled") return response.status(400).json({ error: "plan_cancelled" });
+
+    const wantedWomen = Math.max(Math.floor(Number(request.body?.wantedWomen || 0)), 0);
+    const wantedMen = Math.max(Math.floor(Number(request.body?.wantedMen || 0)), 0);
+    const wantedOpen = Math.max(Math.floor(Number(request.body?.wantedOpen || 0)), 0);
+    const totalWanted = wantedWomen + wantedMen + wantedOpen;
+    if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
+
+    const { data: members, error: membersError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, status")
+      .eq("plan_id", existing.id)
+      .eq("status", "accepted");
+    if (membersError) throw membersError;
+    if (totalWanted < (members || []).length) return response.status(400).json({ error: "group_size_below_accepted" });
+
+    const purchaseId = String(request.body?.purchaseId || existing.purchase_id || "").trim();
+    const { data: purchase, error: purchaseError } = await supabaseAdmin
+      .from("purchases")
+      .select("id, buyer_id")
+      .eq("id", purchaseId)
+      .eq("buyer_id", owner.id)
+      .maybeSingle();
+
+    if (purchaseError) throw purchaseError;
+    if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
+
+    const { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .update({
+        purchase_id: purchaseId,
+        title: String(request.body?.title || "").trim().slice(0, 90) || null,
+        message: String(request.body?.message || "").trim().slice(0, 420) || null,
+        photo_data_url: String(request.body?.photoDataUrl || "").startsWith("data:image/") ? String(request.body.photoDataUrl).slice(0, 900000) : null,
+        wanted_women: wantedWomen,
+        wanted_men: wantedMen,
+        wanted_open: wantedOpen,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .eq("creator_id", owner.id)
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Update social plan error:", error);
+      return response.status(500).json({
+        error: error.code === "23505" ? "purchase_already_has_plan" : error.code === "42P01" ? "social_plans_table_missing" : "update_plan_failed",
+      });
+    }
+
+    response.json({ plan: (await enrichSocialPlans([plan], owner.id))[0] });
+  } catch (error) {
+    console.error("Update social plan fatal error:", error);
+    response.status(500).json({ error: "update_plan_failed" });
   }
 });
 
