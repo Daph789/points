@@ -296,7 +296,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   response.json({ received: true });
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));
 
 app.post("/api/admin/recharges", async (request, response) => {
   if (!supabaseAdmin) {
@@ -1258,6 +1258,18 @@ function nextPlanMemberStatus(plan, members, gender) {
   return "waiting";
 }
 
+function normalizedSocialPlanPhoto(value) {
+  const photo = String(value || "");
+  if (!photo) return null;
+  if (!photo.startsWith("data:image/")) return null;
+  if (photo.length > 1500000) {
+    const error = new Error("photo_too_large");
+    error.code = "photo_too_large";
+    throw error;
+  }
+  return photo;
+}
+
 async function enrichSocialPlans(plans, viewerId = "") {
   const planRows = plans || [];
   const creatorIds = [...new Set(planRows.map((plan) => plan.creator_id).filter(Boolean))];
@@ -1500,7 +1512,7 @@ app.post("/api/social-plans", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: String(request.body?.photoDataUrl || "").startsWith("data:image/") ? String(request.body.photoDataUrl).slice(0, 900000) : null,
+        photo_data_url: normalizedSocialPlanPhoto(request.body?.photoDataUrl),
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
@@ -1518,6 +1530,7 @@ app.post("/api/social-plans", async (request, response) => {
     response.json({ plan: (await enrichSocialPlans([plan], creator.id))[0] });
   } catch (error) {
     console.error("Create social plan fatal error:", error);
+    if (error.code === "photo_too_large") return response.status(413).json({ error: "photo_too_large" });
     response.status(500).json({ error: "create_plan_failed" });
   }
 });
@@ -1573,7 +1586,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: String(request.body?.photoDataUrl || "").startsWith("data:image/") ? String(request.body.photoDataUrl).slice(0, 900000) : null,
+        photo_data_url: normalizedSocialPlanPhoto(request.body?.photoDataUrl),
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
@@ -1594,6 +1607,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
     response.json({ plan: (await enrichSocialPlans([plan], owner.id))[0] });
   } catch (error) {
     console.error("Update social plan fatal error:", error);
+    if (error.code === "photo_too_large") return response.status(413).json({ error: "photo_too_large" });
     response.status(500).json({ error: "update_plan_failed" });
   }
 });

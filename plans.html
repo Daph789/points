@@ -118,6 +118,7 @@
           purchases_table_missing: "Falta activar el SQL de pagos en Supabase.",
           purchase_already_has_plan: "Este billete ya tiene un plan activo.",
           purchase_not_found: "No encontramos este billete en tu cuenta.",
+          photo_too_large: "La foto es demasiado pesada. Prueba con otra imagen.",
           invalid_group_size: "Indica entre 1 y 20 plazas para el grupo.",
           group_size_below_accepted: "No puedes poner menos plazas que personas ya aceptadas.",
           plan_confirmed: "Este grupo ya está confirmado y no se puede editar.",
@@ -129,6 +130,7 @@
           mine_failed: "No se han podido cargar tus planes.",
           tickets_failed: "No se han podido cargar tus billetes.",
         };
+        if (String(message || "").toLowerCase().includes("failed")) return `${fallback} Revisa tu conexión o prueba con una foto más ligera.`;
         return messages[message] || `${fallback} Motivo: ${message || "error desconocido"}`;
       }
 
@@ -151,6 +153,33 @@
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
+      }
+
+      async function compressImageToDataUrl(file, maxSide = 960, quality = 0.78) {
+        if (!file) return "";
+        if (!file.type?.startsWith("image/")) throw new Error("invalid_image");
+
+        const originalUrl = URL.createObjectURL(file);
+        try {
+          const image = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = originalUrl;
+          });
+
+          const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0, width, height);
+          return canvas.toDataURL("image/jpeg", quality);
+        } finally {
+          URL.revokeObjectURL(originalUrl);
+        }
       }
 
       function TicketCard({ ticket, selected, onClick }) {
@@ -345,11 +374,21 @@
         async function handlePhoto(event) {
           const file = event.target.files?.[0];
           if (!file) return;
-          if (file.size > 900000) {
-            setStatus("La foto es demasiado grande. Usa una foto más ligera.");
+          if (file.size > 8 * 1024 * 1024) {
+            setStatus("La foto es demasiado grande. Usa una foto de menos de 8 MB.");
             return;
           }
-          setPhotoDataUrl(await fileToDataUrl(file));
+          try {
+            const compressed = await compressImageToDataUrl(file);
+            if (compressed.length > 1400000) {
+              setStatus("La foto sigue siendo demasiado pesada. Prueba con otra imagen más ligera.");
+              return;
+            }
+            setPhotoDataUrl(compressed);
+            setStatus("");
+          } catch (error) {
+            setStatus("No se ha podido preparar la foto. Prueba con otra imagen.");
+          }
         }
 
         async function createPlan() {
