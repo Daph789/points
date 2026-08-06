@@ -374,7 +374,11 @@
               throw new Error(data.error || "No se ha podido abrir Stripe.");
             }
 
-            window.location.href = data.url;
+            if (window.parent && window.parent !== window) {
+              window.parent.location.href = data.url;
+            } else {
+              window.location.href = data.url;
+            }
           } catch (error) {
             setStatus(error.message === "point_pack_disabled" ? "Esta recarga está temporalmente suspendida." : (error.message || "No se ha podido iniciar la recarga."));
             setIsRedirecting(false);
