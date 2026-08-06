@@ -15,7 +15,14 @@
       const url = new URL(link.href, window.location.href);
       const file = url.pathname.split("/").pop();
       const route = routeByFile[file];
-      if (!route || window.parent === window) return;
+      if (window.parent === window) return;
+      if (!route) {
+        if (url.origin === window.location.origin && file.endsWith(".html")) {
+          event.preventDefault();
+          window.parent.location.href = url.href;
+        }
+        return;
+      }
       event.preventDefault();
       window.parent.postMessage({ type: "donos:navigate", route }, window.location.origin);
     }, { capture: true });

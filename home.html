@@ -264,6 +264,14 @@
         return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
       }
 
+      function openFullPage(url) {
+        if (window.parent && window.parent !== window) {
+          window.parent.location.href = url;
+        } else {
+          window.location.href = url;
+        }
+      }
+
       function formatNumber(value) {
         return Number(value || 0).toLocaleString("es-ES");
       }
@@ -739,7 +747,7 @@
                         category={category}
                         active={selectedCategory === category.label}
                         onClick={() => {
-                          window.location.href = `category.html?category=${encodeURIComponent(category.label)}`;
+                          openFullPage(`category.html?category=${encodeURIComponent(category.label)}`);
                         }}
                       />
                     ))}
