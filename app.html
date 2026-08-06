@@ -84,6 +84,10 @@
         visibility: hidden;
       }
 
+      .spa-boot.is-skipped {
+        display: none;
+      }
+
       .spa-boot-card {
         width: min(100%, 360px);
         border: 1px solid rgba(255, 255, 255, 0.10);
@@ -183,7 +187,14 @@
         const links = Array.from(nav.querySelectorAll("[data-route]"));
         const frames = Array.from(document.querySelectorAll(".spa-frame"));
         const boot = document.getElementById("spa-boot");
+        const hasSeenBoot = localStorage.getItem("donos-spa-boot-seen") === "1";
         let activeIndex = 0;
+
+        if (hasSeenBoot) {
+          boot.classList.add("is-skipped");
+        } else {
+          localStorage.setItem("donos-spa-boot-seen", "1");
+        }
 
         function routeFromHash() {
           const clean = window.location.hash.replace("#", "");
@@ -233,6 +244,7 @@
 
         let loaded = 0;
         function hideBootWhenReady() {
+          if (hasSeenBoot) return;
           loaded += 1;
           if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
         }
@@ -250,7 +262,9 @@
           }, { once: false });
         });
 
-        window.setTimeout(() => boot.classList.add("is-hidden"), 2400);
+        if (!hasSeenBoot) {
+          window.setTimeout(() => boot.classList.add("is-hidden"), 2400);
+        }
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
           setRoute(routeFromHash(), { skipHash: true });
