@@ -179,8 +179,8 @@
         const [status, setStatus] = React.useState("Cargando ofertas...");
         const filteredOffers = offers.filter((offer) => matchesSearch(offer, search));
 
-        React.useEffect(() => {
-          async function loadOffers() {
+        const loadOffers = React.useCallback(async ({ silent = false } = {}) => {
+            if (!silent) setStatus("Cargando ofertas...");
             const { data, error } = await supabaseClient
               .from("business_offers")
               .select("*")
@@ -195,10 +195,22 @@
             const visibleOffers = (data || []).filter(isVisibleForUsers);
             setOffers(visibleOffers);
             setStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${category}.`);
+        }, [category]);
+
+        React.useEffect(() => {
+          loadOffers();
+        }, [loadOffers]);
+
+        React.useEffect(() => {
+          function handleMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type !== "donos:refresh-category") return;
+            loadOffers({ silent: true });
           }
 
-          loadOffers();
-        }, [category]);
+          window.addEventListener("message", handleMessage);
+          return () => window.removeEventListener("message", handleMessage);
+        }, [loadOffers]);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">

@@ -154,7 +154,6 @@
       <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donos" src="plans.html?embedded=1"></iframe>
       <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donos" src="transfer.html?embedded=1"></iframe>
       <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donos" src="profile.html?embedded=1"></iframe>
-      <iframe id="category-frame" class="spa-frame" data-route="categoria" data-index="0" title="Categoría Donos" src="about:blank"></iframe>
     </main>
 
     <div id="spa-boot" class="spa-boot" aria-hidden="true">
@@ -181,13 +180,15 @@
         const routeNames = ["inicio", "historial", "quedar", "transfer", "perfil"];
         const bottomRoutes = ["inicio", "historial", "quedar", "transfer", "perfil"];
         const nav = document.getElementById("donos-static-nav");
+        const root = document.querySelector(".spa-root");
         const grid = nav.querySelector(".donos-static-nav__grid");
         const links = Array.from(nav.querySelectorAll("[data-route]"));
-        const frames = Array.from(document.querySelectorAll(".spa-frame"));
-        const categoryFrame = document.getElementById("category-frame");
+        const baseFrames = Array.from(document.querySelectorAll(".spa-frame"));
+        const categoryFrames = new Map();
         const boot = document.getElementById("spa-boot");
         let activeIndex = 0;
         let activeRoute = "inicio";
+        let activeCategoryKey = "";
 
         function routeFromHash() {
           const clean = window.location.hash.replace("#", "");
@@ -213,8 +214,11 @@
             else link.removeAttribute("aria-current");
           });
 
-          frames.forEach((frame) => {
-            const isActive = frame.dataset.route === route;
+          allFrames().forEach((frame) => {
+            const isActive =
+              route === "categoria"
+                ? frame.dataset.route === "categoria" && frame.dataset.categoryKey === activeCategoryKey
+                : frame.dataset.route === route;
             frame.classList.toggle("is-active", isActive);
             frame.classList.toggle("is-left", !isActive && direction === "left");
           });
@@ -224,10 +228,45 @@
           }
         }
 
+        function allFrames() {
+          return [...baseFrames, ...categoryFrames.values()];
+        }
+
+        function categoryKey(category) {
+          return String(category || "Libros").trim().toLowerCase();
+        }
+
+        function watchFrame(frame) {
+          frame.addEventListener("load", () => {
+            try {
+              const childUrl = new URL(frame.contentWindow.location.href);
+              if (childUrl.pathname.endsWith("/login.html") || childUrl.pathname.endsWith("login.html")) {
+                window.location.href = childUrl.pathname + childUrl.search.replace(/[?&]embedded=1\b/, "");
+                return;
+              }
+            } catch (_error) {}
+            hideBootWhenReady();
+          }, { once: false });
+        }
+
         function openCategory(category, options = {}) {
           const cleanCategory = category || "Libros";
-          const nextSrc = `category.html?embedded=1&category=${encodeURIComponent(cleanCategory)}`;
-          if (!categoryFrame.src.endsWith(nextSrc)) categoryFrame.src = nextSrc;
+          const key = categoryKey(cleanCategory);
+          activeCategoryKey = key;
+          if (!categoryFrames.has(key)) {
+            const frame = document.createElement("iframe");
+            frame.className = "spa-frame";
+            frame.dataset.route = "categoria";
+            frame.dataset.categoryKey = key;
+            frame.dataset.index = "0";
+            frame.title = `${cleanCategory} Donos`;
+            frame.src = `category.html?embedded=1&category=${encodeURIComponent(cleanCategory)}`;
+            watchFrame(frame);
+            root.appendChild(frame);
+            categoryFrames.set(key, frame);
+          } else {
+            categoryFrames.get(key).contentWindow?.postMessage({ type: "donos:refresh-category" }, window.location.origin);
+          }
           setRoute("categoria", { skipHash: true });
           if (!options.skipHash) {
             history.pushState({ route: "categoria", category: cleanCategory }, "", `#categoria=${encodeURIComponent(cleanCategory)}`);
@@ -267,18 +306,7 @@
           if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
         }
 
-        frames.forEach((frame) => {
-          frame.addEventListener("load", () => {
-            try {
-              const childUrl = new URL(frame.contentWindow.location.href);
-              if (childUrl.pathname.endsWith("/login.html") || childUrl.pathname.endsWith("login.html")) {
-                window.location.href = childUrl.pathname + childUrl.search.replace(/[?&]embedded=1\b/, "");
-                return;
-              }
-            } catch (_error) {}
-            hideBootWhenReady();
-          }, { once: false });
-        });
+        baseFrames.forEach(watchFrame);
 
         window.setTimeout(() => boot.classList.add("is-hidden"), 1600);
         window.requestAnimationFrame(() => {
