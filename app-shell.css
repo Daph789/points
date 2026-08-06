@@ -24,13 +24,32 @@ body {
 }
 
 .donos-static-nav__grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
 }
 
+.donos-static-nav__grid::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  z-index: 0;
+  width: calc((100% - 16px) / 5);
+  transform: translateX(calc(var(--nav-index, 0) * (100% + 4px)));
+  border-radius: 18px;
+  background: #42f2b3;
+  box-shadow: 0 14px 36px rgba(66, 242, 179, 0.24);
+}
+
+.donos-static-nav.is-ready .donos-static-nav__grid::before {
+  transition: transform 280ms cubic-bezier(.2,.8,.2,1);
+}
+
 .donos-static-nav__item {
   position: relative;
+  z-index: 1;
   display: flex;
   height: 48px;
   min-width: 0;
@@ -70,8 +89,6 @@ body {
 
 .donos-static-nav__item.is-active {
   color: #060914;
-  background: #42f2b3;
-  box-shadow: 0 14px 36px rgba(66, 242, 179, 0.24);
 }
 
 .donos-static-nav__item:active {
@@ -120,5 +137,9 @@ body {
     height: 56px;
     border-radius: 24px;
     font-size: 12px;
+  }
+
+  .donos-static-nav__grid::before {
+    border-radius: 24px;
   }
 }

@@ -5,35 +5,54 @@
   const current = (window.location.pathname.split("/").pop() || "home.html").toLowerCase();
   const items = Array.from(nav.querySelectorAll("a[href]"));
   const hrefs = items.map((item) => item.getAttribute("href"));
+  const grid = nav.querySelector(".donos-static-nav__grid");
+  let activeIndex = 0;
 
-  items.forEach((item) => {
+  items.forEach((item, index) => {
     const href = (item.getAttribute("href") || "").toLowerCase();
     if (href === current || (current === "" && href === "home.html")) {
       item.classList.add("is-active");
       item.setAttribute("aria-current", "page");
+      activeIndex = index;
     } else {
       item.classList.remove("is-active");
       item.removeAttribute("aria-current");
     }
   });
 
-  const warm = () => {
-    hrefs.forEach((href) => {
-      if (!href || document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
-      const link = document.createElement("link");
-      link.rel = "prefetch";
-      link.href = href;
-      document.head.appendChild(link);
-    });
-  };
+  const storedIndex = Number(window.sessionStorage?.getItem("donos-nav-index"));
+  const fromIndex = Number.isFinite(storedIndex) && storedIndex >= 0 && storedIndex < items.length ? storedIndex : activeIndex;
+  grid?.style.setProperty("--nav-index", String(fromIndex));
+  window.requestAnimationFrame(() => {
+    nav.classList.add("is-ready");
+    grid?.style.setProperty("--nav-index", String(activeIndex));
+    window.sessionStorage?.setItem("donos-nav-index", String(activeIndex));
+  });
 
-  (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 250)))(warm);
+  function prefetchOne(href) {
+    if (!href || document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
+    const link = document.createElement("link");
+    link.rel = "prefetch";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+
+  items.forEach((item) => {
+    const href = item.getAttribute("href");
+    item.addEventListener("pointerenter", () => prefetchOne(href), { passive: true });
+    item.addEventListener("touchstart", () => prefetchOne(href), { passive: true });
+  });
 
   nav.addEventListener("click", (event) => {
     const link = event.target.closest("a[href]");
     if (!link) return;
     const url = new URL(link.href, window.location.href);
     if (url.origin === window.location.origin && hrefs.includes(url.pathname.split("/").pop())) {
+      const targetIndex = items.indexOf(link);
+      if (targetIndex >= 0) {
+        grid?.style.setProperty("--nav-index", String(targetIndex));
+        window.sessionStorage?.setItem("donos-nav-index", String(targetIndex));
+      }
       document.body.classList.add("donos-app-leaving");
     }
   });
@@ -65,5 +84,7 @@
     }
   }
 
-  window.addEventListener("load", hydrateNotificationBadge, { once: true });
+  window.addEventListener("load", () => {
+    (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 1400)))(hydrateNotificationBadge);
+  }, { once: true });
 })();
