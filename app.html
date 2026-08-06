@@ -84,10 +84,6 @@
         visibility: hidden;
       }
 
-      .spa-boot.is-skipped {
-        display: none;
-      }
-
       .spa-boot-card {
         width: min(100%, 360px);
         border: 1px solid rgba(255, 255, 255, 0.10);
@@ -158,6 +154,7 @@
       <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donos" src="plans.html?embedded=1"></iframe>
       <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donos" src="transfer.html?embedded=1"></iframe>
       <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donos" src="profile.html?embedded=1"></iframe>
+      <iframe id="category-frame" class="spa-frame" data-route="categoria" data-index="0" title="Categoría Donos" src="about:blank"></iframe>
     </main>
 
     <div id="spa-boot" class="spa-boot" aria-hidden="true">
@@ -182,29 +179,29 @@
     <script>
       (function () {
         const routeNames = ["inicio", "historial", "quedar", "transfer", "perfil"];
+        const bottomRoutes = ["inicio", "historial", "quedar", "transfer", "perfil"];
         const nav = document.getElementById("donos-static-nav");
         const grid = nav.querySelector(".donos-static-nav__grid");
         const links = Array.from(nav.querySelectorAll("[data-route]"));
         const frames = Array.from(document.querySelectorAll(".spa-frame"));
+        const categoryFrame = document.getElementById("category-frame");
         const boot = document.getElementById("spa-boot");
-        const hasSeenBoot = localStorage.getItem("donos-spa-boot-seen") === "1";
         let activeIndex = 0;
-
-        if (hasSeenBoot) {
-          boot.classList.add("is-skipped");
-        } else {
-          localStorage.setItem("donos-spa-boot-seen", "1");
-        }
+        let activeRoute = "inicio";
 
         function routeFromHash() {
           const clean = window.location.hash.replace("#", "");
+          if (clean.startsWith("categoria=")) return "categoria";
           return routeNames.includes(clean) ? clean : "inicio";
         }
 
         function setRoute(route, options = {}) {
-          const nextIndex = Math.max(routeNames.indexOf(route), 0);
+          const isCategory = route === "categoria";
+          const navRoute = isCategory ? "inicio" : route;
+          const nextIndex = Math.max(bottomRoutes.indexOf(navRoute), 0);
           const direction = nextIndex < activeIndex ? "left" : "right";
           activeIndex = nextIndex;
+          activeRoute = route;
 
           nav.dataset.activeIndex = String(nextIndex);
           grid.style.setProperty("--nav-index", String(nextIndex));
@@ -216,14 +213,24 @@
             else link.removeAttribute("aria-current");
           });
 
-          frames.forEach((frame, index) => {
-            const isActive = index === nextIndex;
+          frames.forEach((frame) => {
+            const isActive = frame.dataset.route === route;
             frame.classList.toggle("is-active", isActive);
             frame.classList.toggle("is-left", !isActive && direction === "left");
           });
 
           if (!options.skipHash && window.location.hash !== `#${route}`) {
             history.pushState({ route }, "", `#${route}`);
+          }
+        }
+
+        function openCategory(category, options = {}) {
+          const cleanCategory = category || "Libros";
+          const nextSrc = `category.html?embedded=1&category=${encodeURIComponent(cleanCategory)}`;
+          if (!categoryFrame.src.endsWith(nextSrc)) categoryFrame.src = nextSrc;
+          setRoute("categoria", { skipHash: true });
+          if (!options.skipHash) {
+            history.pushState({ route: "categoria", category: cleanCategory }, "", `#categoria=${encodeURIComponent(cleanCategory)}`);
           }
         }
 
@@ -234,17 +241,28 @@
           });
         });
 
-        window.addEventListener("popstate", () => setRoute(routeFromHash(), { skipHash: true }));
+        window.addEventListener("popstate", () => {
+          const clean = window.location.hash.replace("#", "");
+          if (clean.startsWith("categoria=")) {
+            openCategory(decodeURIComponent(clean.slice("categoria=".length)), { skipHash: true });
+          } else {
+            setRoute(routeFromHash(), { skipHash: true });
+          }
+        });
         window.addEventListener("message", (event) => {
           if (event.origin !== window.location.origin) return;
-          if (event.data?.type !== "donos:navigate") return;
-          if (!routeNames.includes(event.data.route)) return;
-          setRoute(event.data.route);
+          if (event.data?.type === "donos:category") {
+            openCategory(event.data.category);
+            return;
+          }
+          if (event.data?.type === "donos:navigate") {
+            if (!routeNames.includes(event.data.route)) return;
+            setRoute(event.data.route);
+          }
         });
 
         let loaded = 0;
         function hideBootWhenReady() {
-          if (hasSeenBoot) return;
           loaded += 1;
           if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
         }
@@ -262,12 +280,15 @@
           }, { once: false });
         });
 
-        if (!hasSeenBoot) {
-          window.setTimeout(() => boot.classList.add("is-hidden"), 2400);
-        }
+        window.setTimeout(() => boot.classList.add("is-hidden"), 1600);
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
-          setRoute(routeFromHash(), { skipHash: true });
+          const hash = window.location.hash.replace("#", "");
+          if (hash.startsWith("categoria=")) {
+            openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });
+          } else {
+            setRoute(routeFromHash(), { skipHash: true });
+          }
         });
       })();
     </script>

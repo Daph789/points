@@ -32,6 +32,7 @@
       }
       #root, main { max-width: 100%; overflow-x: hidden; }
       * { min-width: 0; }
+      body.embedded-category main { padding-bottom: 96px; }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -42,6 +43,15 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
+      if (isEmbeddedCategory) document.body.classList.add("embedded-category");
+
+      function goBackToInicio(event) {
+        if (!isEmbeddedCategory || window.parent === window) return;
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:navigate", route: "inicio" }, window.location.origin);
+      }
 
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "—";
@@ -108,7 +118,10 @@
         const detailUrl = `offer-detail.html?id=${offer.id}`;
         return (
           <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
-            <button className="block w-full text-left" onClick={() => window.location.href = detailUrl}>
+            <button className="block w-full text-left" onClick={() => {
+              if (isEmbeddedCategory && window.parent !== window) window.parent.location.href = detailUrl;
+              else window.location.href = detailUrl;
+            }}>
               <div className="relative min-h-[190px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
                 {offer.cover_photo_data_url ? (
                   <img className="absolute inset-0 h-full w-full object-cover" src={offer.cover_photo_data_url} alt="" />
@@ -160,7 +173,7 @@
       function App() {
         const params = new URLSearchParams(window.location.search);
         const category = params.get("category") || "Libros";
-        const backUrl = "app.html#inicio";
+        const backUrl = isEmbeddedCategory ? "#" : "app.html#inicio";
         const [offers, setOffers] = React.useState([]);
         const [search, setSearch] = React.useState("");
         const [status, setStatus] = React.useState("Cargando ofertas...");
@@ -190,14 +203,14 @@
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between">
-              <a href={backUrl} className="flex items-center gap-3">
+              <a href={backUrl} onClick={goBackToInicio} className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
                 <div>
                   <p className="text-lg font-black leading-tight">Donos</p>
                   <p className="text-xs font-semibold text-slate-400">Categorías</p>
                 </div>
               </a>
-              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200" href={backUrl}>Volver</a>
+              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200" href={backUrl} onClick={goBackToInicio}>Volver</a>
             </header>
 
             <section className="mt-8">

@@ -265,6 +265,14 @@
       }
 
       function openFullPage(url) {
+        const target = new URL(url, window.location.href);
+        if (target.pathname.endsWith("category.html") && window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: "donos:category",
+            category: target.searchParams.get("category") || "Libros",
+          }, window.location.origin);
+          return;
+        }
         if (window.parent && window.parent !== window) {
           window.parent.location.href = url;
         } else {
