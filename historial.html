@@ -40,6 +40,11 @@
         animation-duration: 180ms;
         animation-timing-function: cubic-bezier(.22,.61,.36,1);
       }
+      body.page-leaving #root {
+        opacity: 0.96;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -58,6 +63,30 @@
         { label: "Transf.", icon: "transfer", href: "transfer.html" },
         { label: "Perfil", icon: "user", href: "profile.html" },
       ];
+
+      function prepareFastNavigation() {
+        const hrefs = navItems.map((item) => item.href);
+        const warm = () => {
+          hrefs.forEach((href) => {
+            if (document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
+            const link = document.createElement("link");
+            link.rel = "prefetch";
+            link.href = href;
+            document.head.appendChild(link);
+          });
+        };
+        (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 350)))(warm);
+        document.addEventListener("click", (event) => {
+          const link = event.target.closest?.("a[href]");
+          if (!link) return;
+          const url = new URL(link.href, window.location.href);
+          if (url.origin === window.location.origin && hrefs.some((href) => url.pathname.endsWith(href))) {
+            document.body.classList.add("page-leaving");
+          }
+        }, { capture: true });
+      }
+
+      prepareFastNavigation();
 
       function NavIcon({ name }) {
         const paths = {

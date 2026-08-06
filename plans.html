@@ -40,6 +40,11 @@
         animation-duration: 180ms;
         animation-timing-function: cubic-bezier(.22,.61,.36,1);
       }
+      body.page-leaving #root {
+        opacity: 0.96;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -58,6 +63,30 @@
         { label: "Transf.", icon: "transfer", href: "transfer.html" },
         { label: "Perfil", icon: "user", href: "profile.html" },
       ];
+
+      function prepareFastNavigation() {
+        const hrefs = navItems.map((item) => item.href);
+        const warm = () => {
+          hrefs.forEach((href) => {
+            if (document.querySelector(`link[rel="prefetch"][href="${href}"]`)) return;
+            const link = document.createElement("link");
+            link.rel = "prefetch";
+            link.href = href;
+            document.head.appendChild(link);
+          });
+        };
+        (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 350)))(warm);
+        document.addEventListener("click", (event) => {
+          const link = event.target.closest?.("a[href]");
+          if (!link) return;
+          const url = new URL(link.href, window.location.href);
+          if (url.origin === window.location.origin && hrefs.some((href) => url.pathname.endsWith(href))) {
+            document.body.classList.add("page-leaving");
+          }
+        }, { capture: true });
+      }
+
+      prepareFastNavigation();
 
       function NavIcon({ name }) {
         const paths = {
@@ -901,7 +930,7 @@
                   {photos.length > 0 && (
                     <div className="mt-5">
                       <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Fotos de la persona</p>
-                      <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2">
+                      <div className="flex snap-x snap-mandatory justify-start gap-3 overflow-x-auto scroll-smooth pb-2 sm:justify-center">
                         {photos.map((photo, index) => (
                           <div key={`${photo.slice(0, 30)}-${index}`} className="relative h-72 w-[86%] max-w-sm shrink-0 snap-center overflow-hidden rounded-[32px] border border-white/10 bg-black/20 sm:w-72">
                             <img className="h-full w-full object-cover" src={photo} alt="" />
@@ -909,6 +938,12 @@
                           </div>
                         ))}
                       </div>
+                      {detailPlan.message && (
+                        <div className="mt-4 rounded-[28px] border border-white/10 bg-white/[0.055] p-4">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p>
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -945,7 +980,7 @@
                         </a>
                       )}
                       {offer.description && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Descripción del evento</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{offer.description}</p></div>}
-                      {detailPlan.message && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p></div>}
+                      {detailPlan.message && photos.length === 0 && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p></div>}
                       <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)}>Ver el billete en detalle</a>
                     </div>
                   </div>
