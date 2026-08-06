@@ -30,6 +30,12 @@ body {
   gap: 4px;
 }
 
+.donos-static-nav[data-active-index="0"] .donos-static-nav__grid { --nav-index: 0; }
+.donos-static-nav[data-active-index="1"] .donos-static-nav__grid { --nav-index: 1; }
+.donos-static-nav[data-active-index="2"] .donos-static-nav__grid { --nav-index: 2; }
+.donos-static-nav[data-active-index="3"] .donos-static-nav__grid { --nav-index: 3; }
+.donos-static-nav[data-active-index="4"] .donos-static-nav__grid { --nav-index: 4; }
+
 .donos-static-nav__grid::before {
   content: "";
   position: absolute;
@@ -120,6 +126,82 @@ body {
   opacity: 0.96;
   transform: translateY(4px);
   transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.donos-page-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 24% 20%, rgba(66, 242, 179, 0.18), transparent 28%),
+    radial-gradient(circle at 80% 8%, rgba(167, 139, 250, 0.12), transparent 26%),
+    linear-gradient(180deg, #0a0e19 0%, #060914 100%);
+  opacity: 1;
+  transition: opacity 260ms ease, visibility 260ms ease;
+}
+
+.donos-page-loader__card {
+  width: min(calc(100% - 48px), 360px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 32px;
+  background: rgba(13, 17, 29, 0.62);
+  padding: 22px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+}
+
+.donos-page-loader__logo {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 20px;
+  background: #42f2b3;
+  color: #060914;
+  font: 900 28px/1 Inter, system-ui, sans-serif;
+  box-shadow: 0 18px 48px rgba(66, 242, 179, 0.24);
+}
+
+.donos-page-loader__line {
+  height: 14px;
+  margin-top: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.donos-page-loader__line::before {
+  content: "";
+  display: block;
+  width: 44%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(66, 242, 179, 0.65), transparent);
+  animation: donos-loader-sweep 1050ms cubic-bezier(.2,.8,.2,1) infinite;
+}
+
+.donos-page-loader__line:nth-child(3) {
+  width: 72%;
+  opacity: 0.72;
+}
+
+.donos-page-loader__line:nth-child(4) {
+  width: 46%;
+  opacity: 0.46;
+}
+
+.donos-shell-ready .donos-page-loader {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@keyframes donos-loader-sweep {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(260%); }
 }
 
 @media (min-width: 640px) {

@@ -20,13 +20,11 @@
     }
   });
 
-  const storedIndex = Number(window.sessionStorage?.getItem("donos-nav-index"));
-  const fromIndex = Number.isFinite(storedIndex) && storedIndex >= 0 && storedIndex < items.length ? storedIndex : activeIndex;
-  grid?.style.setProperty("--nav-index", String(fromIndex));
+  nav.dataset.activeIndex = String(activeIndex);
+  grid?.style.setProperty("--nav-index", String(activeIndex));
   window.requestAnimationFrame(() => {
     nav.classList.add("is-ready");
     grid?.style.setProperty("--nav-index", String(activeIndex));
-    window.sessionStorage?.setItem("donos-nav-index", String(activeIndex));
   });
 
   function prefetchOne(href) {
@@ -51,11 +49,29 @@
       const targetIndex = items.indexOf(link);
       if (targetIndex >= 0) {
         grid?.style.setProperty("--nav-index", String(targetIndex));
-        window.sessionStorage?.setItem("donos-nav-index", String(targetIndex));
       }
       document.body.classList.add("donos-app-leaving");
     }
   });
+
+  function markShellReady() {
+    window.setTimeout(() => document.body.classList.add("donos-shell-ready"), 120);
+  }
+
+  const root = document.getElementById("root");
+  if (root?.children?.length) {
+    markShellReady();
+  } else if (root) {
+    const observer = new MutationObserver(() => {
+      if (!root.children.length) return;
+      observer.disconnect();
+      markShellReady();
+    });
+    observer.observe(root, { childList: true });
+    window.setTimeout(markShellReady, 1800);
+  } else {
+    window.addEventListener("load", markShellReady, { once: true });
+  }
 
   async function hydrateNotificationBadge() {
     const badge = nav.querySelector("[data-nav-badge='historial']");
