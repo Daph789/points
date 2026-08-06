@@ -2,6 +2,11 @@ body {
   padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
 }
 
+body.donos-embedded .donos-static-nav,
+body.donos-embedded .donos-page-loader {
+  display: none !important;
+}
+
 #root > main > nav.fixed.inset-x-0.bottom-3 {
   display: none !important;
 }
@@ -141,6 +146,10 @@ body {
     linear-gradient(180deg, #0a0e19 0%, #060914 100%);
   opacity: 1;
   transition: opacity 260ms ease, visibility 260ms ease;
+}
+
+.donos-page-loader.is-skipped {
+  display: none;
 }
 
 .donos-page-loader__card {

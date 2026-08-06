@@ -1,8 +1,46 @@
 (function () {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("embedded") === "1") {
+    document.body.classList.add("donos-embedded", "donos-shell-ready");
+    const routeByFile = {
+      "home.html": "inicio",
+      "historial.html": "historial",
+      "plans.html": "quedar",
+      "transfer.html": "transfer",
+      "profile.html": "perfil",
+    };
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest?.("a[href]");
+      if (!link) return;
+      const url = new URL(link.href, window.location.href);
+      const file = url.pathname.split("/").pop();
+      const route = routeByFile[file];
+      if (!route || window.parent === window) return;
+      event.preventDefault();
+      window.parent.postMessage({ type: "donos:navigate", route }, window.location.origin);
+    }, { capture: true });
+    window.addEventListener("load", () => {
+      const file = window.location.pathname.split("/").pop();
+      if (file === "login.html" && window.parent !== window) {
+        window.parent.location.href = window.location.href.replace(/[?&]embedded=1\b/, "");
+      }
+    }, { once: true });
+    return;
+  }
+
   const nav = document.getElementById("donos-static-nav");
   if (!nav) return;
 
   const current = (window.location.pathname.split("/").pop() || "home.html").toLowerCase();
+  const loader = document.querySelector(".donos-page-loader");
+  const visitedKey = `donos-visited-${current}`;
+  if (window.sessionStorage?.getItem(visitedKey)) {
+    loader?.classList.add("is-skipped");
+    document.body.classList.add("donos-shell-ready");
+  } else {
+    window.sessionStorage?.setItem(visitedKey, "1");
+  }
+
   const items = Array.from(nav.querySelectorAll("a[href]"));
   const hrefs = items.map((item) => item.getAttribute("href"));
   const grid = nav.querySelector(".donos-static-nav__grid");
@@ -55,6 +93,7 @@
   });
 
   function markShellReady() {
+    if (loader?.classList.contains("is-skipped")) return;
     window.setTimeout(() => document.body.classList.add("donos-shell-ready"), 120);
   }
 

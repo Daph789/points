@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Donos | App</title>
+    <link rel="stylesheet" href="app-shell.css" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap");
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+        overflow: hidden;
+        background: #060914;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        color: white;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 30%),
+          radial-gradient(circle at 88% 8%, rgba(167, 139, 250, 0.13), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 52%, #050711 100%);
+      }
+
+      .spa-root {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+
+      .spa-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #060914;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateX(18px) scale(0.992);
+        transition:
+          opacity 220ms ease,
+          transform 260ms cubic-bezier(.2,.8,.2,1),
+          visibility 220ms ease;
+      }
+
+      .spa-frame.is-active {
+        opacity: 1;
+        visibility: visible;
+        transform: translateX(0) scale(1);
+      }
+
+      .spa-frame.is-left {
+        transform: translateX(-18px) scale(0.992);
+      }
+
+      .spa-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 24% 20%, rgba(66, 242, 179, 0.20), transparent 28%),
+          radial-gradient(circle at 80% 8%, rgba(167, 139, 250, 0.14), transparent 26%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 100%);
+        opacity: 1;
+        transition: opacity 240ms ease, visibility 240ms ease;
+      }
+
+      .spa-boot.is-hidden {
+        opacity: 0;
+        visibility: hidden;
+      }
+
+      .spa-boot-card {
+        width: min(100%, 360px);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 34px;
+        background: rgba(13, 17, 29, 0.72);
+        padding: 24px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.36);
+        -webkit-backdrop-filter: blur(24px);
+        backdrop-filter: blur(24px);
+      }
+
+      .spa-logo {
+        display: grid;
+        width: 60px;
+        height: 60px;
+        place-items: center;
+        border-radius: 22px;
+        background: #42f2b3;
+        color: #060914;
+        font-size: 30px;
+        font-weight: 900;
+        box-shadow: 0 18px 48px rgba(66, 242, 179, 0.24);
+      }
+
+      .spa-boot-title {
+        margin: 18px 0 0;
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+
+      .spa-boot-text {
+        margin: 8px 0 0;
+        color: #94a3b8;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.5;
+      }
+
+      .spa-progress {
+        height: 12px;
+        margin-top: 18px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .spa-progress::before {
+        content: "";
+        display: block;
+        width: 44%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, transparent, rgba(66, 242, 179, 0.68), transparent);
+        animation: spa-sweep 1050ms cubic-bezier(.2,.8,.2,1) infinite;
+      }
+
+      @keyframes spa-sweep {
+        from { transform: translateX(-110%); }
+        to { transform: translateX(260%); }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="spa-root" aria-live="polite">
+      <iframe class="spa-frame is-active" data-route="inicio" data-index="0" title="Inicio Donos" src="home.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donos" src="historial.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donos" src="plans.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donos" src="transfer.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donos" src="profile.html?embedded=1"></iframe>
+    </main>
+
+    <div id="spa-boot" class="spa-boot" aria-hidden="true">
+      <section class="spa-boot-card">
+        <div class="spa-logo">D</div>
+        <h1 class="spa-boot-title">Donos</h1>
+        <p class="spa-boot-text">Preparando tu app para que las secciones cambien sin recargar.</p>
+        <div class="spa-progress"></div>
+      </section>
+    </div>
+
+    <nav id="donos-static-nav" class="donos-static-nav" data-active-index="0" aria-label="Navegación principal">
+      <div class="donos-static-nav__grid">
+        <a class="donos-static-nav__item" href="#inicio" data-route="inicio" aria-label="Inicio"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5Z"/></svg><span>Inicio</span></a>
+        <a class="donos-static-nav__item" href="#historial" data-route="historial" aria-label="Historial"><span class="donos-static-nav__badge" data-nav-badge="historial"></span><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v5l3 2"/></svg><span>Historial</span></a>
+        <a class="donos-static-nav__item" href="#quedar" data-route="quedar" aria-label="Quedar"><svg viewBox="0 0 24 24"><path d="M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21a5 5 0 0 0-5-5M17 11a3.5 3.5 0 0 0 0-7"/></svg><span>Quedar</span></a>
+        <a class="donos-static-nav__item" href="#transfer" data-route="transfer" aria-label="Transferencias"><svg viewBox="0 0 24 24"><path d="M7 7h12m0 0-4-4m4 4-4 4M17 17H5m0 0 4 4m-4-4 4-4"/></svg><span>Transf.</span></a>
+        <a class="donos-static-nav__item" href="#perfil" data-route="perfil" aria-label="Perfil"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/></svg><span>Perfil</span></a>
+      </div>
+    </nav>
+
+    <script>
+      (function () {
+        const routeNames = ["inicio", "historial", "quedar", "transfer", "perfil"];
+        const nav = document.getElementById("donos-static-nav");
+        const grid = nav.querySelector(".donos-static-nav__grid");
+        const links = Array.from(nav.querySelectorAll("[data-route]"));
+        const frames = Array.from(document.querySelectorAll(".spa-frame"));
+        const boot = document.getElementById("spa-boot");
+        let activeIndex = 0;
+
+        function routeFromHash() {
+          const clean = window.location.hash.replace("#", "");
+          return routeNames.includes(clean) ? clean : "inicio";
+        }
+
+        function setRoute(route, options = {}) {
+          const nextIndex = Math.max(routeNames.indexOf(route), 0);
+          const direction = nextIndex < activeIndex ? "left" : "right";
+          activeIndex = nextIndex;
+
+          nav.dataset.activeIndex = String(nextIndex);
+          grid.style.setProperty("--nav-index", String(nextIndex));
+
+          links.forEach((link, index) => {
+            const isActive = index === nextIndex;
+            link.classList.toggle("is-active", isActive);
+            if (isActive) link.setAttribute("aria-current", "page");
+            else link.removeAttribute("aria-current");
+          });
+
+          frames.forEach((frame, index) => {
+            const isActive = index === nextIndex;
+            frame.classList.toggle("is-active", isActive);
+            frame.classList.toggle("is-left", !isActive && direction === "left");
+          });
+
+          if (!options.skipHash && window.location.hash !== `#${route}`) {
+            history.pushState({ route }, "", `#${route}`);
+          }
+        }
+
+        links.forEach((link) => {
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            setRoute(link.dataset.route);
+          });
+        });
+
+        window.addEventListener("popstate", () => setRoute(routeFromHash(), { skipHash: true }));
+        window.addEventListener("message", (event) => {
+          if (event.origin !== window.location.origin) return;
+          if (event.data?.type !== "donos:navigate") return;
+          if (!routeNames.includes(event.data.route)) return;
+          setRoute(event.data.route);
+        });
+
+        let loaded = 0;
+        function hideBootWhenReady() {
+          loaded += 1;
+          if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
+        }
+
+        frames.forEach((frame) => {
+          frame.addEventListener("load", () => {
+            try {
+              const childUrl = new URL(frame.contentWindow.location.href);
+              if (childUrl.pathname.endsWith("/login.html") || childUrl.pathname.endsWith("login.html")) {
+                window.location.href = childUrl.pathname + childUrl.search.replace(/[?&]embedded=1\b/, "");
+                return;
+              }
+            } catch (_error) {}
+            hideBootWhenReady();
+          }, { once: false });
+        });
+
+        window.setTimeout(() => boot.classList.add("is-hidden"), 2400);
+        window.requestAnimationFrame(() => {
+          nav.classList.add("is-ready");
+          setRoute(routeFromHash(), { skipHash: true });
+        });
+      })();
+    </script>
+  </body>
+</html>

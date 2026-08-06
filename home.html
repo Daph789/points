@@ -86,6 +86,11 @@
       }
     </style>
     <link rel="stylesheet" href="app-shell.css" />
+    <script>
+      if (new URLSearchParams(window.location.search).get("embedded") !== "1") {
+        window.location.replace("app.html#inicio");
+      }
+    </script>
     <script defer src="app-shell.js"></script>
   </head>
   <body class="min-h-screen text-white antialiased">

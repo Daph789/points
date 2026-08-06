@@ -135,7 +135,7 @@
           if (displayName) localStorage.setItem("donosDisplayName", displayName);
           if (transactionId) localStorage.setItem("donosTransactionId", transactionId);
 
-          window.location.href = next || `home.html?type=${accountType}`;
+          window.location.href = next || `app.html#inicio`;
         }
 
         async function handleSubmit(event) {
@@ -170,7 +170,7 @@
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider,
             options: {
-              redirectTo: window.location.origin + "/home.html",
+              redirectTo: window.location.origin + "/app.html#inicio",
             },
           });
 

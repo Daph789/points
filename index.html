@@ -121,7 +121,7 @@
         localStorage.setItem("donosAccountType", accountType);
         localStorage.setItem("donosDisplayName", localStorage.getItem("donosPendingDisplayName") || "");
         window.setTimeout(() => {
-          window.location.href = `home.html?type=${accountType}`;
+          window.location.href = "app.html#inicio";
         }, 1200);
       }
 
@@ -349,7 +349,7 @@
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider,
             options: {
-              redirectTo: window.location.origin + "/home.html",
+              redirectTo: window.location.origin + "/app.html#inicio",
             },
           });
 
