@@ -193,7 +193,7 @@
           }
         };
         return (
-          <main className="mx-auto min-h-screen w-full max-w-5xl pb-28">
+          <main className={`mx-auto min-h-screen w-full max-w-5xl ${isEmbeddedDetail ? "pb-64" : "pb-44"}`}>
             <section className="relative min-h-[360px] overflow-hidden rounded-b-[30px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B] sm:min-h-[420px] sm:rounded-b-[36px]">
               {offer.cover_photo_data_url ? (
                 <button className="absolute inset-0 block h-full w-full cursor-zoom-in" onClick={() => openImage(0)}>
