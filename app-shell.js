@@ -125,8 +125,8 @@
   }
 
   async function hydrateNotificationBadge() {
-    const badge = nav.querySelector("[data-nav-badge='historial']");
-    if (!badge || !window.supabase || !window.supabase.createClient) return;
+    const badges = Array.from(nav.querySelectorAll("[data-nav-badge]"));
+    if (badges.length === 0 || !window.supabase || !window.supabase.createClient) return;
 
     const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
     const supabaseAnonKey =
@@ -139,15 +139,18 @@
       const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) return;
       const data = await response.json();
-      const count = Number(data?.counts?.sections?.historial || 0);
-      if (count > 0) {
-        badge.textContent = `+${count > 9 ? "9" : count}`;
-        badge.classList.add("is-visible");
-      } else {
-        badge.classList.remove("is-visible");
-      }
+      badges.forEach((badge) => {
+        const section = badge.dataset.navBadge;
+        const count = Number(data?.counts?.sections?.[section] || 0);
+        if (count > 0) {
+          badge.textContent = `+${count > 9 ? "9" : count}`;
+          badge.classList.add("is-visible");
+        } else {
+          badge.classList.remove("is-visible");
+        }
+      });
     } catch (_error) {
-      badge.classList.remove("is-visible");
+      badges.forEach((badge) => badge.classList.remove("is-visible"));
     }
   }
 

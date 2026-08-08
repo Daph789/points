@@ -210,12 +210,23 @@ function metadataText(metadata, key) {
 async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
-  const profileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
-  const { data: existing, error: existingError } = await supabaseAdmin
+  const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
+  const profileColumns = `${baseProfileColumns}, plan_gender_preference`;
+  let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
     .eq("id", user.id)
     .maybeSingle();
+
+  if (existingError?.code === "42703") {
+    const fallback = await supabaseAdmin
+      .from("profiles")
+      .select(baseProfileColumns)
+      .eq("id", user.id)
+      .maybeSingle();
+    existing = fallback.data;
+    existingError = fallback.error;
+  }
 
   if (existingError) throw existingError;
   if (existing) return existing;
@@ -252,11 +263,21 @@ async function ensureProfileForUser(user) {
   let lastError = null;
 
   for (const transactionId of transactionIds) {
-    const { data: created, error } = await supabaseAdmin
+    let { data: created, error } = await supabaseAdmin
       .from("profiles")
       .insert({ ...baseProfile, transaction_id: transactionId })
       .select(profileColumns)
       .maybeSingle();
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select(baseProfileColumns)
+        .eq("id", user.id)
+        .maybeSingle();
+      created = fallback.data;
+      error = fallback.error;
+    }
 
     if (!error && created) return created;
 
@@ -946,6 +967,35 @@ app.get("/api/me/plan-photos", async (request, response) => {
   }
 });
 
+app.put("/api/me/plan-preferences", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const gender = ["woman", "man"].includes(request.body?.gender) ? request.body.gender : null;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .update({ plan_gender_preference: gender, updated_at: new Date().toISOString() })
+      .eq("id", auth.user.id)
+      .select("id, plan_gender_preference")
+      .maybeSingle();
+
+    if (error) {
+      return response.status(500).json({ error: error.code === "42703" ? "plan_gender_sql_missing" : "plan_preferences_failed" });
+    }
+
+    response.json({ gender: data?.plan_gender_preference || "" });
+  } catch (error) {
+    console.error("Plan preferences save fatal error:", error);
+    response.status(500).json({ error: error.code === "42703" ? "plan_gender_sql_missing" : "plan_preferences_failed" });
+  }
+});
+
 app.put("/api/me/plan-photos", async (request, response) => {
   if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
 
@@ -1051,6 +1101,75 @@ async function buildNotificationsForProfile(profile) {
     }
   } catch (error) {
     console.error("Notification movements error:", error);
+  }
+
+  try {
+    const { data: ownedPlans, error: ownedPlansError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, title")
+      .eq("creator_id", profile.id)
+      .limit(120);
+
+    if (!ownedPlansError && (ownedPlans || []).length > 0) {
+      const planIds = ownedPlans.map((plan) => plan.id);
+      const plansById = Object.fromEntries(ownedPlans.map((plan) => [plan.id, plan]));
+      const { data: members, error: membersError } = await supabaseAdmin
+        .from("social_plan_members")
+        .select("id, plan_id, user_id, status, created_at, updated_at")
+        .in("plan_id", planIds)
+        .neq("user_id", profile.id)
+        .order("updated_at", { ascending: false })
+        .limit(120);
+
+      if (!membersError) {
+        for (const member of members || []) {
+          const plan = plansById[member.plan_id] || {};
+          pushNotification(events, {
+            section: "quedar",
+            href: "plans.html?tab=mine",
+            key: `quedar:mine:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
+            subsection: "mine",
+            title: member.status === "waiting" ? "Nueva persona en espera" : member.status === "accepted" ? "Nueva persona aceptada" : "Movimiento en tu plan",
+            detail: plan.title || "Plan Donos",
+            created_at: member.updated_at || member.created_at,
+          });
+        }
+      }
+    }
+
+    const { data: joinedMembers, error: joinedError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, plan_id, status, created_at, updated_at")
+      .eq("user_id", profile.id)
+      .order("updated_at", { ascending: false })
+      .limit(120);
+
+    if (!joinedError && (joinedMembers || []).length > 0) {
+      const joinedPlanIds = [...new Set(joinedMembers.map((member) => member.plan_id).filter(Boolean))];
+      let plansById = {};
+      if (joinedPlanIds.length > 0) {
+        const { data: plans } = await supabaseAdmin
+          .from("social_plans")
+          .select("id, title")
+          .in("id", joinedPlanIds);
+        plansById = Object.fromEntries((plans || []).map((plan) => [plan.id, plan]));
+      }
+
+      for (const member of joinedMembers || []) {
+        const plan = plansById[member.plan_id] || {};
+        pushNotification(events, {
+          section: "quedar",
+          href: "plans.html?tab=joined",
+          key: `quedar:joined:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
+          subsection: "joined",
+          title: member.status === "accepted" ? "Te aceptaron en un plan" : member.status === "waiting" ? "Sigues en lista de espera" : member.status === "removed" ? "Ya no estás en este plan" : "Actualización de plan",
+          detail: plan.title || "Plan Donos",
+          created_at: member.updated_at || member.created_at,
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Notification social plans error:", error);
   }
 
   if (profile.account_type === "business") {

@@ -169,7 +169,7 @@
       <div class="donos-static-nav__grid">
         <a class="donos-static-nav__item" href="#inicio" data-route="inicio" aria-label="Inicio"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1V10.5Z"/></svg><span>Inicio</span></a>
         <a class="donos-static-nav__item" href="#historial" data-route="historial" aria-label="Historial"><span class="donos-static-nav__badge" data-nav-badge="historial"></span><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v6h6M12 7v5l3 2"/></svg><span>Historial</span></a>
-        <a class="donos-static-nav__item" href="#quedar" data-route="quedar" aria-label="Quedar"><svg viewBox="0 0 24 24"><path d="M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21a5 5 0 0 0-5-5M17 11a3.5 3.5 0 0 0 0-7"/></svg><span>Quedar</span></a>
+        <a class="donos-static-nav__item" href="#quedar" data-route="quedar" aria-label="Quedar"><span class="donos-static-nav__badge" data-nav-badge="quedar"></span><svg viewBox="0 0 24 24"><path d="M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21a5 5 0 0 0-5-5M17 11a3.5 3.5 0 0 0 0-7"/></svg><span>Quedar</span></a>
         <a class="donos-static-nav__item" href="#transfer" data-route="transfer" aria-label="Transferencias"><svg viewBox="0 0 24 24"><path d="M7 7h12m0 0-4-4m4 4-4 4M17 17H5m0 0 4 4m-4-4 4-4"/></svg><span>Transf.</span></a>
         <a class="donos-static-nav__item" href="#perfil" data-route="perfil" aria-label="Perfil"><svg viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/></svg><span>Perfil</span></a>
       </div>
@@ -190,6 +190,35 @@
         let activeIndex = 0;
         let activeRoute = "inicio";
         let activeCategoryKey = "";
+
+        async function hydrateNotificationBadges() {
+          const badges = Array.from(nav.querySelectorAll("[data-nav-badge]"));
+          if (badges.length === 0 || !window.supabase?.createClient) return;
+          const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+          const supabaseAnonKey =
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+          try {
+            const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+            const { data: auth } = await client.auth.getSession();
+            const token = auth?.session?.access_token;
+            if (!token) return;
+            const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${token}` } });
+            if (!response.ok) return;
+            const data = await response.json();
+            badges.forEach((badge) => {
+              const section = badge.dataset.navBadge;
+              const count = Number(data?.counts?.sections?.[section] || 0);
+              if (count > 0) {
+                badge.textContent = `+${count > 9 ? "9" : count}`;
+                badge.classList.add("is-visible");
+              } else {
+                badge.classList.remove("is-visible");
+              }
+            });
+          } catch (_error) {
+            badges.forEach((badge) => badge.classList.remove("is-visible"));
+          }
+        }
 
         function routeFromHash() {
           const clean = window.location.hash.replace("#", "");
@@ -215,6 +244,7 @@
             if (isActive) link.setAttribute("aria-current", "page");
             else link.removeAttribute("aria-current");
           });
+          window.setTimeout(hydrateNotificationBadges, 500);
 
           allFrames().forEach((frame) => {
             const isActive =
@@ -348,6 +378,7 @@
         window.setTimeout(() => boot.classList.add("is-hidden"), 1600);
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
+          window.setTimeout(hydrateNotificationBadges, 900);
           const hash = window.location.hash.replace("#", "");
           if (hash.startsWith("categoria=")) {
             openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });

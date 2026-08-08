@@ -158,6 +158,7 @@
         const [accessToken, setAccessToken] = React.useState("");
         const [planPhotos, setPlanPhotos] = React.useState([]);
         const [isSavingPhotos, setIsSavingPhotos] = React.useState(false);
+        const [isSavingPlanGender, setIsSavingPlanGender] = React.useState(false);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -172,7 +173,7 @@
               return;
             }
 
-            const columns = "id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points";
+            const columns = "id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
             let data = null;
             let error = null;
 
@@ -296,6 +297,31 @@
           }
         }
 
+        async function savePlanGenderPreference(gender) {
+          if (!accessToken) return redirectToLogin();
+          setIsSavingPlanGender(true);
+          setStatus("");
+          setProfile((current) => current ? { ...current, plan_gender_preference: gender } : current);
+          try {
+            const response = await fetch("/api/me/plan-preferences", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ gender }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "save_failed");
+            setProfile((current) => current ? { ...current, plan_gender_preference: data.gender || gender } : current);
+            setStatus("Preferencia para Quedar guardada correctamente.");
+          } catch (error) {
+            setStatus(error.message === "plan_gender_sql_missing" ? "Falta ejecutar el SQL de preferencia chico/chica." : "No se ha podido guardar tu preferencia.");
+          } finally {
+            setIsSavingPlanGender(false);
+          }
+        }
+
         async function signOut() {
           await supabaseClient.auth.signOut();
           localStorage.removeItem("donosAccountType");
@@ -304,7 +330,7 @@
           window.location.href = "login.html";
         }
 
-        if (status) {
+        if (status === "Cargando perfil...") {
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
@@ -329,6 +355,14 @@
                 {isBusiness ? "Empresa" : "Usuario"}
               </span>
             </header>
+
+            {status && (
+              <p className={`mt-4 rounded-2xl border p-4 text-sm font-black ${
+                status.includes("correctamente") ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/25 bg-coral/10 text-coral"
+              }`}>
+                {status}
+              </p>
+            )}
 
             <section className="mt-6 rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:mt-7 sm:rounded-[38px] sm:p-8">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Cuenta Donos</p>
@@ -378,6 +412,26 @@
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${planPhotos.length >= 2 ? "bg-mint text-ink" : "bg-coral/10 text-coral ring-1 ring-coral/20"}`}>
                     {planPhotos.length}/5 fotos
                   </span>
+                </div>
+
+                <div className="mt-5 rounded-[28px] border border-white/10 bg-black/20 p-4">
+                  <p className="text-sm font-black text-white">¿Cómo te calificas para Quedar?</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Esto se usará automáticamente cuando pulses “Voy contigo”. Puedes cambiarlo cuando quieras.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {[["woman", "Chica"], ["man", "Chico"]].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`h-12 rounded-2xl text-sm font-black transition ${
+                          profile.plan_gender_preference === value ? "bg-mint text-ink shadow-glow" : "bg-white/[0.06] text-slate-300 ring-1 ring-white/10"
+                        }`}
+                        disabled={isSavingPlanGender}
+                        onClick={() => savePlanGenderPreference(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
