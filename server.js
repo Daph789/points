@@ -131,6 +131,33 @@ function transferPublicProfile(profile) {
   };
 }
 
+function parsePlanProfilePhotos(value) {
+  const raw = String(value || "");
+  if (!raw) return [];
+  if (raw.startsWith("data:image/")) return [raw];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((item) => String(item || "").startsWith("data:image/")).slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizedPlanProfilePhotos(values) {
+  const photos = (Array.isArray(values) ? values : [values])
+    .map((value) => String(value || ""))
+    .filter((value) => value.startsWith("data:image/"))
+    .slice(0, 5);
+  if (photos.length === 0) return null;
+  const encoded = JSON.stringify(photos);
+  if (encoded.length > 4200000) {
+    const error = new Error("photo_too_large");
+    error.code = "photo_too_large";
+    throw error;
+  }
+  return encoded;
+}
+
 function compactNotificationCounts(events, readKeys) {
   const unread = events.filter((event) => !readKeys.has(event.key));
   const sections = {};
@@ -892,10 +919,59 @@ app.get("/api/me/profile", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(userData.user);
-    response.json({ profile: profile || null });
+    response.json({
+      profile: profile ? {
+        ...profile,
+        plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+      } : null,
+    });
   } catch (error) {
     console.error("Me profile error:", error);
     return response.status(500).json({ error: "Could not load profile" });
+  }
+});
+
+app.get("/api/me/plan-photos", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    response.json({ photos: parsePlanProfilePhotos(profile?.plan_photo_data_url) });
+  } catch (error) {
+    console.error("Plan photos load error:", error);
+    response.status(500).json({ error: error.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+  }
+});
+
+app.put("/api/me/plan-photos", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const encoded = normalizedPlanProfilePhotos(request.body?.photos || []);
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .update({ plan_photo_data_url: encoded, updated_at: new Date().toISOString() })
+      .eq("id", profile.id)
+      .select("id, plan_photo_data_url")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Plan photos save error:", error);
+      return response.status(500).json({ error: error.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    }
+
+    response.json({ photos: parsePlanProfilePhotos(data?.plan_photo_data_url) });
+  } catch (error) {
+    console.error("Plan photos save fatal error:", error);
+    if (error.code === "photo_too_large") return response.status(413).json({ error: "photo_too_large" });
+    response.status(500).json({ error: "plan_photos_failed" });
   }
 });
 
@@ -1235,6 +1311,15 @@ function publicPlanProfile(profile) {
   };
 }
 
+function privatePlanProfile(profile) {
+  const base = publicPlanProfile(profile);
+  if (!base) return null;
+  return {
+    ...base,
+    plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+  };
+}
+
 function countPlanMembers(members = []) {
   const accepted = members.filter((member) => member.status === "accepted");
   const waiting = members.filter((member) => member.status === "waiting");
@@ -1295,10 +1380,18 @@ async function enrichSocialPlans(plans, viewerId = "") {
   let membersByPlanId = {};
 
   if (creatorIds.length > 0) {
-    const { data: creators, error } = await supabaseAdmin
+    let { data: creators, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, neighborhood, transaction_id, is_verified")
+      .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
       .in("id", creatorIds);
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, neighborhood, transaction_id, is_verified")
+        .in("id", creatorIds);
+      creators = fallback.data;
+      error = fallback.error;
+    }
     if (error) console.error("Social plan creators error:", error);
     creatorsById = Object.fromEntries((creators || []).map((profile) => [profile.id, profile]));
   }
@@ -1323,10 +1416,18 @@ async function enrichSocialPlans(plans, viewerId = "") {
     const memberUserIds = [...new Set((members || []).map((member) => member.user_id).filter(Boolean))];
     let usersById = {};
     if (memberUserIds.length > 0) {
-      const { data: users, error: usersError } = await supabaseAdmin
+      let { data: users, error: usersError } = await supabaseAdmin
         .from("profiles")
-        .select("id, display_name, neighborhood, transaction_id, is_verified")
+        .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
         .in("id", memberUserIds);
+      if (usersError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, neighborhood, transaction_id, is_verified")
+          .in("id", memberUserIds);
+        users = fallback.data;
+        usersError = fallback.error;
+      }
       if (usersError) console.error("Social plan member users error:", usersError);
       usersById = Object.fromEntries((users || []).map((profile) => [profile.id, profile]));
     }
@@ -1334,21 +1435,36 @@ async function enrichSocialPlans(plans, viewerId = "") {
       if (!membersByPlanId[member.plan_id]) membersByPlanId[member.plan_id] = [];
       membersByPlanId[member.plan_id].push({
         ...member,
-        user: publicPlanProfile(usersById[member.user_id]),
+        user: usersById[member.user_id],
       });
     }
   }
 
   return planRows.map((plan) => {
     const members = membersByPlanId[plan.id] || [];
+    const viewerMember = members.find((member) => member.user_id === viewerId) || null;
+    const canViewParticipantPhotos =
+      plan.creator_id === viewerId ||
+      members.some((member) => member.user_id === viewerId && ["accepted", "waiting"].includes(member.status));
+    const publicMembers = members.map((member) => ({
+      ...member,
+      user: canViewParticipantPhotos || member.user_id === viewerId
+        ? privatePlanProfile(member.user)
+        : publicPlanProfile(member.user),
+    }));
     return {
       ...plan,
       photo_data_urls: parseSocialPlanPhotos(plan.photo_data_url),
-      creator: publicPlanProfile(creatorsById[plan.creator_id]),
+      creator: canViewParticipantPhotos || plan.creator_id === viewerId
+        ? privatePlanProfile(creatorsById[plan.creator_id])
+        : publicPlanProfile(creatorsById[plan.creator_id]),
       purchase: purchasesById[plan.purchase_id] || null,
-      members,
-      counts: countPlanMembers(members),
-      viewer_member: members.find((member) => member.user_id === viewerId) || null,
+      members: publicMembers,
+      counts: countPlanMembers(publicMembers),
+      viewer_member: viewerMember ? {
+        ...viewerMember,
+        user: privatePlanProfile(viewerMember.user),
+      } : null,
       is_owner: plan.creator_id === viewerId,
     };
   });
@@ -1665,6 +1781,18 @@ app.post("/api/social-plans/:id/join", async (request, response) => {
       .maybeSingle();
     if (matchingPurchaseError) throw matchingPurchaseError;
     if (!matchingPurchase) return response.status(403).json({ error: "ticket_required" });
+    const { data: photoProfile, error: photoProfileError } = await supabaseAdmin
+      .from("profiles")
+      .select("plan_photo_data_url")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (photoProfileError) {
+      if (photoProfileError.code === "42703") return response.status(500).json({ error: "plan_photos_sql_missing" });
+      throw photoProfileError;
+    }
+    if (parsePlanProfilePhotos(photoProfile?.plan_photo_data_url).length < 2) {
+      return response.status(403).json({ error: "plan_photos_required" });
+    }
 
     const gender = ["woman", "man", "open"].includes(request.body?.gender) ? request.body.gender : "open";
     const note = String(request.body?.note || "").trim().slice(0, 160) || null;

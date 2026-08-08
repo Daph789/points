@@ -185,6 +185,7 @@
         const links = Array.from(nav.querySelectorAll("[data-route]"));
         const baseFrames = Array.from(document.querySelectorAll(".spa-frame"));
         const categoryFrames = new Map();
+        const offerFrames = new Map();
         const boot = document.getElementById("spa-boot");
         let activeIndex = 0;
         let activeRoute = "inicio";
@@ -193,12 +194,13 @@
         function routeFromHash() {
           const clean = window.location.hash.replace("#", "");
           if (clean.startsWith("categoria=")) return "categoria";
+          if (clean.startsWith("detalle=")) return "detalle";
           return routeNames.includes(clean) ? clean : "inicio";
         }
 
         function setRoute(route, options = {}) {
-          const isCategory = route === "categoria";
-          const navRoute = isCategory ? "inicio" : route;
+          const isExternalInicioRoute = route === "categoria" || route === "detalle";
+          const navRoute = isExternalInicioRoute ? "inicio" : route;
           const nextIndex = Math.max(bottomRoutes.indexOf(navRoute), 0);
           const direction = nextIndex < activeIndex ? "left" : "right";
           activeIndex = nextIndex;
@@ -218,6 +220,8 @@
             const isActive =
               route === "categoria"
                 ? frame.dataset.route === "categoria" && frame.dataset.categoryKey === activeCategoryKey
+                : route === "detalle"
+                  ? frame.dataset.route === "detalle" && frame.dataset.offerId === activeOfferId
                 : frame.dataset.route === route;
             frame.classList.toggle("is-active", isActive);
             frame.classList.toggle("is-left", !isActive && direction === "left");
@@ -229,7 +233,7 @@
         }
 
         function allFrames() {
-          return [...baseFrames, ...categoryFrames.values()];
+          return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values()];
         }
 
         function categoryKey(category) {
@@ -273,6 +277,29 @@
           }
         }
 
+        let activeOfferId = "";
+        function openOfferDetail(offerId, options = {}) {
+          const cleanId = String(offerId || "").trim();
+          if (!cleanId) return;
+          activeOfferId = cleanId;
+          if (!offerFrames.has(cleanId)) {
+            const frame = document.createElement("iframe");
+            frame.className = "spa-frame";
+            frame.dataset.route = "detalle";
+            frame.dataset.offerId = cleanId;
+            frame.dataset.index = "0";
+            frame.title = "Detalle Donos";
+            frame.src = `offer-detail.html?embedded=1&id=${encodeURIComponent(cleanId)}`;
+            watchFrame(frame);
+            root.appendChild(frame);
+            offerFrames.set(cleanId, frame);
+          }
+          setRoute("detalle", { skipHash: true });
+          if (!options.skipHash) {
+            history.pushState({ route: "detalle", offerId: cleanId }, "", `#detalle=${encodeURIComponent(cleanId)}`);
+          }
+        }
+
         links.forEach((link) => {
           link.addEventListener("click", (event) => {
             event.preventDefault();
@@ -284,6 +311,8 @@
           const clean = window.location.hash.replace("#", "");
           if (clean.startsWith("categoria=")) {
             openCategory(decodeURIComponent(clean.slice("categoria=".length)), { skipHash: true });
+          } else if (clean.startsWith("detalle=")) {
+            openOfferDetail(decodeURIComponent(clean.slice("detalle=".length)), { skipHash: true });
           } else {
             setRoute(routeFromHash(), { skipHash: true });
           }
@@ -292,6 +321,14 @@
           if (event.origin !== window.location.origin) return;
           if (event.data?.type === "donos:category") {
             openCategory(event.data.category);
+            return;
+          }
+          if (event.data?.type === "donos:offer-detail") {
+            openOfferDetail(event.data.id);
+            return;
+          }
+          if (event.data?.type === "donos:detail-back") {
+            history.back();
             return;
           }
           if (event.data?.type === "donos:navigate") {
@@ -314,6 +351,8 @@
           const hash = window.location.hash.replace("#", "");
           if (hash.startsWith("categoria=")) {
             openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });
+          } else if (hash.startsWith("detalle=")) {
+            openOfferDetail(decodeURIComponent(hash.slice("detalle=".length)), { skipHash: true });
           } else {
             setRoute(routeFromHash(), { skipHash: true });
           }

@@ -43,6 +43,15 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
+
+      function goBackFromDetail() {
+        if (isEmbeddedDetail && window.parent !== window) {
+          window.parent.postMessage({ type: "donos:detail-back" }, window.location.origin);
+          return;
+        }
+        history.back();
+      }
 
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "—";
@@ -136,7 +145,9 @@
         const canBuy = Boolean(deliveryChoice && totalPoints > 0 && !outOfStock);
         const goToCheckout = () => {
           if (!canBuy) return;
-          window.location.href = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
+          const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
+          if (isEmbeddedDetail && window.parent !== window) window.parent.location.href = checkoutUrl;
+          else window.location.href = checkoutUrl;
         };
         const resetDrag = () => {
           setTouchStartX(null);
@@ -189,7 +200,7 @@
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-[#060914] via-black/25 to-black/20"></div>
               <header className="relative z-10 flex items-center justify-between px-4 pt-5 sm:px-6 lg:px-8">
-                <button className="rounded-full bg-black/30 px-4 py-2 text-sm font-black text-white backdrop-blur" onClick={() => history.back()}>
+                <button className="rounded-full bg-black/30 px-4 py-2 text-sm font-black text-white backdrop-blur" onClick={goBackFromDetail}>
                   Volver
                 </button>
                 <div className="flex items-center gap-2">

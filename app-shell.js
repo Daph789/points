@@ -16,6 +16,11 @@
       const file = url.pathname.split("/").pop();
       const route = routeByFile[file];
       if (window.parent === window) return;
+      if (file === "offer-detail.html" && url.searchParams.get("id")) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:offer-detail", id: url.searchParams.get("id") }, window.location.origin);
+        return;
+      }
       if (!route) {
         if (url.origin === window.location.origin && file.endsWith(".html")) {
           event.preventDefault();

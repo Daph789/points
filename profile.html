@@ -128,16 +128,42 @@
         );
       }
 
+      async function compressImageToDataUrl(file, maxSide = 900, quality = 0.76) {
+        const image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = reader.result;
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const ratio = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * ratio));
+        canvas.height = Math.max(1, Math.round(image.height * ratio));
+        const context = canvas.getContext("2d");
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", quality);
+      }
+
       function App() {
         const [profile, setProfile] = React.useState(null);
         const [status, setStatus] = React.useState("Cargando perfil...");
         const [copyStatus, setCopyStatus] = React.useState("");
         const [navBadges, setNavBadges] = React.useState({});
+        const [accessToken, setAccessToken] = React.useState("");
+        const [planPhotos, setPlanPhotos] = React.useState([]);
+        const [isSavingPhotos, setIsSavingPhotos] = React.useState(false);
 
         React.useEffect(() => {
           async function loadProfile() {
             const { data: sessionData } = await supabaseClient.auth.getSession();
             const accessToken = sessionData.session?.access_token;
+            setAccessToken(accessToken || "");
             const authUser = sessionData.session?.user;
             const userId = authUser?.id;
 
@@ -197,9 +223,16 @@
             }
 
             setProfile({ points: 0, ...data });
+            setPlanPhotos(data?.plan_photo_data_urls || []);
             setStatus("");
 
             if (accessToken) {
+              const photosResponse = await fetch("/api/me/plan-photos", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              const photosData = await photosResponse.json().catch(() => ({}));
+              if (photosResponse.ok) setPlanPhotos(photosData.photos || []);
+
               const response = await fetch("/api/me/notifications", {
                 headers: { Authorization: `Bearer ${accessToken}` },
               });
@@ -217,6 +250,50 @@
           await navigator.clipboard.writeText(clean);
           setCopyStatus("Copiado");
           setTimeout(() => setCopyStatus(""), 1400);
+        }
+
+        async function handlePlanPhotoUpload(event) {
+          const files = Array.from(event.target.files || []).slice(0, 5 - planPhotos.length);
+          if (!files.length) return;
+          if (files.some((file) => file.size > 8 * 1024 * 1024)) {
+            setStatus("Una foto es demasiado grande. Usa imágenes de menos de 8 MB.");
+            event.target.value = "";
+            return;
+          }
+          try {
+            const compressed = await Promise.all(files.map((file) => compressImageToDataUrl(file)));
+            setPlanPhotos((current) => [...current, ...compressed].slice(0, 5));
+            setStatus("");
+          } catch (_error) {
+            setStatus("No se han podido preparar las fotos.");
+          } finally {
+            event.target.value = "";
+          }
+        }
+
+        async function savePlanPhotos() {
+          if (!accessToken) return redirectToLogin();
+          setIsSavingPhotos(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/plan-photos", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ photos: planPhotos }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "save_failed");
+            setPlanPhotos(data.photos || []);
+            setProfile((current) => current ? { ...current, plan_photo_data_urls: data.photos || [] } : current);
+            setStatus("Fotos para planes guardadas correctamente.");
+          } catch (error) {
+            setStatus(error.message === "plan_photos_sql_missing" ? "Falta ejecutar el SQL de fotos para planes." : "No se han podido guardar las fotos.");
+          } finally {
+            setIsSavingPhotos(false);
+          }
         }
 
         async function signOut() {
@@ -287,6 +364,55 @@
               {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
               {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}
             </section>
+
+            {!isBusiness && (
+              <section className="mt-5 rounded-[32px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Fotos para planes</p>
+                    <h2 className="mt-2 text-2xl font-black text-white">Planes con más gente</h2>
+                    <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-400">
+                      Estas fotos solo se muestran a personas autorizadas en Quedar: quien creó el plan y participantes del mismo grupo. Para apuntarte se necesitan mínimo 2 fotos.
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${planPhotos.length >= 2 ? "bg-mint text-ink" : "bg-coral/10 text-coral ring-1 ring-coral/20"}`}>
+                    {planPhotos.length}/5 fotos
+                  </span>
+                </div>
+
+                <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
+                  {planPhotos.map((photo, index) => (
+                    <div key={`${photo.slice(0, 28)}-${index}`} className="relative h-40 w-32 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-black/20">
+                      <img className="h-full w-full object-cover" src={photo} alt="" />
+                      <button
+                        className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/65 text-sm font-black text-white backdrop-blur"
+                        type="button"
+                        onClick={() => setPlanPhotos((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {planPhotos.length < 5 && (
+                    <label className="grid h-40 w-32 shrink-0 cursor-pointer place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 text-center">
+                      <span>
+                        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="plus" /></span>
+                        <span className="mt-2 block text-xs font-black text-mint">Añadir</span>
+                      </span>
+                      <input className="hidden" type="file" accept="image/*" multiple onChange={handlePlanPhotoUpload} />
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  className="mt-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                  disabled={isSavingPhotos}
+                  onClick={savePlanPhotos}
+                >
+                  {isSavingPhotos ? "Guardando..." : "Guardar fotos"}
+                </button>
+              </section>
+            )}
 
             <section className="mt-5 rounded-[30px] border border-coral/25 bg-coral/10 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">

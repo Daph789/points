@@ -119,7 +119,7 @@
         return (
           <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
             <button className="block w-full text-left" onClick={() => {
-              if (isEmbeddedCategory && window.parent !== window) window.parent.location.href = detailUrl;
+              if (isEmbeddedCategory && window.parent !== window) window.parent.postMessage({ type: "donos:offer-detail", id: offer.id }, window.location.origin);
               else window.location.href = detailUrl;
             }}>
               <div className="relative min-h-[190px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
