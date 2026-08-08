@@ -328,17 +328,40 @@
         const other = isOut ? movement.to_profile : movement.from_profile;
         const isRequest = movement.transfer_type === "request";
         const isPendingRequestToMe = isRequest && movement.status === "pending" && isOut;
+        const otherName = other?.display_name || "Cuenta Donos";
         const title = isRequest
-          ? isOut
-            ? `${movement.to_profile?.display_name || "Alguien"} te pide puntos`
-            : `Pediste puntos a ${movement.from_profile?.display_name || "alguien"}`
+          ? movement.status === "pending"
+            ? isOut
+              ? `Solicitud de ${otherName}`
+              : `Pedido a ${otherName}`
+            : movement.status === "declined"
+              ? isOut
+                ? `Solicitud rechazada`
+                : `${otherName} rechazó tu solicitud`
+              : isOut
+                ? `Pagado a ${otherName}`
+                : `Cobrado de ${otherName}`
           : isOut
-            ? `Enviado a ${other?.display_name || "Cuenta Donos"}`
-            : `Recibido de ${other?.display_name || "Cuenta Donos"}`;
+            ? `Enviado a ${otherName}`
+            : `Recibido de ${otherName}`;
+        const directionText = isRequest
+          ? movement.status === "pending"
+            ? isOut
+              ? "Te está pidiendo puntos"
+              : "Solicitud enviada"
+            : movement.status === "declined"
+              ? "Solicitud rechazada"
+              : isOut
+                ? "Solicitud pagada"
+                : "Solicitud cobrada"
+          : isOut
+            ? "Transferencia enviada"
+            : "Transferencia recibida";
         const tone = movement.status === "declined" ? "coral" : movement.status === "pending" ? "sun" : isOut ? "coral" : "mint";
         const pointsSign = isOut && movement.status !== "declined" ? "-" : "+";
         const pointsToneClass = tone === "mint" ? "bg-mint text-ink" : tone === "sun" ? "bg-sun text-ink" : "bg-coral/15 text-coral ring-1 ring-coral/25";
-        const contact = other?.email || formatDonosId(other?.transaction_id) || "Cuenta Donos";
+        const contact = other?.email || "Email no visible";
+        const donosId = formatDonosId(other?.transaction_id);
         return (
           <article
             className={`rounded-[26px] border p-3 shadow-2xl shadow-black/20 transition active:scale-[0.99] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
@@ -350,7 +373,11 @@
                   <p className="truncate text-[15px] font-black leading-tight text-white sm:text-base">{title}</p>
                   {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-coral shadow-[0_0_14px_rgba(255,107,107,0.75)]"></span>}
                 </div>
-                <p className="mt-1 truncate text-xs font-bold text-slate-400 sm:text-sm">{contact}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-slate-300 ring-1 ring-white/10">{directionText}</span>
+                  {donosId && <span className="rounded-full bg-black/20 px-2.5 py-1 font-mono text-[11px] font-black text-mint ring-1 ring-mint/10">{donosId}</span>}
+                </div>
+                <p className="mt-2 truncate text-xs font-bold text-slate-400 sm:text-sm">{contact}</p>
                 <p className="mt-1 text-xs font-bold text-slate-600">{formatDate(movement.created_at)} · {formatTime(movement.created_at)}</p>
                 {movement.note && <p className="mt-2 max-w-full truncate rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
               </div>
@@ -406,6 +433,19 @@
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
+        const historyContentRef = React.useRef(null);
+
+        function scrollToHistoryContent() {
+          window.setTimeout(() => {
+            historyContentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 80);
+        }
+
+        function selectHistoryMode(nextMode) {
+          setMode(nextMode);
+          setSearch("");
+          scrollToHistoryContent();
+        }
 
         React.useEffect(() => {
           loadPurchases();
@@ -763,7 +803,7 @@
 	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-7" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
                 <button
                   className={`relative rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-                  onClick={() => setMode("purchases")}
+                  onClick={() => selectHistoryMode("purchases")}
                 >
                   <NotificationBadge count={unreadCount("purchases")} />
                   <p className="text-2xl">🛍️</p>
@@ -774,7 +814,7 @@
                   <>
                     <button
                       className={`relative rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-                      onClick={() => setMode("incoming")}
+                      onClick={() => selectHistoryMode("incoming")}
                     >
                       <NotificationBadge count={unreadCount("incoming")} />
                       <p className="text-2xl">↗</p>
@@ -783,7 +823,7 @@
                     </button>
                     <button
 	                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-	                      onClick={() => setMode("scanned")}
+	                      onClick={() => selectHistoryMode("scanned")}
                     >
                       <NotificationBadge count={unreadCount("scanned")} />
                       <p className="text-2xl">▣</p>
@@ -792,7 +832,7 @@
 	                    </button>
                     <button
                       className={`relative rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
-                      onClick={() => setMode("stock")}
+                      onClick={() => selectHistoryMode("stock")}
                     >
                       <NotificationBadge count={unreadCount("stock")} />
                       <p className="text-2xl">↻</p>
@@ -801,7 +841,7 @@
                     </button>
                     <button
                       className={`relative rounded-3xl border p-4 text-left transition ${mode === "payouts" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-                      onClick={() => setMode("payouts")}
+                      onClick={() => selectHistoryMode("payouts")}
                     >
                       <NotificationBadge count={unreadCount("payouts")} />
                       <p className="text-2xl">€</p>
@@ -812,16 +852,16 @@
 	                )}
                 <button
                   className={`relative rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
-                  onClick={() => setMode("points")}
+                  onClick={() => selectHistoryMode("points")}
                 >
                   <NotificationBadge count={unreadCount("points")} />
                   <p className="text-2xl">⇄</p>
-                  <p className="mt-2 text-base font-black text-white">Puntos</p>
-                  <p className="mt-1 text-xs font-bold text-slate-400">{pointMovements.length} movimientos</p>
+                  <p className="mt-2 text-base font-black text-white">Transferencias</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">{pointMovements.length} envíos y pedidos</p>
                 </button>
 	                <button
                   className={`relative rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
-                  onClick={() => setMode("debts")}
+                  onClick={() => selectHistoryMode("debts")}
                 >
                   <NotificationBadge count={unreadCount("debts")} />
                   <p className="text-2xl">📌</p>
@@ -831,6 +871,7 @@
               </div>
             </section>
 
+            <div ref={historyContentRef} className="scroll-mt-4">
             {mode === "purchases" ? (
               <section className="mt-5">
                 <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
@@ -1146,6 +1187,7 @@
                 </div>
               </section>
             )}
+            </div>
 
             <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">

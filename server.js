@@ -1636,6 +1636,17 @@ app.post("/api/social-plans", async (request, response) => {
     const wantedOpen = Math.max(Math.floor(Number(request.body?.wantedOpen || 0)), 0);
     const totalWanted = wantedWomen + wantedMen + wantedOpen;
     if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
+    const planPhotoDataUrl = normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl);
+    if (parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
+
+    const { error: profilePhotosError } = await supabaseAdmin
+      .from("profiles")
+      .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
+      .eq("id", creator.id);
+    if (profilePhotosError) {
+      console.error("Create social plan profile photos sync error:", profilePhotosError);
+      return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    }
 
     const { data: plan, error } = await supabaseAdmin
       .from("social_plans")
@@ -1644,7 +1655,7 @@ app.post("/api/social-plans", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl),
+        photo_data_url: planPhotoDataUrl,
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
@@ -1711,6 +1722,17 @@ app.patch("/api/social-plans/:id", async (request, response) => {
 
     if (purchaseError) throw purchaseError;
     if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
+    const planPhotoDataUrl = normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl);
+    if (parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
+
+    const { error: profilePhotosError } = await supabaseAdmin
+      .from("profiles")
+      .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
+      .eq("id", owner.id);
+    if (profilePhotosError) {
+      console.error("Update social plan profile photos sync error:", profilePhotosError);
+      return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    }
 
     const { data: plan, error } = await supabaseAdmin
       .from("social_plans")
@@ -1718,7 +1740,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         purchase_id: purchaseId,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
-        photo_data_url: normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl),
+        photo_data_url: planPhotoDataUrl,
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,

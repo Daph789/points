@@ -445,11 +445,40 @@
           const response = await fetch("/api/me/plan-photos", { headers: { Authorization: `Bearer ${accessToken}` } });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.error || "plan_photos_failed");
-          setPlanProfilePhotos(data.photos || []);
+          const photos = data.photos || [];
+          setPlanProfilePhotos(photos);
+          setPhotoDataUrls((current) => current.length ? current : photos);
         }
 
         async function reloadAll() {
           await Promise.all([loadPlans(), loadMine(), loadTickets(), loadPlanProfilePhotos()]);
+        }
+
+        async function syncPlanPhotos(nextPhotos, options = {}) {
+          const cleanPhotos = [...new Set((nextPhotos || []).filter(Boolean))].slice(0, 5);
+          setPhotoDataUrls(cleanPhotos);
+          setPlanProfilePhotos(cleanPhotos);
+          if (!token) return cleanPhotos;
+          try {
+            const response = await fetch("/api/me/plan-photos", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ photos: cleanPhotos }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "plan_photos_failed");
+            const savedPhotos = data.photos || [];
+            setPhotoDataUrls(savedPhotos);
+            setPlanProfilePhotos(savedPhotos);
+            if (!options.silent) setStatus("Fotos actualizadas en tu perfil.");
+            return savedPhotos;
+          } catch (error) {
+            setStatus(error.message === "plan_photos_sql_missing" ? "Falta ejecutar el SQL de fotos para planes." : "No se han podido guardar tus fotos en el perfil.");
+            return cleanPhotos;
+          }
         }
 
         async function handlePhoto(event) {
@@ -467,7 +496,8 @@
               event.target.value = "";
               return;
             }
-            setPhotoDataUrls((current) => [...current, ...compressedPhotos].slice(0, 5));
+            const nextPhotos = [...photoDataUrls, ...compressedPhotos].slice(0, 5);
+            await syncPlanPhotos(nextPhotos, { silent: true });
             setStatus("");
           } catch (error) {
             setStatus("No se ha podido preparar la foto. Prueba con otra imagen.");
@@ -522,6 +552,7 @@
 
         async function createPlan() {
           if (!selectedTicketId) return setStatus("Elige un billete para crear el plan.");
+          if (photoDataUrls.length < 2) return setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
           const totalWanted = Math.max(Math.floor(Number(maxPeople || 0)), 0);
           const womenWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedWomen || 0)), 0);
           const menWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedMen || 0)), 0);
@@ -532,13 +563,19 @@
           setIsSaving(true);
           setStatus("");
           try {
+            const savedPhotos = await syncPlanPhotos(photoDataUrls, { silent: true });
+            if (savedPhotos.length < 2) {
+              setStatus("Añade mínimo 2 fotos tuyas para publicar el plan.");
+              setIsSaving(false);
+              return;
+            }
             await api(editingPlanId ? `/api/social-plans/${editingPlanId}` : "/api/social-plans", {
               method: editingPlanId ? "PATCH" : "POST",
               body: JSON.stringify({
                 purchaseId: selectedTicketId,
                 title,
                 message,
-                photoDataUrls,
+                photoDataUrls: savedPhotos,
                 wantedWomen: womenWanted,
                 wantedMen: menWanted,
                 wantedOpen: openWanted,
@@ -646,6 +683,13 @@
           setWantedWomen(0);
           setWantedMen(0);
           setStatus("");
+        }
+
+        function selectMode(nextMode) {
+          setMode(nextMode);
+          if (nextMode === "create" && !editingPlanId && photoDataUrls.length === 0 && planProfilePhotos.length > 0) {
+            setPhotoDataUrls(planProfilePhotos);
+          }
         }
 
         async function updateMember(plan, member, nextStatus) {
@@ -756,7 +800,7 @@
             <div className="sticky top-0 z-30 -mx-3 mt-3 overflow-x-auto border-y border-white/5 bg-[#060914]/72 px-3 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
               <div className="flex w-max min-w-full gap-2">
                 {modes.map((item) => (
-                  <TopModeButton key={item.value} {...item} mode={mode} onClick={setMode} />
+                  <TopModeButton key={item.value} {...item} mode={mode} onClick={selectMode} />
                 ))}
               </div>
             </div>
@@ -818,9 +862,21 @@
                   </div>
                   <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título: Vamos al concierto..." />
                   <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Texto: quién eres, qué plan quieres, punto de encuentro..." />
-                  <label className={`mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 ${photoDataUrls.length >= 5 ? "opacity-55" : ""}`}>
-                    <span className="text-sm font-bold text-slate-300">{photoDataUrls.length ? `${photoDataUrls.length}/5 fotos cargadas` : "Subir fotos tuyas"}</span>
-                    <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Fotos</span>
+                  <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-white">Fotos tuyas para el plan</p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                          Mínimo 2. Se cargan desde tu perfil y solo las verá la gente autorizada del plan.
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${photoDataUrls.length >= 2 ? "bg-mint text-ink" : "bg-coral/10 text-coral ring-1 ring-coral/20"}`}>
+                        {photoDataUrls.length}/5
+                      </span>
+                    </div>
+                  <label className={`mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 ${photoDataUrls.length >= 5 ? "opacity-55" : ""}`}>
+                    <span className="text-sm font-bold text-slate-300">{photoDataUrls.length ? "Añadir o reemplazar fotos" : "Subir fotos tuyas"}</span>
+                    <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Importar</span>
                     <input type="file" className="hidden" accept="image/*" multiple disabled={photoDataUrls.length >= 5} onChange={handlePhoto} />
                   </label>
                   {photoDataUrls.length > 0 && (
@@ -828,11 +884,18 @@
                       {photoDataUrls.map((photo, index) => (
                         <div key={`${photo.slice(0, 32)}-${index}`} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-3xl ring-1 ring-white/10">
                           <img className="h-full w-full object-cover" src={photo} alt="" />
-                          <button className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm font-black text-white" type="button" onClick={() => setPhotoDataUrls((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+                          <button
+                            className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm font-black text-white"
+                            type="button"
+                            onClick={() => syncPlanPhotos(photoDataUrls.filter((_, itemIndex) => itemIndex !== index))}
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                     </div>
                   )}
+                  </div>
 
                   <label className="mt-4 block rounded-[26px] border border-white/10 bg-black/20 p-4">
                     <span className="text-sm font-black text-white">¿Cuántas personas máximo pueden apuntarse?</span>
