@@ -70,6 +70,9 @@
         const params = new URLSearchParams(window.location.search);
         const offerId = params.get("id");
         const delivery = params.get("delivery") || "pickup";
+        const fromApp = params.get("from") === "app";
+        const backHref = fromApp ? "app.html#quedar" : "";
+        const homeHref = fromApp ? "app.html#inicio" : "home.html";
         const [offer, setOffer] = React.useState(null);
         const [profile, setProfile] = React.useState(null);
         const [userId, setUserId] = React.useState("");
@@ -256,7 +259,7 @@
         return (
           <main className="mx-auto min-h-screen w-full max-w-3xl px-3 py-4 sm:px-6">
             <header className="flex items-center justify-between">
-              <button className="rounded-full bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => history.back()}>
+              <button className="rounded-full bg-white/10 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => fromApp ? window.location.href = backHref : history.back()}>
                 Volver
               </button>
               <span className="rounded-full bg-mint/10 px-4 py-2 text-sm font-black text-mint ring-1 ring-mint/20">Pago seguro</span>
@@ -440,7 +443,7 @@
                     </div>
 
                     <div className="mt-5 grid gap-3 min-[380px]:grid-cols-2">
-                      <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" href="home.html">
+                      <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" href={homeHref}>
                         Inicio
                       </a>
                       <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]" href={successPurchase.id ? `order-detail.html?id=${successPurchase.id}` : "historial.html"}>

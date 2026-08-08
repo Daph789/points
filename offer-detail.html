@@ -149,7 +149,7 @@
         }`;
         const goToCheckout = () => {
           if (!canBuy) return;
-          const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
+          const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}${isEmbeddedDetail ? "&from=app" : ""}`;
           if (isEmbeddedDetail && window.parent !== window) window.parent.location.href = checkoutUrl;
           else window.location.href = checkoutUrl;
         };

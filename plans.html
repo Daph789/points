@@ -69,6 +69,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const isEmbeddedPlans = new URLSearchParams(window.location.search).get("embedded") === "1";
 
       const navItems = [
         { label: "Inicio", icon: "home", href: "home.html" },
@@ -154,6 +155,13 @@
 
       function offerDetailUrl(ticket) {
         return ticket?.offer?.id ? `offer-detail.html?id=${ticket.offer.id}` : "home.html";
+      }
+
+      function openOfferDetailInApp(event, ticket) {
+        const offerId = ticket?.offer?.id || ticket?.offer_id;
+        if (!isEmbeddedPlans || !offerId || window.parent === window) return;
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:offer-detail", id: offerId }, window.location.origin);
       }
 
       function statusLabel(value) {
@@ -291,6 +299,7 @@
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
         const offer = plan.purchase?.offer || {};
+        const creatorName = plan.creator?.display_name || "Usuario Donos";
         const counts = plan.counts || {};
         const full = Number(plan.wanted_women || 0) + Number(plan.wanted_men || 0) + Number(plan.wanted_open || 0);
         const accepted = Number(counts.accepted || 0);
@@ -315,10 +324,9 @@
             </div>
             <div className="p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-sm font-black text-mint">{merchant}</p>
-                {plan.purchase?.offer?.business_is_verified && <VerifiedBadge />}
-                <p className="text-xs font-bold text-slate-500">· por {plan.creator?.display_name || "Usuario Donos"}</p>
+                <p className="truncate text-sm font-black text-mint">{creatorName}</p>
                 {plan.creator?.is_verified && <VerifiedBadge />}
+                <p className="text-xs font-bold text-slate-500">· creador/a del plan</p>
               </div>
               <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400">
                 {address && <p className="rounded-2xl bg-black/20 px-3 py-2">Dirección: <span className="text-slate-200">{address}</span></p>}
@@ -551,8 +559,14 @@
         }
 
         async function createPlan() {
-          if (!selectedTicketId) return setStatus("Elige un billete para crear el plan.");
-          if (photoDataUrls.length < 2) return setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
+          if (!selectedTicketId) {
+            setStatus("Elige un billete para crear el plan.");
+            return;
+          }
+          if (photoDataUrls.length < 2) {
+            setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
+            return;
+          }
           const totalWanted = Math.max(Math.floor(Number(maxPeople || 0)), 0);
           const womenWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedWomen || 0)), 0);
           const menWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedMen || 0)), 0);
@@ -785,7 +799,7 @@
         }
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-28 pt-4 sm:px-6 lg:px-8">
+          <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-52 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between gap-3">
               <a href="home.html" className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</div>
@@ -929,6 +943,11 @@
                     </div>
                   )}
                   <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donos lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
+                  {status && mode === "create" && !status.includes("correctamente") && !status.includes("Editando") && (
+                    <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
+                      {status}
+                    </p>
+                  )}
                   <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Guardando..." : editingPlanId ? "Guardar cambios" : "Publicar plan"}</button>
                 </div>
               </section>
@@ -986,8 +1005,8 @@
             )}
 
             {joinPlan && (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-xl">
-                <section className="w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 pb-36 backdrop-blur-xl">
+                <section className="mx-auto w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Voy contigo</p>
                   <h2 className="mt-2 text-2xl font-black text-white">{planTitle(joinPlan)}</h2>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Tus fotos de planes se compartirán solo con la persona que creó este plan y participantes autorizados.</p>
@@ -1006,7 +1025,7 @@
             )}
 
             {photoGatePlan && (
-              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-xl">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
                 <section className="mx-auto w-full max-w-lg rounded-[36px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -1043,6 +1062,11 @@
                     </p>
                     <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Si cancelas, no se enviará tu solicitud porque la otra persona no podrá reconocerte.</p>
                   </div>
+                  {status && (status.includes("foto") || status.includes("Fotos") || status.includes("SQL")) && (
+                    <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
+                      {status}
+                    </p>
+                  )}
 
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setPhotoGatePlan(null)}>Cancelar</button>
@@ -1053,8 +1077,8 @@
             )}
 
             {purchaseRequiredPlan && (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
-                <section className="w-full max-w-md overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
+                <section className="mx-auto w-full max-w-md overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl">
                   <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
                     {ticketImage(purchaseRequiredPlan.purchase) ? <img className="absolute inset-0 h-full w-full object-cover" src={ticketImage(purchaseRequiredPlan.purchase)} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">🎟️</span>}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent"></div>
@@ -1075,7 +1099,7 @@
                     </div>
                     <div className="mt-5 grid grid-cols-2 gap-3">
                       <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setPurchaseRequiredPlan(null)}>Ahora no</button>
-                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" href={offerDetailUrl(purchaseRequiredPlan.purchase)}>Pagar</a>
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" href={offerDetailUrl(purchaseRequiredPlan.purchase)} onClick={(event) => openOfferDetailInApp(event, purchaseRequiredPlan.purchase)}>Pagar</a>
                     </div>
                   </div>
                 </section>
@@ -1083,8 +1107,8 @@
             )}
 
             {detailPlan && (
-              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 backdrop-blur-xl">
-                <section className="mx-auto max-w-3xl rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
+                <section className="mx-auto mb-24 max-w-3xl rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   {(() => {
                     const photos = planPhotos(detailPlan);
                     const ticket = detailPlan.purchase;
@@ -1146,6 +1170,13 @@
                       {offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de inicio</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
                       {offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de fin</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
                       {!offer.start_date && !offer.end_date && dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
+                      <div className="rounded-2xl bg-black/20 p-3">
+                        <p className="text-xs font-bold text-slate-500">Comercio</p>
+                        <p className="mt-1 inline-flex items-center gap-2 text-sm font-black text-white">
+                          <span>{merchant}</span>
+                          {offer.business_is_verified && <VerifiedBadge />}
+                        </p>
+                      </div>
                       {offer.hours && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Horarios</p><p className="mt-1 text-sm font-black text-white">{offer.hours}</p></div>}
                       {requiredPoints > 0 && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Puntos necesarios</p><p className="mt-1 text-sm font-black text-white">{requiredPoints} puntos</p></div>}
                       {offer.age && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Edad</p><p className="mt-1 text-sm font-black text-white">{offer.age}</p></div>}
@@ -1160,7 +1191,7 @@
                       )}
                       {offer.description && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Descripción del evento</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{offer.description}</p></div>}
                       {detailPlan.message && photos.length === 0 && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p></div>}
-                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)}>Ver el billete en detalle</a>
+                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)} onClick={(event) => openOfferDetailInApp(event, ticket)}>Ver el billete en detalle</a>
                     </div>
                   </div>
 
