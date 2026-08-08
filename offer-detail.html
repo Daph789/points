@@ -143,6 +143,10 @@
         const remainingStock = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
         const canBuy = Boolean(deliveryChoice && totalPoints > 0 && !outOfStock);
+        const actionButtonText = (offer.cart_button_text || "Comprar").trim() || "Comprar";
+        const checkoutDockClass = `fixed left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl ${
+          isEmbeddedDetail ? "bottom-[92px] sm:bottom-[104px]" : "bottom-0"
+        }`;
         const goToCheckout = () => {
           if (!canBuy) return;
           const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}`;
@@ -403,7 +407,7 @@
               </section>
             </section>
 
-            <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl">
+            <div className={checkoutDockClass}>
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</p>
@@ -416,7 +420,7 @@
 	                  disabled={!canBuy}
 	                  onClick={goToCheckout}
 	                >
-	                  {outOfStock ? "Agotado" : (offer.cart_button_text || "Comprar")}
+	                  {outOfStock ? "Agotado" : actionButtonText}
 	                </button>
               </div>
             </div>
