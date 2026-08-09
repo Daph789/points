@@ -1993,7 +1993,15 @@ app.patch("/api/social-plans/:id/members/:memberId", async (request, response) =
       .maybeSingle();
     if (error) throw error;
     if (!member) return response.status(404).json({ error: "member_not_found" });
-    response.json({ member });
+
+    const { data: updatedPlan, error: updatedPlanError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .eq("id", plan.id)
+      .maybeSingle();
+    if (updatedPlanError) throw updatedPlanError;
+
+    response.json({ member, plan: updatedPlan ? (await enrichSocialPlans([updatedPlan], owner.id))[0] : null });
   } catch (error) {
     console.error("Update social plan member fatal error:", error);
     response.status(500).json({ error: "member_update_failed" });

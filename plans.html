@@ -392,8 +392,10 @@
         const [joinGender, setJoinGender] = React.useState("open");
         const [joinNote, setJoinNote] = React.useState("");
         const [detailPlan, setDetailPlan] = React.useState(null);
+        const [memberFilter, setMemberFilter] = React.useState("accepted");
         const [status, setStatus] = React.useState("");
         const [isSaving, setIsSaving] = React.useState(false);
+        const [actionToast, setActionToast] = React.useState(null);
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
@@ -760,18 +762,40 @@
           }
         }
 
+        function openDetailPlan(plan) {
+          setMemberFilter("accepted");
+          setDetailPlan(plan);
+        }
+
         async function updateMember(plan, member, nextStatus) {
           setIsSaving(true);
           try {
-            await api(`/api/social-plans/${plan.id}/members/${member.id}`, {
+            const data = await api(`/api/social-plans/${plan.id}/members/${member.id}`, {
               method: "PATCH",
               body: JSON.stringify({ status: nextStatus }),
             });
+            const personName = member.user?.display_name || "La persona";
+            const messages = {
+              accepted: `${personName} aceptado/a en el grupo.`,
+              waiting: `${personName} queda en lista de espera.`,
+              removed: `${personName} retirado/a del plan.`,
+            };
+            setActionToast({
+              type: nextStatus === "removed" ? "warning" : "success",
+              title: nextStatus === "removed" ? "Participante actualizado" : "Cambio guardado",
+              message: messages[nextStatus] || "Participante actualizado.",
+            });
+            window.setTimeout(() => setActionToast(null), 2600);
             await reloadAll();
-            const fresh = [...ownedPlans, ...plans].find((item) => item.id === plan.id);
+            const fresh = data.plan || [...ownedPlans, ...plans].find((item) => item.id === plan.id);
             if (fresh) setDetailPlan(fresh);
           } catch (error) {
-            setStatus("No se ha podido actualizar la persona.");
+            setActionToast({
+              type: "error",
+              title: "No se ha guardado",
+              message: "No se ha podido actualizar la persona.",
+            });
+            window.setTimeout(() => setActionToast(null), 3000);
           } finally {
             setIsSaving(false);
           }
@@ -891,7 +915,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -1015,14 +1039,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={setDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -1268,48 +1292,90 @@
                   })()}
 
                   <div className="mt-5">
-                    <div className="mb-3 flex items-end justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Gente del plan</p>
-                        <h3 className="mt-1 text-xl font-black text-white">Participantes y solicitudes</h3>
-                      </div>
-                      <span className="rounded-full bg-white/[0.07] px-3 py-1 text-xs font-black text-slate-300 ring-1 ring-white/10">{(detailPlan.members || []).length} personas</span>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                    {(detailPlan.members || []).map((member) => (
-                      <article key={member.id} className="overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/10">
-                        <div className="flex gap-2 overflow-x-auto bg-black/20 p-3">
-                          {(member.user?.plan_photo_data_urls || []).length > 0 ? (
-                            member.user.plan_photo_data_urls.map((photo, index) => (
-                              <img key={`${member.id}-${index}`} className="h-36 w-28 shrink-0 rounded-[24px] object-cover ring-1 ring-white/10" src={photo} alt="" />
-                            ))
-                          ) : (
-                            <div className="grid h-36 w-full place-items-center rounded-[24px] bg-white/[0.055] text-center">
-                              <span className="px-4 text-xs font-bold leading-5 text-slate-500">Fotos visibles solo para personas autorizadas</span>
+                    {(() => {
+                      const members = detailPlan.members || [];
+                      const memberTabs = [
+                        { value: "accepted", label: "Aceptados", hint: "Dentro del grupo", empty: "Todavía no hay personas aceptadas.", className: "data-[active=true]:bg-mint data-[active=true]:text-ink data-[active=true]:shadow-glow" },
+                        { value: "waiting", label: "En espera", hint: "Pendientes", empty: "No hay solicitudes en espera.", className: "data-[active=true]:bg-sun data-[active=true]:text-ink" },
+                        { value: "removed", label: "Retirados", hint: "Quitados", empty: "No has retirado a nadie de este plan.", className: "data-[active=true]:bg-coral data-[active=true]:text-white" },
+                      ];
+                      const visibleMembers = members.filter((member) => (member.status || "waiting") === memberFilter);
+                      const activeTab = memberTabs.find((tab) => tab.value === memberFilter) || memberTabs[0];
+                      const memberCardTone = {
+                        accepted: "border-mint/20 bg-mint/[0.055]",
+                        waiting: "border-sun/20 bg-sun/[0.055]",
+                        removed: "border-coral/20 bg-coral/[0.045] opacity-90",
+                      };
+
+                      return (
+                        <>
+                          <div className="mb-3 flex items-end justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Gente del plan</p>
+                              <h3 className="mt-1 text-xl font-black text-white">Participantes y solicitudes</h3>
                             </div>
+                            <span className="rounded-full bg-white/[0.07] px-3 py-1 text-xs font-black text-slate-300 ring-1 ring-white/10">{members.length} personas</span>
+                          </div>
+
+                          <div className="mb-4 grid grid-cols-3 gap-2 rounded-[26px] border border-white/10 bg-black/20 p-2">
+                            {memberTabs.map((tab) => {
+                              const count = members.filter((member) => (member.status || "waiting") === tab.value).length;
+                              return (
+                                <button
+                                  key={tab.value}
+                                  data-active={memberFilter === tab.value}
+                                  className={`rounded-[20px] px-2 py-3 text-left transition duration-200 ${memberFilter === tab.value ? "" : "bg-white/[0.045] text-slate-300 hover:bg-white/[0.075]"} ${tab.className}`}
+                                  type="button"
+                                  onClick={() => setMemberFilter(tab.value)}
+                                >
+                                  <span className="block text-center text-sm font-black sm:text-left">{tab.label}</span>
+                                  <span className="mt-1 block text-center text-[11px] font-black uppercase tracking-[0.08em] opacity-75 sm:text-left">{count} · {tab.hint}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            {visibleMembers.map((member) => (
+                              <article key={member.id} className={`overflow-hidden rounded-[30px] border shadow-2xl shadow-black/10 ${memberCardTone[member.status] || "border-white/10 bg-white/[0.055]"}`}>
+                                <div className="flex gap-2 overflow-x-auto bg-black/20 p-3">
+                                  {(member.user?.plan_photo_data_urls || []).length > 0 ? (
+                                    member.user.plan_photo_data_urls.map((photo, index) => (
+                                      <img key={`${member.id}-${index}`} className="h-36 w-28 shrink-0 rounded-[24px] object-cover ring-1 ring-white/10" src={photo} alt="" />
+                                    ))
+                                  ) : (
+                                    <div className="grid h-36 w-full place-items-center rounded-[24px] bg-white/[0.055] text-center">
+                                      <span className="px-4 text-xs font-bold leading-5 text-slate-500">Fotos visibles solo para personas autorizadas</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="grid gap-3 p-4">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-black text-white">{member.user?.display_name || "Usuario Donos"}</p>
+                                      {member.user?.is_verified && <VerifiedBadge />}
+                                    </div>
+                                    <p className="mt-1 text-sm font-bold text-slate-400">{genderLabel(member.gender)} · {statusLabel(member.status)} · {formatDate(member.created_at)} {formatTime(member.created_at)}</p>
+                                    {member.note && <p className="mt-2 rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{member.note}</p>}
+                                  </div>
+                                  {detailPlan.is_owner && detailPlan.status === "open" && (
+                                    <div className="grid grid-cols-3 gap-2">
+                                      <button className="h-10 rounded-2xl bg-mint px-3 text-xs font-black text-ink disabled:opacity-50" disabled={isSaving || member.status === "accepted"} onClick={() => updateMember(detailPlan, member, "accepted")}>Aceptar</button>
+                                      <button className="h-10 rounded-2xl bg-white/[0.08] px-3 text-xs font-black text-slate-200 ring-1 ring-white/10 disabled:opacity-50" disabled={isSaving || member.status === "waiting"} onClick={() => updateMember(detailPlan, member, "waiting")}>Espera</button>
+                                      <button className="h-10 rounded-2xl bg-coral/10 px-3 text-xs font-black text-coral ring-1 ring-coral/20 disabled:opacity-50" disabled={isSaving || member.status === "removed"} onClick={() => updateMember(detailPlan, member, "removed")}>Quitar</button>
+                                    </div>
+                                  )}
+                                </div>
+                              </article>
+                            ))}
+                          </div>
+
+                          {visibleMembers.length === 0 && (
+                            <p className="rounded-3xl border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">{activeTab.empty}</p>
                           )}
-                        </div>
-                        <div className="grid gap-3 p-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-black text-white">{member.user?.display_name || "Usuario Donos"}</p>
-                            {member.user?.is_verified && <VerifiedBadge />}
-                          </div>
-                          <p className="mt-1 text-sm font-bold text-slate-400">{genderLabel(member.gender)} · {statusLabel(member.status)} · {formatDate(member.created_at)} {formatTime(member.created_at)}</p>
-                          {member.note && <p className="mt-2 rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{member.note}</p>}
-                        </div>
-                        {detailPlan.is_owner && detailPlan.status === "open" && (
-                          <div className="grid grid-cols-3 gap-2">
-                            <button className="h-10 rounded-2xl bg-mint px-3 text-xs font-black text-ink" disabled={isSaving} onClick={() => updateMember(detailPlan, member, "accepted")}>Aceptar</button>
-                            <button className="h-10 rounded-2xl bg-white/[0.08] px-3 text-xs font-black text-slate-200 ring-1 ring-white/10" disabled={isSaving} onClick={() => updateMember(detailPlan, member, "waiting")}>Espera</button>
-                            <button className="h-10 rounded-2xl bg-coral/10 px-3 text-xs font-black text-coral ring-1 ring-coral/20" disabled={isSaving} onClick={() => updateMember(detailPlan, member, "removed")}>Quitar</button>
-                          </div>
-                        )}
-                        </div>
-                      </article>
-                    ))}
-                    </div>
-                    {(detailPlan.members || []).length === 0 && <p className="rounded-3xl border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">Todavía nadie se apuntó.</p>}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {detailPlan.is_owner && detailPlan.status === "open" && (
@@ -1320,6 +1386,26 @@
                     </div>
                   )}
                 </section>
+              </div>
+            )}
+
+            {actionToast && (
+              <div className="fixed inset-x-4 bottom-28 z-[70] mx-auto max-w-md rounded-[28px] border border-white/10 bg-[#0D111D]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-2xl">
+                <div className="flex items-start gap-3">
+                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-lg font-black ${
+                    actionToast.type === "error"
+                      ? "bg-coral/15 text-coral ring-1 ring-coral/25"
+                      : actionToast.type === "warning"
+                        ? "bg-sun/15 text-sun ring-1 ring-sun/25"
+                        : "bg-mint text-ink shadow-glow"
+                  }`}>
+                    {actionToast.type === "error" ? "!" : "✓"}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-white">{actionToast.title}</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-slate-400">{actionToast.message}</p>
+                  </div>
+                </div>
               </div>
             )}
 

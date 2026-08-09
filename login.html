@@ -104,6 +104,27 @@
 
         const canSubmit = email.trim() && password.length >= 1;
 
+        function redirectTargetFromNext(next) {
+          if (!next) return "app.html#inicio";
+          try {
+            const url = new URL(next, window.location.origin);
+            if (url.origin !== window.location.origin) return "app.html#inicio";
+            const file = url.pathname.split("/").pop() || "home.html";
+            const routes = {
+              "home.html": "inicio",
+              "historial.html": "historial",
+              "plans.html": "quedar",
+              "transfer.html": "transfer",
+              "profile.html": "perfil",
+            };
+            if (routes[file]) return `app.html#${routes[file]}`;
+            if (file === "app.html") return `${url.pathname}${url.hash || "#inicio"}`;
+            return `${url.pathname}${url.search}${url.hash}`;
+          } catch (_error) {
+            return "app.html#inicio";
+          }
+        }
+
         async function loadProfileAndRedirect(userId) {
           const next = new URLSearchParams(window.location.search).get("next");
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -135,7 +156,7 @@
           if (displayName) localStorage.setItem("donosDisplayName", displayName);
           if (transactionId) localStorage.setItem("donosTransactionId", transactionId);
 
-          window.location.href = next || `app.html#inicio`;
+          window.location.href = redirectTargetFromNext(next);
         }
 
         async function handleSubmit(event) {
