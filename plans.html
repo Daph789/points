@@ -769,26 +769,42 @@
 
         async function updateMember(plan, member, nextStatus) {
           setIsSaving(true);
+          const personName = member.user?.display_name || "La persona";
+          const loadingMessages = {
+            accepted: `Aceptando a ${personName}...`,
+            waiting: `Moviendo a ${personName} a espera...`,
+            removed: `Retirando a ${personName} del plan...`,
+          };
+          setActionToast({
+            type: "loading",
+            title: "Guardando cambio",
+            message: loadingMessages[nextStatus] || "Actualizando participante...",
+          });
           try {
             const data = await api(`/api/social-plans/${plan.id}/members/${member.id}`, {
               method: "PATCH",
               body: JSON.stringify({ status: nextStatus }),
             });
-            const personName = member.user?.display_name || "La persona";
             const messages = {
               accepted: `${personName} aceptado/a en el grupo.`,
               waiting: `${personName} queda en lista de espera.`,
               removed: `${personName} retirado/a del plan.`,
             };
+            const titles = {
+              accepted: "Participante aceptado",
+              waiting: "En lista de espera",
+              removed: "Participante retirado",
+            };
             setActionToast({
               type: nextStatus === "removed" ? "warning" : "success",
-              title: nextStatus === "removed" ? "Participante actualizado" : "Cambio guardado",
+              title: titles[nextStatus] || "Cambio guardado",
               message: messages[nextStatus] || "Participante actualizado.",
             });
             window.setTimeout(() => setActionToast(null), 2600);
             await reloadAll();
             const fresh = data.plan || [...ownedPlans, ...plans].find((item) => item.id === plan.id);
             if (fresh) setDetailPlan(fresh);
+            setMemberFilter(nextStatus);
           } catch (error) {
             setActionToast({
               type: "error",
@@ -1296,8 +1312,8 @@
                       const members = detailPlan.members || [];
                       const memberTabs = [
                         { value: "accepted", label: "Aceptados", hint: "Dentro del grupo", empty: "Todavía no hay personas aceptadas.", className: "data-[active=true]:bg-mint data-[active=true]:text-ink data-[active=true]:shadow-glow" },
-                        { value: "waiting", label: "En espera", hint: "Pendientes", empty: "No hay solicitudes en espera.", className: "data-[active=true]:bg-sun data-[active=true]:text-ink" },
-                        { value: "removed", label: "Retirados", hint: "Quitados", empty: "No has retirado a nadie de este plan.", className: "data-[active=true]:bg-coral data-[active=true]:text-white" },
+                        { value: "waiting", label: "En espera", hint: "Solicitudes pendientes", empty: "No hay solicitudes en espera.", className: "data-[active=true]:bg-sun data-[active=true]:text-ink" },
+                        { value: "removed", label: "Retirados", hint: "Personas quitadas", empty: "No has retirado a nadie de este plan.", className: "data-[active=true]:bg-coral data-[active=true]:text-white" },
                       ];
                       const visibleMembers = members.filter((member) => (member.status || "waiting") === memberFilter);
                       const activeTab = memberTabs.find((tab) => tab.value === memberFilter) || memberTabs[0];
@@ -1317,22 +1333,27 @@
                             <span className="rounded-full bg-white/[0.07] px-3 py-1 text-xs font-black text-slate-300 ring-1 ring-white/10">{members.length} personas</span>
                           </div>
 
-                          <div className="mb-4 grid grid-cols-3 gap-2 rounded-[26px] border border-white/10 bg-black/20 p-2">
+                          <div className="-mx-1 mb-4 overflow-x-auto px-1 pb-2">
+                            <div className="flex min-w-max gap-2 rounded-[26px] border border-white/10 bg-black/20 p-2">
                             {memberTabs.map((tab) => {
                               const count = members.filter((member) => (member.status || "waiting") === tab.value).length;
                               return (
                                 <button
                                   key={tab.value}
                                   data-active={memberFilter === tab.value}
-                                  className={`rounded-[20px] px-2 py-3 text-left transition duration-200 ${memberFilter === tab.value ? "" : "bg-white/[0.045] text-slate-300 hover:bg-white/[0.075]"} ${tab.className}`}
+                                  className={`min-h-[86px] w-[168px] shrink-0 rounded-[22px] px-4 py-3 text-left transition duration-200 sm:w-[190px] ${memberFilter === tab.value ? "" : "bg-white/[0.045] text-slate-300 hover:bg-white/[0.075]"} ${tab.className}`}
                                   type="button"
                                   onClick={() => setMemberFilter(tab.value)}
                                 >
-                                  <span className="block text-center text-sm font-black sm:text-left">{tab.label}</span>
-                                  <span className="mt-1 block text-center text-[11px] font-black uppercase tracking-[0.08em] opacity-75 sm:text-left">{count} · {tab.hint}</span>
+                                  <span className="flex items-center justify-between gap-3">
+                                    <span className="truncate text-base font-black">{tab.label}</span>
+                                    <span className="grid h-9 min-w-9 place-items-center rounded-full bg-black/15 px-3 text-sm font-black ring-1 ring-black/5">{count}</span>
+                                  </span>
+                                  <span className="mt-2 block text-xs font-black uppercase tracking-[0.08em] opacity-75">{tab.hint}</span>
                                 </button>
                               );
                             })}
+                            </div>
                           </div>
 
                           <div className="grid gap-3 sm:grid-cols-2">
@@ -1390,21 +1411,25 @@
             )}
 
             {actionToast && (
-              <div className="fixed inset-x-4 bottom-28 z-[70] mx-auto max-w-md rounded-[28px] border border-white/10 bg-[#0D111D]/95 p-4 shadow-2xl shadow-black/40 backdrop-blur-2xl">
-                <div className="flex items-start gap-3">
-                  <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-lg font-black ${
+              <div className="fixed inset-0 z-[70] grid place-items-center bg-black/45 px-5 backdrop-blur-sm">
+                <div className="w-full max-w-sm rounded-[34px] border border-white/10 bg-[#0D111D]/95 p-6 text-center shadow-2xl shadow-black/50">
+                  <div className={`mx-auto grid h-16 w-16 place-items-center rounded-[24px] ${
                     actionToast.type === "error"
                       ? "bg-coral/15 text-coral ring-1 ring-coral/25"
                       : actionToast.type === "warning"
                         ? "bg-sun/15 text-sun ring-1 ring-sun/25"
-                        : "bg-mint text-ink shadow-glow"
+                        : actionToast.type === "loading"
+                          ? "bg-mint/10 text-mint ring-1 ring-mint/25"
+                          : "bg-mint text-ink shadow-glow"
                   }`}>
-                    {actionToast.type === "error" ? "!" : "✓"}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-white">{actionToast.title}</p>
-                    <p className="mt-1 text-xs font-bold leading-5 text-slate-400">{actionToast.message}</p>
+                    {actionToast.type === "loading" ? (
+                      <span className="h-7 w-7 animate-spin rounded-full border-4 border-mint/25 border-t-mint"></span>
+                    ) : (
+                      <span className="text-2xl font-black">{actionToast.type === "error" ? "!" : "✓"}</span>
+                    )}
                   </div>
+                  <p className="mt-4 text-lg font-black text-white">{actionToast.title}</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{actionToast.message}</p>
                 </div>
               </div>
             )}
