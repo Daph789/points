@@ -43,7 +43,9 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
-      const planId = new URLSearchParams(window.location.search).get("id") || "";
+      const params = new URLSearchParams(window.location.search);
+      const planId = params.get("id") || "";
+      const isEmbeddedChat = params.get("embedded") === "1";
 
       function redirectToLogin() {
         window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
@@ -95,6 +97,15 @@
         }, []);
 
         React.useEffect(() => {
+          function handleMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === "donos:refresh-chat") loadChat(token, true);
+          }
+          window.addEventListener("message", handleMessage);
+          return () => window.removeEventListener("message", handleMessage);
+        }, [token]);
+
+        React.useEffect(() => {
           if (!token || !planId) return undefined;
           const interval = window.setInterval(() => loadChat(token, true), 2500);
           return () => window.clearInterval(interval);
@@ -129,17 +140,60 @@
             setPlan(data.plan || null);
             setMessages(data.messages || []);
             setStatus("");
+            markChatNotificationsRead(accessToken);
           } catch (error) {
             if (!silent) setStatus(friendlyChatError(error.message));
           }
+        }
+
+        async function markChatNotificationsRead(accessToken = token) {
+          if (!accessToken || !planId) return;
+          try {
+            const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${accessToken}` } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) return;
+            const keys = (data.events || [])
+              .filter((event) => event.section === "quedar" && event.kind === "chat" && event.plan_id === planId && !event.read)
+              .map((event) => event.key)
+              .filter(Boolean);
+            if (keys.length === 0) return;
+            await fetch("/api/me/notifications/read", {
+              method: "POST",
+              keepalive: true,
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({ keys }),
+            });
+          } catch (_error) {}
+        }
+
+        function goBackToQuedar(event) {
+          event.preventDefault();
+          if (isEmbeddedChat && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:navigate", route: "quedar" }, window.location.origin);
+            return;
+          }
+          window.location.href = "plans.html?tab=joined";
         }
 
         async function sendMessage(event) {
           event.preventDefault();
           const body = draft.trim();
           if (!body || isSending) return;
+          const temporaryId = `temp-${Date.now()}`;
           setIsSending(true);
           setDraft("");
+          setMessages((current) => [
+            ...current,
+            {
+              id: temporaryId,
+              plan_id: planId,
+              sender_id: profile?.id,
+              body,
+              created_at: new Date().toISOString(),
+              sender: profile,
+              pending: true,
+            },
+          ]);
           try {
             const response = await fetch(`/api/social-plans/${planId}/chat`, {
               method: "POST",
@@ -148,10 +202,11 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "send_message_failed");
-            setMessages((current) => [...current.filter((item) => item.id !== data.message?.id), data.message].filter(Boolean));
+            setMessages((current) => [...current.filter((item) => item.id !== temporaryId && item.id !== data.message?.id), data.message].filter(Boolean));
             setStatus("");
             await loadChat(token, true);
           } catch (error) {
+            setMessages((current) => current.filter((item) => item.id !== temporaryId));
             setDraft(body);
             setStatus(friendlyChatError(error.message));
           } finally {
@@ -163,7 +218,7 @@
           <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-4 pt-4 sm:px-6">
             <header className="sticky top-0 z-20 -mx-4 border-b border-white/10 bg-[#080C16]/85 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6">
               <div className="flex items-center gap-3">
-                <a className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-2xl font-black text-white ring-1 ring-white/10" href="plans.html">‹</a>
+                <a className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-2xl font-black text-white ring-1 ring-white/10" href="plans.html" onClick={goBackToQuedar}>‹</a>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Chat del grupo</p>
                   <h1 className="truncate text-xl font-black text-white">{plan ? planTitle(plan) : "Quedar"}</h1>
@@ -207,7 +262,7 @@
                           </div>
                         )}
                         <p className="whitespace-pre-wrap break-words text-sm font-bold leading-6">{message.body}</p>
-                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{formatTime(message.created_at)}</p>
+                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{message.pending ? "Enviando..." : formatTime(message.created_at)}</p>
                       </article>
                     </div>
                   );

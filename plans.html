@@ -299,7 +299,7 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin, onEdit }) {
+      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, chatUnreadCount = 0 }) {
         const image = ticketImage(plan.purchase);
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
@@ -310,13 +310,15 @@
         const accepted = Number(counts.accepted || 0);
         const hasPreference = Number(plan.wanted_women || 0) > 0 || Number(plan.wanted_men || 0) > 0;
         const photos = planPhotos(plan);
+        const canChat = plan.is_owner || plan.viewer_member?.status === "accepted";
         return (
-          <article className="overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
+          <article className={`overflow-hidden rounded-[32px] border bg-white/[0.055] shadow-2xl shadow-black/20 ${chatUnreadCount > 0 ? "border-coral/35 ring-1 ring-coral/25" : "border-white/10"}`}>
             <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
               {image ? <img className="absolute inset-0 h-full w-full object-cover" src={image} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">🎟️</span>}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
               {photos[0] && <img className="absolute left-4 top-4 h-16 w-16 rounded-3xl border border-white/20 object-cover shadow-2xl" src={photos[0]} alt="" />}
               {photos.length > 1 && <span className="absolute left-14 top-14 rounded-full bg-black/55 px-2 py-1 text-[10px] font-black text-white backdrop-blur">+{photos.length - 1}</span>}
+              {chatUnreadCount > 0 && <span className="absolute right-4 top-4 rounded-full bg-coral px-3 py-1 text-xs font-black text-white shadow-2xl shadow-coral/30">+{chatUnreadCount > 9 ? "9" : chatUnreadCount} chat</span>}
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{statusLabel(plan.status)}</span>
@@ -360,6 +362,11 @@
                   {plan.viewer_member ? statusLabel(plan.viewer_member.status) : plan.is_owner ? "Tu plan" : "Voy contigo"}
                 </button>
               </div>
+              {canChat && (
+                <button className="mt-2 h-12 w-full rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" onClick={() => onChat(plan)}>
+                  Chatear con el grupo{chatUnreadCount > 0 ? ` · +${chatUnreadCount > 9 ? "9" : chatUnreadCount}` : ""}
+                </button>
+              )}
             </div>
           </article>
         );
@@ -493,8 +500,16 @@
           return unreadEventsFor(subsection).length || notificationCounts.subsections?.[`quedar:${subsection}`] || 0;
         }
 
+        function chatUnreadEventsForPlan(planId) {
+          return notificationEvents.filter((event) => event.section === "quedar" && event.kind === "chat" && event.plan_id === planId && !readKeys.has(event.key));
+        }
+
+        function chatUnreadCountForPlan(planId) {
+          return chatUnreadEventsForPlan(planId).length;
+        }
+
         async function markQuedarSubsectionRead(subsection) {
-          const keys = unreadEventsFor(subsection).map((event) => event.key).filter(Boolean);
+          const keys = unreadEventsFor(subsection).filter((event) => event.kind !== "chat").map((event) => event.key).filter(Boolean);
           if (keys.length === 0) return;
           setReadKeys((current) => new Set([...current, ...keys]));
           const response = await fetch("/api/me/notifications/read", {
@@ -504,6 +519,29 @@
             body: JSON.stringify({ keys }),
           });
           if (response.ok) loadNotifications();
+        }
+
+        async function markPlanChatRead(planId) {
+          const keys = chatUnreadEventsForPlan(planId).map((event) => event.key).filter(Boolean);
+          if (keys.length === 0) return;
+          setReadKeys((current) => new Set([...current, ...keys]));
+          await fetch("/api/me/notifications/read", {
+            method: "POST",
+            keepalive: true,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ keys }),
+          });
+          loadNotifications();
+        }
+
+        function openPlanChat(plan) {
+          if (!plan?.id) return;
+          markPlanChatRead(plan.id);
+          if (isEmbeddedPlans && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:plan-chat", id: plan.id }, window.location.origin);
+            return;
+          }
+          window.location.href = `plan-chat.html?id=${encodeURIComponent(plan.id)}`;
         }
 
         async function syncPlanPhotos(nextPhotos, options = {}) {
@@ -931,7 +969,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -1055,14 +1093,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -1303,21 +1341,6 @@
                     <p className="text-sm font-black text-white">Compra usada como prueba</p>
                     <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Aquí solo aparecen datos públicos del evento. El QR, código de validación y código de seguridad nunca se muestran en Quedar.</p>
                   </div>
-
-                  <div className="mt-4 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-4 sm:grid-cols-[1fr_auto] sm:items-center">
-                    <div>
-                      <p className="text-sm font-black text-white">Participantes protegidos</p>
-                      <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
-                        Para ver los participantes y saber a qué se parecen, tienes que participar en el plan.
-                      </p>
-                    </div>
-                    <a
-                      className="grid h-12 place-items-center rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow"
-                      href={`plan-chat.html?id=${detailPlan.id}`}
-                    >
-                      Chatear con el grupo
-                    </a>
-                  </div>
                       </>
                     );
                   })()}
@@ -1337,6 +1360,14 @@
                         waiting: "border-sun/20 bg-sun/[0.055]",
                         removed: "border-coral/20 bg-coral/[0.045] opacity-90",
                       };
+                      const canChat = detailPlan.is_owner || detailPlan.viewer_member?.status === "accepted";
+                      const viewerStatus = detailPlan.viewer_member?.status || "";
+                      const protectionDetail =
+                        viewerStatus === "waiting"
+                          ? "Tu solicitud está en espera. Cuando te acepten, podrás ver mejor a la gente del grupo y chatear."
+                          : viewerStatus === "removed"
+                            ? "El administrador te ha retirado de este plan. Ya no puedes ver el grupo completo ni chatear."
+                            : "Aún no participas en este plan. Para ver los participantes y saber a qué se parecen, tienes que participar.";
 
                       return (
                         <>
@@ -1371,7 +1402,19 @@
                             </div>
                           </div>
 
-                          <div className="grid gap-3 sm:grid-cols-2">
+                          {canChat ? (
+                            <button className="mb-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => openPlanChat(detailPlan)}>
+                              Chatear con el grupo{chatUnreadCountForPlan(detailPlan.id) > 0 ? ` · +${chatUnreadCountForPlan(detailPlan.id) > 9 ? "9" : chatUnreadCountForPlan(detailPlan.id)}` : ""}
+                            </button>
+                          ) : (
+                            <div className="mb-4 rounded-[28px] border border-white/10 bg-white/[0.055] p-4">
+                              <p className="text-sm font-black text-white">Participantes protegidos</p>
+                              <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{protectionDetail}</p>
+                              {viewerStatus && <p className="mt-3 inline-flex rounded-full bg-black/25 px-3 py-2 text-xs font-black text-slate-200 ring-1 ring-white/10">Tu estado: {statusLabel(viewerStatus)}</p>}
+                            </div>
+                          )}
+
+                          {canChat && <div className="grid gap-3 sm:grid-cols-2">
                             {visibleMembers.map((member) => (
                               <article key={member.id} className={`overflow-hidden rounded-[30px] border shadow-2xl shadow-black/10 ${memberCardTone[member.status] || "border-white/10 bg-white/[0.055]"}`}>
                                 <div className="flex gap-2 overflow-x-auto bg-black/20 p-3">
@@ -1404,9 +1447,9 @@
                                 </div>
                               </article>
                             ))}
-                          </div>
+                          </div>}
 
-                          {visibleMembers.length === 0 && (
+                          {canChat && visibleMembers.length === 0 && (
                             <p className="rounded-3xl border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">{activeTab.empty}</p>
                           )}
                         </>

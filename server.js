@@ -1168,6 +1168,48 @@ async function buildNotificationsForProfile(profile) {
         });
       }
     }
+
+    const chatPlanSubsections = new Map();
+    for (const plan of ownedPlans || []) {
+      chatPlanSubsections.set(plan.id, "mine");
+    }
+    for (const member of joinedMembers || []) {
+      if (member.status === "accepted") chatPlanSubsections.set(member.plan_id, "joined");
+    }
+
+    const chatPlanIds = [...chatPlanSubsections.keys()].filter(Boolean);
+    if (chatPlanIds.length > 0) {
+      const { data: chatPlans } = await supabaseAdmin
+        .from("social_plans")
+        .select("id, title")
+        .in("id", chatPlanIds);
+      const chatPlansById = Object.fromEntries((chatPlans || []).map((plan) => [plan.id, plan]));
+      const { data: messages, error: messagesError } = await supabaseAdmin
+        .from("social_plan_messages")
+        .select("id, plan_id, sender_id, body, created_at")
+        .in("plan_id", chatPlanIds)
+        .neq("sender_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(160);
+
+      if (messagesError && messagesError.code !== "42P01") console.error("Notification social plan chat error:", messagesError);
+      if (!messagesError) {
+        for (const message of messages || []) {
+          const plan = chatPlansById[message.plan_id] || {};
+          pushNotification(events, {
+            section: "quedar",
+            href: `plan-chat.html?id=${message.plan_id}`,
+            key: `quedar:chat:${message.id}:${profile.id}`,
+            subsection: chatPlanSubsections.get(message.plan_id) || "joined",
+            kind: "chat",
+            plan_id: message.plan_id,
+            title: "Nuevo mensaje en el grupo",
+            detail: `${plan.title || "Plan Donos"} · ${String(message.body || "").slice(0, 80)}`,
+            created_at: message.created_at,
+          });
+        }
+      }
+    }
   } catch (error) {
     console.error("Notification social plans error:", error);
   }
@@ -1564,7 +1606,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
     const viewerMember = members.find((member) => member.user_id === viewerId) || null;
     const canViewParticipantPhotos =
       plan.creator_id === viewerId ||
-      members.some((member) => member.user_id === viewerId && ["accepted", "waiting"].includes(member.status));
+      members.some((member) => member.user_id === viewerId && member.status === "accepted");
     const publicMembers = members.map((member) => ({
       ...member,
       user: canViewParticipantPhotos || member.user_id === viewerId

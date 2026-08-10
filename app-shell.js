@@ -21,6 +21,11 @@
         window.parent.postMessage({ type: "donos:offer-detail", id: url.searchParams.get("id") }, window.location.origin);
         return;
       }
+      if (file === "plan-chat.html" && url.searchParams.get("id")) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:plan-chat", id: url.searchParams.get("id") }, window.location.origin);
+        return;
+      }
       if (!route) {
         if (url.origin === window.location.origin && file.endsWith(".html")) {
           event.preventDefault();

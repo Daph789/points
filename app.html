@@ -186,6 +186,7 @@
         const baseFrames = Array.from(document.querySelectorAll(".spa-frame"));
         const categoryFrames = new Map();
         const offerFrames = new Map();
+        const chatFrames = new Map();
         const boot = document.getElementById("spa-boot");
         let activeIndex = 0;
         let activeRoute = "inicio";
@@ -224,12 +225,13 @@
           const clean = window.location.hash.replace("#", "");
           if (clean.startsWith("categoria=")) return "categoria";
           if (clean.startsWith("detalle=")) return "detalle";
+          if (clean.startsWith("chat=")) return "chat";
           return routeNames.includes(clean) ? clean : "inicio";
         }
 
         function setRoute(route, options = {}) {
           const isExternalInicioRoute = route === "categoria" || route === "detalle";
-          const navRoute = isExternalInicioRoute ? "inicio" : route;
+          const navRoute = route === "chat" ? "quedar" : isExternalInicioRoute ? "inicio" : route;
           const nextIndex = Math.max(bottomRoutes.indexOf(navRoute), 0);
           const direction = nextIndex < activeIndex ? "left" : "right";
           activeIndex = nextIndex;
@@ -252,6 +254,8 @@
                 ? frame.dataset.route === "categoria" && frame.dataset.categoryKey === activeCategoryKey
                 : route === "detalle"
                   ? frame.dataset.route === "detalle" && frame.dataset.offerId === activeOfferId
+                : route === "chat"
+                  ? frame.dataset.route === "chat" && frame.dataset.planId === activePlanChatId
                 : frame.dataset.route === route;
             frame.classList.toggle("is-active", isActive);
             frame.classList.toggle("is-left", !isActive && direction === "left");
@@ -263,7 +267,7 @@
         }
 
         function allFrames() {
-          return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values()];
+          return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values(), ...chatFrames.values()];
         }
 
         function categoryKey(category) {
@@ -330,6 +334,31 @@
           }
         }
 
+        let activePlanChatId = "";
+        function openPlanChat(planId, options = {}) {
+          const cleanId = String(planId || "").trim();
+          if (!cleanId) return;
+          activePlanChatId = cleanId;
+          if (!chatFrames.has(cleanId)) {
+            const frame = document.createElement("iframe");
+            frame.className = "spa-frame";
+            frame.dataset.route = "chat";
+            frame.dataset.planId = cleanId;
+            frame.dataset.index = "2";
+            frame.title = "Chat Quedar";
+            frame.src = `plan-chat.html?embedded=1&id=${encodeURIComponent(cleanId)}`;
+            watchFrame(frame);
+            root.appendChild(frame);
+            chatFrames.set(cleanId, frame);
+          } else {
+            chatFrames.get(cleanId).contentWindow?.postMessage({ type: "donos:refresh-chat" }, window.location.origin);
+          }
+          setRoute("chat", { skipHash: true });
+          if (!options.skipHash) {
+            history.pushState({ route: "chat", planId: cleanId }, "", `#chat=${encodeURIComponent(cleanId)}`);
+          }
+        }
+
         links.forEach((link) => {
           link.addEventListener("click", (event) => {
             event.preventDefault();
@@ -343,6 +372,8 @@
             openCategory(decodeURIComponent(clean.slice("categoria=".length)), { skipHash: true });
           } else if (clean.startsWith("detalle=")) {
             openOfferDetail(decodeURIComponent(clean.slice("detalle=".length)), { skipHash: true });
+          } else if (clean.startsWith("chat=")) {
+            openPlanChat(decodeURIComponent(clean.slice("chat=".length)), { skipHash: true });
           } else {
             setRoute(routeFromHash(), { skipHash: true });
           }
@@ -355,6 +386,10 @@
           }
           if (event.data?.type === "donos:offer-detail") {
             openOfferDetail(event.data.id);
+            return;
+          }
+          if (event.data?.type === "donos:plan-chat") {
+            openPlanChat(event.data.id);
             return;
           }
           if (event.data?.type === "donos:detail-back") {
@@ -384,6 +419,8 @@
             openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });
           } else if (hash.startsWith("detalle=")) {
             openOfferDetail(decodeURIComponent(hash.slice("detalle=".length)), { skipHash: true });
+          } else if (hash.startsWith("chat=")) {
+            openPlanChat(decodeURIComponent(hash.slice("chat=".length)), { skipHash: true });
           } else {
             setRoute(routeFromHash(), { skipHash: true });
           }
