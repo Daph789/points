@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Chat del grupo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166", violet: "#A78BFA" },
+            boxShadow: {
+              glow: "0 24px 80px rgba(66, 242, 179, 0.18)",
+              nav: "0 20px 70px rgba(0, 0, 0, 0.42)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 20% -8%, rgba(66, 242, 179, 0.20), transparent 30%),
+          radial-gradient(circle at 88% 8%, rgba(167, 139, 250, 0.16), transparent 32%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const planId = new URLSearchParams(window.location.search).get("id") || "";
+
+      function redirectToLogin() {
+        window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      }
+
+      function formatTime(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function planTitle(plan) {
+        return plan?.title || plan?.purchase?.offer?.title || "Chat del grupo";
+      }
+
+      function verifiedBadge() {
+        return (
+          <span className="relative inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3 w-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
+      function friendlyChatError(error) {
+        const messages = {
+          plan_chat_table_missing: "Falta activar el SQL del chat de grupos en Supabase.",
+          not_member: "Para chatear tienes que participar primero en este plan.",
+          not_accepted: "Tu solicitud aún no está aceptada. Cuando estés dentro del grupo podrás chatear.",
+          plan_not_found: "No encontramos este plan.",
+          empty_message: "Escribe un mensaje antes de enviar.",
+        };
+        return messages[error] || "No se ha podido cargar el chat.";
+      }
+
+      function App() {
+        const [token, setToken] = React.useState("");
+        const [profile, setProfile] = React.useState(null);
+        const [plan, setPlan] = React.useState(null);
+        const [messages, setMessages] = React.useState([]);
+        const [draft, setDraft] = React.useState("");
+        const [status, setStatus] = React.useState("Cargando chat...");
+        const [isSending, setIsSending] = React.useState(false);
+        const listRef = React.useRef(null);
+
+        React.useEffect(() => {
+          bootstrap();
+        }, []);
+
+        React.useEffect(() => {
+          if (!token || !planId) return undefined;
+          const interval = window.setInterval(() => loadChat(token, true), 2500);
+          return () => window.clearInterval(interval);
+        }, [token, planId]);
+
+        React.useEffect(() => {
+          window.setTimeout(() => {
+            if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+          }, 40);
+        }, [messages.length]);
+
+        async function bootstrap() {
+          if (!planId) {
+            setStatus("No encontramos el grupo.");
+            return;
+          }
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) return redirectToLogin();
+          setToken(accessToken);
+          await loadChat(accessToken);
+        }
+
+        async function loadChat(accessToken = token, silent = false) {
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/chat`, {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "plan_chat_failed");
+            setProfile(data.profile || null);
+            setPlan(data.plan || null);
+            setMessages(data.messages || []);
+            setStatus("");
+          } catch (error) {
+            if (!silent) setStatus(friendlyChatError(error.message));
+          }
+        }
+
+        async function sendMessage(event) {
+          event.preventDefault();
+          const body = draft.trim();
+          if (!body || isSending) return;
+          setIsSending(true);
+          setDraft("");
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/chat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ body }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "send_message_failed");
+            setMessages((current) => [...current.filter((item) => item.id !== data.message?.id), data.message].filter(Boolean));
+            setStatus("");
+            await loadChat(token, true);
+          } catch (error) {
+            setDraft(body);
+            setStatus(friendlyChatError(error.message));
+          } finally {
+            setIsSending(false);
+          }
+        }
+
+        return (
+          <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-4 pt-4 sm:px-6">
+            <header className="sticky top-0 z-20 -mx-4 border-b border-white/10 bg-[#080C16]/85 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6">
+              <div className="flex items-center gap-3">
+                <a className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-2xl font-black text-white ring-1 ring-white/10" href="plans.html">‹</a>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Chat del grupo</p>
+                  <h1 className="truncate text-xl font-black text-white">{plan ? planTitle(plan) : "Quedar"}</h1>
+                </div>
+                <span className="rounded-full bg-mint/10 px-3 py-2 text-xs font-black text-mint ring-1 ring-mint/20">En directo</span>
+              </div>
+              {plan?.creator && (
+                <div className="mt-3 flex items-center gap-2 overflow-hidden rounded-2xl bg-white/[0.055] px-3 py-2">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-mint text-sm font-black text-ink">{String(plan.creator.display_name || "D").slice(0, 1).toUpperCase()}</span>
+                  <p className="truncate text-xs font-bold text-slate-300">Creado por <span className="text-white">{plan.creator.display_name || "Usuario Donos"}</span></p>
+                  {plan.creator.is_verified && verifiedBadge()}
+                </div>
+              )}
+            </header>
+
+            {status && (
+              <div className={`mt-4 rounded-[28px] border p-4 text-sm font-bold leading-6 ${
+                status.includes("Cargando")
+                  ? "border-white/10 bg-white/[0.055] text-slate-300"
+                  : "border-coral/25 bg-coral/10 text-coral"
+              }`}>
+                {status}
+              </div>
+            )}
+
+            <section ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-5">
+              <div className="space-y-3">
+                {messages.map((message) => {
+                  const mine = message.sender_id === profile?.id;
+                  return (
+                    <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <article className={`max-w-[82%] rounded-[28px] px-4 py-3 shadow-2xl shadow-black/10 ${
+                        mine
+                          ? "rounded-br-md bg-mint text-ink"
+                          : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"
+                      }`}>
+                        {!mine && (
+                          <div className="mb-1 flex items-center gap-2">
+                            <p className="truncate text-xs font-black text-mint">{message.sender?.display_name || "Usuario Donos"}</p>
+                            {message.sender?.is_verified && verifiedBadge()}
+                          </div>
+                        )}
+                        <p className="whitespace-pre-wrap break-words text-sm font-bold leading-6">{message.body}</p>
+                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{formatTime(message.created_at)}</p>
+                      </article>
+                    </div>
+                  );
+                })}
+                {!status && messages.length === 0 && (
+                  <div className="rounded-[30px] border border-white/10 bg-white/[0.055] p-6 text-center">
+                    <p className="text-lg font-black text-white">Todavía no hay mensajes</p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Sé la primera persona en escribir al grupo.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <form className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#080C16]/90 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6" onSubmit={sendMessage}>
+              <div className="flex items-end gap-2 rounded-[28px] border border-white/10 bg-white/[0.055] p-2">
+                <textarea
+                  className="max-h-32 min-h-12 flex-1 resize-none bg-transparent px-3 py-3 text-sm font-bold text-white outline-none placeholder:text-slate-500"
+                  value={draft}
+                  rows="1"
+                  onChange={(event) => setDraft(event.target.value)}
+                  placeholder="Escribe un mensaje..."
+                />
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || !draft.trim()} type="submit">
+                  ↑
+                </button>
+              </div>
+            </form>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -1303,6 +1303,21 @@
                     <p className="text-sm font-black text-white">Compra usada como prueba</p>
                     <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Aquí solo aparecen datos públicos del evento. El QR, código de validación y código de seguridad nunca se muestran en Quedar.</p>
                   </div>
+
+                  <div className="mt-4 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                    <div>
+                      <p className="text-sm font-black text-white">Participantes protegidos</p>
+                      <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                        Para ver los participantes y saber a qué se parecen, tienes que participar en el plan.
+                      </p>
+                    </div>
+                    <a
+                      className="grid h-12 place-items-center rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow"
+                      href={`plan-chat.html?id=${detailPlan.id}`}
+                    >
+                      Chatear con el grupo
+                    </a>
+                  </div>
                       </>
                     );
                   })()}

@@ -1589,6 +1589,44 @@ async function enrichSocialPlans(plans, viewerId = "") {
   });
 }
 
+async function getSocialPlanChatAccess(planId, profileId) {
+  const { data: plan, error: planError } = await supabaseAdmin
+    .from("social_plans")
+    .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+    .eq("id", planId)
+    .maybeSingle();
+  if (planError) throw planError;
+  if (!plan || plan.status === "cancelled") return { allowed: false, reason: "plan_not_found" };
+  if (plan.creator_id === profileId) return { allowed: true, role: "owner", plan };
+
+  const { data: member, error: memberError } = await supabaseAdmin
+    .from("social_plan_members")
+    .select("id, status")
+    .eq("plan_id", plan.id)
+    .eq("user_id", profileId)
+    .maybeSingle();
+  if (memberError) throw memberError;
+  if (member?.status === "accepted") return { allowed: true, role: "member", plan };
+  return { allowed: false, reason: member ? "not_accepted" : "not_member", plan };
+}
+
+async function enrichPlanChatMessages(messages = []) {
+  const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
+  let sendersById = {};
+  if (senderIds.length > 0) {
+    const { data: senders, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, transaction_id, is_verified")
+      .in("id", senderIds);
+    if (error) console.error("Social plan chat senders error:", error);
+    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+  }
+  return messages.map((message) => ({
+    ...message,
+    sender: sendersById[message.sender_id] || null,
+  }));
+}
+
 app.get("/api/me/purchases", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -2005,6 +2043,73 @@ app.patch("/api/social-plans/:id/members/:memberId", async (request, response) =
   } catch (error) {
     console.error("Update social plan member fatal error:", error);
     response.status(500).json({ error: "member_update_failed" });
+  }
+});
+
+app.get("/api/social-plans/:id/chat", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+
+    const { data: messages, error } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select("id, plan_id, sender_id, body, created_at")
+      .eq("plan_id", access.plan.id)
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (error) {
+      console.error("Social plan chat list error:", error);
+      return response.status(500).json({ error: error.code === "42P01" ? "plan_chat_table_missing" : "plan_chat_failed" });
+    }
+
+    response.json({
+      profile: transferPublicProfile(profile),
+      plan: (await enrichSocialPlans([access.plan], profile.id))[0],
+      messages: await enrichPlanChatMessages(messages || []),
+    });
+  } catch (error) {
+    console.error("Social plan chat list fatal error:", error);
+    response.status(500).json({ error: "plan_chat_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/chat", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    if (!body) return response.status(400).json({ error: "empty_message" });
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_messages")
+      .insert({ plan_id: access.plan.id, sender_id: profile.id, body })
+      .select("id, plan_id, sender_id, body, created_at")
+      .maybeSingle();
+
+    if (error) {
+      console.error("Social plan chat send error:", error);
+      return response.status(500).json({ error: error.code === "42P01" ? "plan_chat_table_missing" : "send_message_failed" });
+    }
+
+    const [enriched] = await enrichPlanChatMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Social plan chat send fatal error:", error);
+    response.status(500).json({ error: "send_message_failed" });
   }
 });
 
