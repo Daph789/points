@@ -1774,9 +1774,29 @@ async function getSocialPlanChatAccess(planId, profileId) {
   return { allowed: false, reason: member ? "not_accepted" : "not_member", plan };
 }
 
+async function markPlanChatMessagesRead(messages = [], planId, readerId) {
+  const readableMessages = (messages || []).filter((message) => message.sender_id !== readerId && !message.deleted_at);
+  if (readableMessages.length === 0) return;
+  const now = new Date().toISOString();
+  const rows = readableMessages.map((message) => ({
+    message_id: message.id,
+    plan_id: planId,
+    reader_id: readerId,
+    read_at: now,
+  }));
+  const { error } = await supabaseAdmin
+    .from("social_plan_message_reads")
+    .upsert(rows, { onConflict: "message_id,reader_id" });
+  if (error && !["42P01", "42703"].includes(error.code)) {
+    console.error("Social plan chat read receipt error:", error);
+  }
+}
+
 async function enrichPlanChatMessages(messages = []) {
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
+  const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
+  let readsByMessageId = {};
   if (senderIds.length > 0) {
     const { data: senders, error } = await supabaseAdmin
       .from("profiles")
@@ -1785,9 +1805,38 @@ async function enrichPlanChatMessages(messages = []) {
     if (error) console.error("Social plan chat senders error:", error);
     sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
   }
+  if (messageIds.length > 0) {
+    const { data: reads, error } = await supabaseAdmin
+      .from("social_plan_message_reads")
+      .select("message_id, reader_id, read_at")
+      .in("message_id", messageIds)
+      .order("read_at", { ascending: true });
+    if (error) {
+      if (!["42P01", "42703"].includes(error.code)) console.error("Social plan chat reads error:", error);
+    } else {
+      const readerIds = [...new Set((reads || []).map((read) => read.reader_id).filter(Boolean))];
+      let readersById = {};
+      if (readerIds.length > 0) {
+        const { data: readers, error: readersError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, email, transaction_id, is_verified")
+          .in("id", readerIds);
+        if (readersError) console.error("Social plan chat readers error:", readersError);
+        readersById = Object.fromEntries((readers || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+      }
+      for (const read of reads || []) {
+        if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
+        readsByMessageId[read.message_id].push({
+          read_at: read.read_at,
+          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donos" },
+        });
+      }
+    }
+  }
   return messages.map((message) => ({
     ...message,
     sender: sendersById[message.sender_id] || null,
+    read_by: readsByMessageId[message.id] || [],
   }));
 }
 
@@ -2296,6 +2345,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       console.error("Social plan chat list error:", error);
       return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_failed" });
     }
+    await markPlanChatMessagesRead(messages || [], access.plan.id, profile.id);
 
     response.json({
       profile: transferPublicProfile(profile),

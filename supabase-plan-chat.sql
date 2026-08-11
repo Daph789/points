@@ -17,8 +17,23 @@ alter table public.social_plan_messages
   add column if not exists edited_at timestamptz,
   add column if not exists deleted_at timestamptz;
 
+create table if not exists public.social_plan_message_reads (
+  message_id uuid not null references public.social_plan_messages(id) on delete cascade,
+  plan_id uuid not null references public.social_plans(id) on delete cascade,
+  reader_id uuid not null references public.profiles(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (message_id, reader_id)
+);
+
+create index if not exists social_plan_message_reads_plan_idx
+  on public.social_plan_message_reads(plan_id, read_at desc);
+
+create index if not exists social_plan_message_reads_reader_idx
+  on public.social_plan_message_reads(reader_id, read_at desc);
+
 alter table public.social_plan_messages enable row level security;
+alter table public.social_plan_message_reads enable row level security;
 
 notify pgrst, 'reload schema';
 
-select 'social_plan_messages listo' as status;
+select 'social_plan_messages y lecturas listo' as status;
