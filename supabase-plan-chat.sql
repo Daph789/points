@@ -13,6 +13,10 @@ create index if not exists social_plan_messages_plan_created_idx
 create index if not exists social_plan_messages_sender_idx
   on public.social_plan_messages(sender_id, created_at desc);
 
+alter table public.social_plan_messages
+  add column if not exists edited_at timestamptz,
+  add column if not exists deleted_at timestamptz;
+
 alter table public.social_plan_messages enable row level security;
 
 notify pgrst, 'reload schema';

@@ -78,8 +78,15 @@
           not_accepted: "Tu solicitud aún no está aceptada. Cuando estés dentro del grupo podrás chatear.",
           plan_not_found: "No encontramos este plan.",
           empty_message: "Escribe un mensaje antes de enviar.",
+          edit_window_closed: "Solo puedes modificar un mensaje durante los primeros 15 minutos.",
+          message_not_found: "No encontramos este mensaje.",
         };
         return messages[error] || "No se ha podido cargar el chat.";
+      }
+
+      function canEditMessage(message) {
+        if (!message?.created_at || message.deleted_at || message.pending) return false;
+        return Date.now() - new Date(message.created_at).getTime() <= 15 * 60 * 1000;
       }
 
       function App() {
@@ -90,6 +97,10 @@
         const [draft, setDraft] = React.useState("");
         const [status, setStatus] = React.useState("Cargando chat...");
         const [isSending, setIsSending] = React.useState(false);
+        const [selectedMessage, setSelectedMessage] = React.useState(null);
+        const [editingMessage, setEditingMessage] = React.useState(null);
+        const [editDraft, setEditDraft] = React.useState("");
+        const [messageToDelete, setMessageToDelete] = React.useState(null);
         const listRef = React.useRef(null);
 
         React.useEffect(() => {
@@ -214,6 +225,52 @@
           }
         }
 
+        async function saveEditedMessage(event) {
+          event.preventDefault();
+          if (!editingMessage || isSending) return;
+          const body = editDraft.trim();
+          if (!body) return;
+          setIsSending(true);
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/chat/${editingMessage.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ body }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "edit_message_failed");
+            setMessages((current) => current.map((item) => item.id === data.message.id ? data.message : item));
+            setEditingMessage(null);
+            setEditDraft("");
+            setStatus("");
+          } catch (error) {
+            setStatus(friendlyChatError(error.message));
+          } finally {
+            setIsSending(false);
+          }
+        }
+
+        async function deleteMessage() {
+          if (!messageToDelete || isSending) return;
+          setIsSending(true);
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/chat/${messageToDelete.id}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "delete_message_failed");
+            setMessages((current) => current.map((item) => item.id === data.message.id ? data.message : item));
+            setMessageToDelete(null);
+            setSelectedMessage(null);
+            setStatus("");
+          } catch (error) {
+            setStatus(friendlyChatError(error.message));
+          } finally {
+            setIsSending(false);
+          }
+        }
+
         return (
           <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-4 pt-4 sm:px-6">
             <header className="sticky top-0 z-20 -mx-4 border-b border-white/10 bg-[#080C16]/85 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6">
@@ -250,19 +307,22 @@
                   const mine = message.sender_id === profile?.id;
                   return (
                     <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                      <article className={`max-w-[82%] rounded-[28px] px-4 py-3 shadow-2xl shadow-black/10 ${
+                      <article
+                        className={`max-w-[82%] rounded-[28px] px-4 py-3 shadow-2xl shadow-black/10 ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
                         mine
                           ? "rounded-br-md bg-mint text-ink"
                           : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"
-                      }`}>
+                      } ${message.deleted_at ? "opacity-70" : ""}`}
+                        onClick={() => mine && !message.pending && !message.deleted_at ? setSelectedMessage(message) : null}
+                      >
                         {!mine && (
                           <div className="mb-1 flex items-center gap-2">
                             <p className="truncate text-xs font-black text-mint">{message.sender?.display_name || "Usuario Donos"}</p>
                             {message.sender?.is_verified && verifiedBadge()}
                           </div>
                         )}
-                        <p className="whitespace-pre-wrap break-words text-sm font-bold leading-6">{message.body}</p>
-                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{message.pending ? "Enviando..." : formatTime(message.created_at)}</p>
+                        <p className={`whitespace-pre-wrap break-words text-sm font-bold leading-6 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
+                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</p>
                       </article>
                     </div>
                   );
@@ -290,6 +350,60 @@
                 </button>
               </div>
             </form>
+
+            {selectedMessage && (
+              <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 px-4 pb-5 backdrop-blur-sm" onClick={() => setSelectedMessage(null)}>
+                <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                  <p className="text-sm font-black text-white">Opciones del mensaje</p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">Puedes modificarlo solo durante 15 minutos.</p>
+                  <div className="mt-4 grid gap-2">
+                    {canEditMessage(selectedMessage) && (
+                      <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => {
+                        setEditingMessage(selectedMessage);
+                        setEditDraft(selectedMessage.body || "");
+                        setSelectedMessage(null);
+                      }}>
+                        Modificar
+                      </button>
+                    )}
+                    <button className="h-12 rounded-2xl bg-coral/10 text-sm font-black text-coral ring-1 ring-coral/20" onClick={() => {
+                      setMessageToDelete(selectedMessage);
+                      setSelectedMessage(null);
+                    }}>
+                      Eliminar
+                    </button>
+                    <button className="h-12 rounded-2xl bg-white/[0.04] text-sm font-black text-slate-300 ring-1 ring-white/10" onClick={() => setSelectedMessage(null)}>Cancelar</button>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {editingMessage && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm">
+                <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl" onSubmit={saveEditedMessage}>
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Modificar mensaje</p>
+                  <textarea className="mt-4 min-h-32 w-full rounded-3xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/60" value={editDraft} onChange={(event) => setEditDraft(event.target.value)} />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button type="button" className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setEditingMessage(null)}>Cancelar</button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSending || !editDraft.trim()} type="submit">Guardar</button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {messageToDelete && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm">
+                <section className="w-full max-w-md rounded-[34px] border border-coral/20 bg-[#0D111D] p-5 text-center shadow-2xl">
+                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-coral/10 text-2xl font-black text-coral ring-1 ring-coral/25">!</div>
+                  <h2 className="mt-4 text-2xl font-black text-white">¿Eliminar mensaje?</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Se mostrará como “Mensaje eliminado” para que el chat siga claro.</p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setMessageToDelete(null)}>Cancelar</button>
+                    <button className="h-12 rounded-2xl bg-coral text-sm font-black text-white" disabled={isSending} onClick={deleteMessage}>Eliminar</button>
+                  </div>
+                </section>
+              </div>
+            )}
           </main>
         );
       }

@@ -1135,6 +1135,31 @@ async function buildNotificationsForProfile(profile) {
           });
         }
       }
+
+      const { data: oldAdmins, error: oldAdminsError } = await supabaseAdmin
+        .from("social_plan_members")
+        .select("id, plan_id, note, created_at, updated_at")
+        .in("plan_id", planIds)
+        .eq("note", "Antiguo administrador")
+        .order("created_at", { ascending: false })
+        .limit(80);
+
+      if (!oldAdminsError) {
+        for (const oldAdmin of oldAdmins || []) {
+          const plan = plansById[oldAdmin.plan_id] || {};
+          pushNotification(events, {
+            section: "quedar",
+            href: "plans.html?tab=mine",
+            key: `quedar:admin-transfer:${oldAdmin.plan_id}:${oldAdmin.id}`,
+            subsection: "mine",
+            kind: "admin_transfer",
+            plan_id: oldAdmin.plan_id,
+            title: "Ahora administras este plan",
+            detail: plan.title || "Plan Donos",
+            created_at: oldAdmin.updated_at || oldAdmin.created_at,
+          });
+        }
+      }
     }
 
     const { data: joinedMembers, error: joinedError } = await supabaseAdmin
@@ -1150,7 +1175,7 @@ async function buildNotificationsForProfile(profile) {
       if (joinedPlanIds.length > 0) {
         const { data: plans } = await supabaseAdmin
           .from("social_plans")
-          .select("id, title")
+          .select("id, title, status")
           .in("id", joinedPlanIds);
         plansById = Object.fromEntries((plans || []).map((plan) => [plan.id, plan]));
       }
@@ -1166,6 +1191,101 @@ async function buildNotificationsForProfile(profile) {
           detail: plan.title || "Plan Donos",
           created_at: member.updated_at || member.created_at,
         });
+        if (["waiting", "removed"].includes(member.status) && plan.status === "confirmed") {
+          pushNotification(events, {
+            section: "quedar",
+            href: `side-group.html?id=${member.plan_id}&status=${member.status}`,
+            key: `quedar:side:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
+            subsection: "joined",
+            kind: "side_available",
+            plan_id: member.plan_id,
+            side_status: member.status,
+            title: member.status === "waiting" ? "Grupo alternativo disponible" : "Grupo aparte disponible",
+            detail: plan.title || "Plan Donos",
+            created_at: member.updated_at || member.created_at,
+          });
+        }
+      }
+    }
+
+    const sideMembers = (joinedMembers || []).filter((member) => ["waiting", "removed"].includes(member.status) && plansById[member.plan_id]?.status === "confirmed");
+    const sidePlanIds = [...new Set(sideMembers.map((member) => member.plan_id).filter(Boolean))];
+    const sideMemberByPlanId = new Map(sideMembers.map((member) => [member.plan_id, member]));
+
+    if (sidePlanIds.length > 0) {
+      const { data: sideMessages, error: sideMessagesError } = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select("id, plan_id, group_status, sender_id, body, created_at")
+        .in("plan_id", sidePlanIds)
+        .neq("sender_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(160);
+
+      if (sideMessagesError && sideMessagesError.code !== "42P01") console.error("Notification side messages error:", sideMessagesError);
+      if (!sideMessagesError) {
+        for (const message of sideMessages || []) {
+          const member = sideMemberByPlanId.get(message.plan_id);
+          if (!member) continue;
+          if (![member.status, "merged"].includes(message.group_status)) continue;
+          const plan = plansById[message.plan_id] || {};
+          pushNotification(events, {
+            section: "quedar",
+            href: `side-group.html?id=${message.plan_id}&status=${member.status}`,
+            key: `quedar:side-chat:${message.id}:${profile.id}`,
+            subsection: "joined",
+            kind: "side_chat",
+            plan_id: message.plan_id,
+            side_status: member.status,
+            title: member.status === "waiting" ? "Mensaje en grupo alternativo" : "Mensaje en grupo aparte",
+            detail: `${plan.title || "Plan Donos"} · ${String(message.body || "").slice(0, 80)}`,
+            created_at: message.created_at,
+          });
+        }
+      }
+
+      const { data: mergeRequests, error: mergeError } = await supabaseAdmin
+        .from("social_plan_side_group_merges")
+        .select("id, plan_id, from_status, to_status, requester_id, status, created_at, accepted_at")
+        .in("plan_id", sidePlanIds)
+        .or("status.eq.pending,status.eq.accepted")
+        .order("created_at", { ascending: false })
+        .limit(160);
+
+      if (mergeError && mergeError.code !== "42P01") console.error("Notification side merge error:", mergeError);
+      if (!mergeError) {
+        for (const requestRow of mergeRequests || []) {
+          const member = sideMemberByPlanId.get(requestRow.plan_id);
+          if (!member || ![requestRow.from_status, requestRow.to_status].includes(member.status)) continue;
+          const plan = plansById[requestRow.plan_id] || {};
+          if (requestRow.status === "pending" && requestRow.to_status === member.status && requestRow.requester_id !== profile.id) {
+            pushNotification(events, {
+              section: "quedar",
+              href: `side-group.html?id=${requestRow.plan_id}&status=${member.status}`,
+              key: `quedar:side-merge-request:${requestRow.id}:${profile.id}`,
+              subsection: "joined",
+              kind: "side_merge",
+              plan_id: requestRow.plan_id,
+              side_status: member.status,
+              title: "Solicitud para unir grupos",
+              detail: plan.title || "Plan Donos",
+              created_at: requestRow.created_at,
+            });
+          }
+          if (requestRow.status === "accepted") {
+            pushNotification(events, {
+              section: "quedar",
+              href: `side-group.html?id=${requestRow.plan_id}&status=${member.status}`,
+              key: `quedar:side-merge-accepted:${requestRow.id}:${profile.id}`,
+              subsection: "joined",
+              kind: "side_merge",
+              plan_id: requestRow.plan_id,
+              side_status: member.status,
+              title: "Grupos unidos",
+              detail: plan.title || "Plan Donos",
+              created_at: requestRow.accepted_at || requestRow.created_at,
+            });
+          }
+        }
       }
     }
 
@@ -1484,9 +1604,11 @@ function privatePlanProfile(profile) {
 function countPlanMembers(members = []) {
   const accepted = members.filter((member) => member.status === "accepted");
   const waiting = members.filter((member) => member.status === "waiting");
+  const removed = members.filter((member) => member.status === "removed");
   return {
     accepted: accepted.length,
     waiting: waiting.length,
+    removed: removed.length,
     women: accepted.filter((member) => member.gender === "woman").length,
     men: accepted.filter((member) => member.gender === "man").length,
     open: accepted.filter((member) => member.gender === "open").length,
@@ -1669,6 +1791,70 @@ async function enrichPlanChatMessages(messages = []) {
   }));
 }
 
+function canEditChatMessage(message) {
+  if (!message?.created_at || message.deleted_at) return false;
+  return Date.now() - new Date(message.created_at).getTime() <= 15 * 60 * 1000;
+}
+
+function normalizeSideGroupStatus(value) {
+  return ["waiting", "removed"].includes(value) ? value : "";
+}
+
+function otherSideGroupStatus(value) {
+  return value === "waiting" ? "removed" : "waiting";
+}
+
+async function getSideGroupAccess(planId, profileId, requestedStatus) {
+  const status = normalizeSideGroupStatus(requestedStatus);
+  if (!status) return { allowed: false, reason: "invalid_side_group" };
+
+  const { data: plan, error: planError } = await supabaseAdmin
+    .from("social_plans")
+    .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+    .eq("id", planId)
+    .maybeSingle();
+  if (planError) throw planError;
+  if (!plan || plan.status !== "confirmed") return { allowed: false, reason: "side_group_not_ready" };
+
+  const { data: member, error: memberError } = await supabaseAdmin
+    .from("social_plan_members")
+    .select("id, plan_id, user_id, gender, status, note, created_at, updated_at")
+    .eq("plan_id", plan.id)
+    .eq("user_id", profileId)
+    .maybeSingle();
+  if (memberError) throw memberError;
+  if (!member || member.status !== status) return { allowed: false, reason: "not_in_side_group", plan };
+
+  return { allowed: true, plan, member, status };
+}
+
+async function getAcceptedSideMerge(planId) {
+  const { data: merge, error } = await supabaseAdmin
+    .from("social_plan_side_group_merges")
+    .select("id, plan_id, from_status, to_status, requester_id, status, created_at, accepted_at")
+    .eq("plan_id", planId)
+    .eq("status", "accepted")
+    .order("accepted_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error && error.code !== "42P01") throw error;
+  return merge || null;
+}
+
+async function enrichSideMessages(messages = []) {
+  const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
+  let sendersById = {};
+  if (senderIds.length > 0) {
+    const { data: senders, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, transaction_id, is_verified")
+      .in("id", senderIds);
+    if (error) console.error("Side group message senders error:", error);
+    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+  }
+  return messages.map((message) => ({ ...message, sender: sendersById[message.sender_id] || null }));
+}
+
 app.get("/api/me/purchases", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -1783,7 +1969,7 @@ app.get("/api/social-plans/me", async (request, response) => {
       .from("social_plan_members")
       .select("plan_id")
       .eq("user_id", viewer.id)
-      .in("status", ["accepted", "waiting"])
+      .in("status", ["accepted", "waiting", "removed"])
       .limit(120);
 
     if (memberError && memberError.code !== "42P01") console.error("My social plans member error:", memberError);
@@ -2101,14 +2287,14 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
 
     const { data: messages, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .select("id, plan_id, sender_id, body, created_at")
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
       .eq("plan_id", access.plan.id)
       .order("created_at", { ascending: true })
       .limit(200);
 
     if (error) {
       console.error("Social plan chat list error:", error);
-      return response.status(500).json({ error: error.code === "42P01" ? "plan_chat_table_missing" : "plan_chat_failed" });
+      return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_failed" });
     }
 
     response.json({
@@ -2139,12 +2325,12 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
       .insert({ plan_id: access.plan.id, sender_id: profile.id, body })
-      .select("id, plan_id, sender_id, body, created_at")
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
       .maybeSingle();
 
     if (error) {
       console.error("Social plan chat send error:", error);
-      return response.status(500).json({ error: error.code === "42P01" ? "plan_chat_table_missing" : "send_message_failed" });
+      return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "send_message_failed" });
     }
 
     const [enriched] = await enrichPlanChatMessages([message]);
@@ -2152,6 +2338,254 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
   } catch (error) {
     console.error("Social plan chat send fatal error:", error);
     response.status(500).json({ error: "send_message_failed" });
+  }
+});
+
+app.patch("/api/social-plans/:id/chat/:messageId", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    if (!body) return response.status(400).json({ error: "empty_message" });
+
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+    if (!canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_messages")
+      .update({ body, edited_at: new Date().toISOString() })
+      .eq("id", current.id)
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .maybeSingle();
+    if (error) throw error;
+    const [enriched] = await enrichPlanChatMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Social plan chat edit fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "edit_message_failed" });
+  }
+});
+
+app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select("id, plan_id, sender_id")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_messages")
+      .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+      .eq("id", current.id)
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .maybeSingle();
+    if (error) throw error;
+    const [enriched] = await enrichPlanChatMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Social plan chat delete fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "delete_message_failed" });
+  }
+});
+
+app.get("/api/social-plans/:id/side-group/:status", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+
+    const otherStatus = otherSideGroupStatus(access.status);
+    const merge = await getAcceptedSideMerge(access.plan.id);
+    const isMerged = Boolean(merge);
+    const statuses = isMerged ? ["waiting", "removed"] : [access.status];
+    const messageStatuses = isMerged ? ["waiting", "removed", "merged"] : [access.status];
+
+    const { data: members, error: membersError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, plan_id, user_id, gender, status, note, created_at, updated_at")
+      .eq("plan_id", access.plan.id)
+      .in("status", statuses)
+      .order("created_at", { ascending: true });
+    if (membersError) throw membersError;
+
+    const memberUserIds = [...new Set((members || []).map((member) => member.user_id).filter(Boolean))];
+    let usersById = {};
+    if (memberUserIds.length > 0) {
+      const { data: users, error: usersError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
+        .in("id", memberUserIds);
+      if (usersError) throw usersError;
+      usersById = Object.fromEntries((users || []).map((user) => [user.id, user]));
+    }
+
+    const { count: otherCount } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", access.plan.id)
+      .eq("status", otherStatus);
+
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select("id, plan_id, group_status, sender_id, body, created_at")
+      .eq("plan_id", access.plan.id)
+      .in("group_status", messageStatuses)
+      .order("created_at", { ascending: true })
+      .limit(240);
+    if (messagesError) return response.status(500).json({ error: ["42P01", "42703"].includes(messagesError.code) ? "side_groups_sql_missing" : "side_group_failed" });
+
+    const { data: mergeRequests, error: mergeError } = await supabaseAdmin
+      .from("social_plan_side_group_merges")
+      .select("id, plan_id, from_status, to_status, requester_id, status, created_at, accepted_at")
+      .eq("plan_id", access.plan.id)
+      .eq("status", "pending")
+      .or(`from_status.eq.${access.status},to_status.eq.${access.status}`)
+      .order("created_at", { ascending: false });
+    if (mergeError) return response.status(500).json({ error: ["42P01", "42703"].includes(mergeError.code) ? "side_groups_sql_missing" : "side_group_failed" });
+
+    response.json({
+      profile: transferPublicProfile(profile),
+      plan: (await enrichSocialPlans([access.plan], profile.id))[0],
+      status: access.status,
+      other_status: otherStatus,
+      other_count: Number(otherCount || 0),
+      merged: isMerged,
+      members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
+      messages: await enrichSideMessages(messages || []),
+      merge_requests: mergeRequests || [],
+    });
+  } catch (error) {
+    console.error("Side group fatal error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "side_groups_sql_missing" : "side_group_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/side-group/:status/messages", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    if (!body) return response.status(400).json({ error: "empty_message" });
+    const merge = await getAcceptedSideMerge(access.plan.id);
+    const groupStatus = merge ? "merged" : access.status;
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .insert({ plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body })
+      .select("id, plan_id, group_status, sender_id, body, created_at")
+      .maybeSingle();
+    if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_message_failed" });
+    const [enriched] = await enrichSideMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Side group message fatal error:", error);
+    response.status(500).json({ error: "side_message_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/side-group/:status/merge-request", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+    const otherStatus = otherSideGroupStatus(access.status);
+
+    const { count: otherCount } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", access.plan.id)
+      .eq("status", otherStatus);
+    if (Number(otherCount || 0) <= 0) return response.status(400).json({ error: "other_group_empty" });
+
+    const { data: requestRow, error } = await supabaseAdmin
+      .from("social_plan_side_group_merges")
+      .insert({ plan_id: access.plan.id, from_status: access.status, to_status: otherStatus, requester_id: profile.id })
+      .select("id, plan_id, from_status, to_status, requester_id, status, created_at, accepted_at")
+      .maybeSingle();
+    if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "merge_request_failed" });
+    response.json({ request: requestRow });
+  } catch (error) {
+    console.error("Side group merge request fatal error:", error);
+    response.status(500).json({ error: "merge_request_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/side-group/:status/merge-request/:requestId/accept", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+
+    const { data: merge, error: mergeError } = await supabaseAdmin
+      .from("social_plan_side_group_merges")
+      .select("id, plan_id, to_status, status")
+      .eq("id", request.params.requestId)
+      .eq("plan_id", access.plan.id)
+      .eq("to_status", access.status)
+      .eq("status", "pending")
+      .maybeSingle();
+    if (mergeError) throw mergeError;
+    if (!merge) return response.status(404).json({ error: "merge_request_not_found" });
+
+    const { data: accepted, error } = await supabaseAdmin
+      .from("social_plan_side_group_merges")
+      .update({ status: "accepted", accepted_at: new Date().toISOString() })
+      .eq("id", merge.id)
+      .select("id, plan_id, from_status, to_status, requester_id, status, created_at, accepted_at")
+      .maybeSingle();
+    if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "merge_accept_failed" });
+    response.json({ request: accepted });
+  } catch (error) {
+    console.error("Side group merge accept fatal error:", error);
+    response.status(500).json({ error: "merge_accept_failed" });
   }
 });
 
@@ -2188,17 +2622,64 @@ app.post("/api/social-plans/:id/cancel", async (request, response) => {
 
   try {
     const owner = await ensureProfileForUser(auth.user);
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .eq("id", request.params.id)
+      .eq("creator_id", owner.id)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (!existing || existing.status === "confirmed") return response.status(404).json({ error: "plan_not_found" });
+
+    const { data: acceptedMembers, error: membersError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id, user_id, created_at")
+      .eq("plan_id", existing.id)
+      .eq("status", "accepted")
+      .neq("user_id", owner.id)
+      .order("created_at", { ascending: true });
+    if (membersError) throw membersError;
+
+    if ((acceptedMembers || []).length > 0) {
+      const nextAdmin = acceptedMembers[Math.floor(Math.random() * acceptedMembers.length)];
+      const now = new Date().toISOString();
+      const { data: transferredPlan, error: transferError } = await supabaseAdmin
+        .from("social_plans")
+        .update({ creator_id: nextAdmin.user_id, updated_at: now })
+        .eq("id", existing.id)
+        .eq("creator_id", owner.id)
+        .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .maybeSingle();
+      if (transferError) throw transferError;
+      if (!transferredPlan) return response.status(404).json({ error: "plan_not_found" });
+
+      await supabaseAdmin
+        .from("social_plan_members")
+        .delete()
+        .eq("plan_id", existing.id)
+        .eq("user_id", owner.id);
+      await supabaseAdmin
+        .from("social_plan_members")
+        .insert({ plan_id: existing.id, user_id: owner.id, gender: ["woman", "man"].includes(owner.plan_gender_preference) ? owner.plan_gender_preference : "open", status: "waiting", note: "Antiguo administrador" });
+
+      response.json({
+        ok: true,
+        transferred: true,
+        message: "La administración se ha transferido y ahora estás en lista de espera.",
+        plan: (await enrichSocialPlans([transferredPlan], owner.id))[0],
+      });
+      return;
+    }
+
     const { data: plan, error } = await supabaseAdmin
       .from("social_plans")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("id", request.params.id)
+      .eq("id", existing.id)
       .eq("creator_id", owner.id)
-      .neq("status", "confirmed")
-      .select("id")
+      .select("id, creator_id, purchase_id, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw error;
-    if (!plan) return response.status(404).json({ error: "plan_not_found" });
-    response.json({ ok: true });
+    response.json({ ok: true, transferred: false, plan });
   } catch (error) {
     console.error("Cancel social plan fatal error:", error);
     response.status(500).json({ error: "cancel_plan_failed" });

@@ -299,7 +299,7 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, chatUnreadCount = 0 }) {
+      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, chatUnreadCount = 0, sideUnreadCount = 0 }) {
         const image = ticketImage(plan.purchase);
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
@@ -311,6 +311,9 @@
         const hasPreference = Number(plan.wanted_women || 0) > 0 || Number(plan.wanted_men || 0) > 0;
         const photos = planPhotos(plan);
         const canChat = plan.is_owner || plan.viewer_member?.status === "accepted";
+        const sideStatus = ["waiting", "removed"].includes(plan.viewer_member?.status) ? plan.viewer_member.status : "";
+        const sideCount = sideStatus ? Number(counts[sideStatus] || 0) : 0;
+        const canOpenSideGroup = plan.status === "confirmed" && sideStatus && sideCount >= 2;
         return (
           <article className={`overflow-hidden rounded-[32px] border bg-white/[0.055] shadow-2xl shadow-black/20 ${chatUnreadCount > 0 ? "border-coral/35 ring-1 ring-coral/25" : "border-white/10"}`}>
             <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
@@ -367,6 +370,11 @@
                   Chatear con el grupo{chatUnreadCount > 0 ? ` · +${chatUnreadCount > 9 ? "9" : chatUnreadCount}` : ""}
                 </button>
               )}
+              {canOpenSideGroup && (
+                <button className="mt-2 h-12 w-full rounded-2xl border border-sun/25 bg-sun/10 text-sm font-black text-sun" onClick={() => onSideGroup(plan, sideStatus)}>
+                  {sideStatus === "waiting" ? "Ver grupo alternativo" : "Ver grupo aparte"}{sideUnreadCount > 0 ? ` · +${sideUnreadCount > 9 ? "9" : sideUnreadCount}` : ""}
+                </button>
+              )}
             </div>
           </article>
         );
@@ -403,6 +411,7 @@
         const [status, setStatus] = React.useState("");
         const [isSaving, setIsSaving] = React.useState(false);
         const [actionToast, setActionToast] = React.useState(null);
+        const [cancelPromptPlan, setCancelPromptPlan] = React.useState(null);
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
@@ -508,8 +517,16 @@
           return chatUnreadEventsForPlan(planId).length;
         }
 
+        function sideUnreadEventsForPlan(planId, status) {
+          return notificationEvents.filter((event) => event.section === "quedar" && String(event.kind || "").startsWith("side_") && event.plan_id === planId && event.side_status === status && !readKeys.has(event.key));
+        }
+
+        function sideUnreadCountForPlan(planId, status) {
+          return sideUnreadEventsForPlan(planId, status).length;
+        }
+
         async function markQuedarSubsectionRead(subsection) {
-          const keys = unreadEventsFor(subsection).filter((event) => event.kind !== "chat").map((event) => event.key).filter(Boolean);
+          const keys = unreadEventsFor(subsection).filter((event) => event.kind !== "chat" && !String(event.kind || "").startsWith("side_")).map((event) => event.key).filter(Boolean);
           if (keys.length === 0) return;
           setReadKeys((current) => new Set([...current, ...keys]));
           const response = await fetch("/api/me/notifications/read", {
@@ -534,6 +551,19 @@
           loadNotifications();
         }
 
+        async function markSideGroupRead(planId, status) {
+          const keys = sideUnreadEventsForPlan(planId, status).map((event) => event.key).filter(Boolean);
+          if (keys.length === 0) return;
+          setReadKeys((current) => new Set([...current, ...keys]));
+          await fetch("/api/me/notifications/read", {
+            method: "POST",
+            keepalive: true,
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ keys }),
+          });
+          loadNotifications();
+        }
+
         function openPlanChat(plan) {
           if (!plan?.id) return;
           markPlanChatRead(plan.id);
@@ -542,6 +572,16 @@
             return;
           }
           window.location.href = `plan-chat.html?id=${encodeURIComponent(plan.id)}`;
+        }
+
+        function openSideGroup(plan, status) {
+          if (!plan?.id || !status) return;
+          markSideGroupRead(plan.id, status);
+          if (isEmbeddedPlans && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:side-group", id: plan.id, status }, window.location.origin);
+            return;
+          }
+          window.location.href = `side-group.html?id=${encodeURIComponent(plan.id)}&status=${encodeURIComponent(status)}`;
         }
 
         async function syncPlanPhotos(nextPhotos, options = {}) {
@@ -871,11 +911,18 @@
         }
 
         async function cancelPlan(plan) {
-          if (!window.confirm("¿Cancelar este plan?")) return;
+          if (!plan) return;
+          setCancelPromptPlan(plan);
+        }
+
+        async function confirmCancelPlan() {
+          const plan = cancelPromptPlan;
+          if (!plan) return;
           setIsSaving(true);
           try {
-            await api(`/api/social-plans/${plan.id}/cancel`, { method: "POST", body: "{}" });
-            setStatus("Plan cancelado.");
+            const data = await api(`/api/social-plans/${plan.id}/cancel`, { method: "POST", body: "{}" });
+            setStatus(data.transferred ? "Has dejado la administración. El plan sigue activo con nuevo administrador." : "Plan cancelado.");
+            setCancelPromptPlan(null);
             setDetailPlan(null);
             await reloadAll();
           } catch (error) {
@@ -969,7 +1016,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -1093,14 +1140,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} chatUnreadCount={chatUnreadCountForPlan(plan.id)} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -1460,7 +1507,9 @@
                   {detailPlan.is_owner && detailPlan.status === "open" && (
                     <div className="mt-5 grid gap-3 sm:grid-cols-3">
                       <button className="h-12 rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" disabled={isSaving} onClick={() => startEditPlan(detailPlan)}>Editar plan</button>
-                      <button className="h-12 rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral" disabled={isSaving} onClick={() => cancelPlan(detailPlan)}>Cancelar plan</button>
+                      <button className="h-12 rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral" disabled={isSaving} onClick={() => cancelPlan(detailPlan)}>
+                        {Number(detailPlan.counts?.accepted || 0) > 0 ? "Dejar admin" : "Cancelar plan"}
+                      </button>
                       <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={() => confirmPlan(detailPlan)}>Confirmar grupo</button>
                     </div>
                   )}
@@ -1489,6 +1538,36 @@
                   <p className="mt-4 text-lg font-black text-white">{actionToast.title}</p>
                   <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{actionToast.message}</p>
                 </div>
+              </div>
+            )}
+
+            {cancelPromptPlan && (
+              <div className="fixed inset-0 z-[72] grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+                <section className="w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 text-center shadow-2xl">
+                  {(() => {
+                    const acceptedCount = Number(cancelPromptPlan.counts?.accepted || 0);
+                    const hasGroup = acceptedCount > 0;
+                    return (
+                      <>
+                        <div className={`mx-auto grid h-14 w-14 place-items-center rounded-2xl text-2xl font-black ${hasGroup ? "bg-sun/15 text-sun ring-1 ring-sun/25" : "bg-coral/10 text-coral ring-1 ring-coral/25"}`}>
+                          !
+                        </div>
+                        <h2 className="mt-4 text-2xl font-black text-white">{hasGroup ? "Dejar administración" : "Cancelar plan"}</h2>
+                        <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                          {hasGroup
+                            ? "Este plan ya tiene participantes. Si continúas, no se eliminará: Donos elegirá un nuevo administrador entre las personas aceptadas y tú pasarás a lista de espera."
+                            : "Este plan todavía no tiene participantes aceptados. Si continúas, se cancelará y dejará de aparecer en Quedar."}
+                        </p>
+                        <div className="mt-5 grid grid-cols-2 gap-3">
+                          <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" disabled={isSaving} onClick={() => setCancelPromptPlan(null)}>Volver</button>
+                          <button className={`h-12 rounded-2xl text-sm font-black ${hasGroup ? "bg-sun text-ink" : "bg-coral text-white"}`} disabled={isSaving} onClick={confirmCancelPlan}>
+                            {isSaving ? "Guardando..." : hasGroup ? "Dejar admin" : "Cancelar"}
+                          </button>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </section>
               </div>
             )}
 

@@ -26,6 +26,11 @@
         window.parent.postMessage({ type: "donos:plan-chat", id: url.searchParams.get("id") }, window.location.origin);
         return;
       }
+      if (file === "side-group.html" && url.searchParams.get("id") && url.searchParams.get("status")) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:side-group", id: url.searchParams.get("id"), status: url.searchParams.get("status") }, window.location.origin);
+        return;
+      }
       if (!route) {
         if (url.origin === window.location.origin && file.endsWith(".html")) {
           event.preventDefault();

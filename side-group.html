@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donos | Grupo alternativo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166", violet: "#A78BFA" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.18)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        background:
+          radial-gradient(circle at 20% -8%, rgba(255, 209, 102, 0.18), transparent 30%),
+          radial-gradient(circle at 88% 8%, rgba(66, 242, 179, 0.15), transparent 32%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const params = new URLSearchParams(window.location.search);
+      const planId = params.get("id") || "";
+      const sideStatus = ["waiting", "removed"].includes(params.get("status")) ? params.get("status") : "waiting";
+      const isEmbedded = params.get("embedded") === "1";
+
+      function redirectToLogin() {
+        window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      }
+
+      function formatTime(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function titleForStatus(status, merged) {
+        if (merged) return "Grupo unido";
+        return status === "waiting" ? "Grupo alternativo" : "Grupo aparte";
+      }
+
+      function statusText(status) {
+        return status === "waiting" ? "En espera" : "Retirados";
+      }
+
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-3 w-3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5"><path d="m5 12 4 4L19 7" /></svg>
+          </span>
+        );
+      }
+
+      function App() {
+        const [token, setToken] = React.useState("");
+        const [profile, setProfile] = React.useState(null);
+        const [plan, setPlan] = React.useState(null);
+        const [members, setMembers] = React.useState([]);
+        const [messages, setMessages] = React.useState([]);
+        const [mergeRequests, setMergeRequests] = React.useState([]);
+        const [merged, setMerged] = React.useState(false);
+        const [otherCount, setOtherCount] = React.useState(0);
+        const [draft, setDraft] = React.useState("");
+        const [status, setStatus] = React.useState("Cargando grupo...");
+        const [isSaving, setIsSaving] = React.useState(false);
+        const listRef = React.useRef(null);
+
+        React.useEffect(() => { bootstrap(); }, []);
+        React.useEffect(() => {
+          if (!token) return undefined;
+          const timer = window.setInterval(() => loadGroup(token, true), 2500);
+          return () => window.clearInterval(timer);
+        }, [token]);
+        React.useEffect(() => {
+          window.setTimeout(() => {
+            if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+          }, 40);
+        }, [messages.length]);
+        React.useEffect(() => {
+          function handleMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === "donos:refresh-side-group") loadGroup(token, true);
+          }
+          window.addEventListener("message", handleMessage);
+          return () => window.removeEventListener("message", handleMessage);
+        }, [token]);
+
+        async function bootstrap() {
+          const { data } = await supabaseClient.auth.getSession();
+          const accessToken = data.session?.access_token;
+          if (!accessToken) return redirectToLogin();
+          setToken(accessToken);
+          await loadGroup(accessToken);
+        }
+
+        async function loadGroup(accessToken = token, silent = false) {
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "side_group_failed");
+            setProfile(data.profile || null);
+            setPlan(data.plan || null);
+            setMembers(data.members || []);
+            setMessages(data.messages || []);
+            setMergeRequests(data.merge_requests || []);
+            setMerged(Boolean(data.merged));
+            setOtherCount(Number(data.other_count || 0));
+            setStatus("");
+            markSideNotificationsRead(accessToken);
+          } catch (error) {
+            if (!silent) setStatus(error.message === "side_groups_sql_missing" ? "Falta ejecutar supabase-side-groups.sql en Supabase." : "No se ha podido cargar este grupo.");
+          }
+        }
+
+        async function markSideNotificationsRead(accessToken = token) {
+          if (!accessToken || !planId || !sideStatus) return;
+          try {
+            const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${accessToken}` } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) return;
+            const keys = (data.events || [])
+              .filter((event) => event.section === "quedar" && String(event.kind || "").startsWith("side_") && event.plan_id === planId && event.side_status === sideStatus && !event.read)
+              .map((event) => event.key)
+              .filter(Boolean);
+            if (keys.length === 0) return;
+            await fetch("/api/me/notifications/read", {
+              method: "POST",
+              keepalive: true,
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+              body: JSON.stringify({ keys }),
+            });
+          } catch (_error) {}
+        }
+
+        function goBack(event) {
+          event.preventDefault();
+          if (isEmbedded && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:navigate", route: "quedar" }, window.location.origin);
+            return;
+          }
+          window.location.href = "plans.html?tab=joined";
+        }
+
+        async function sendMessage(event) {
+          event.preventDefault();
+          const body = draft.trim();
+          if (!body || isSaving) return;
+          const temp = { id: `tmp-${Date.now()}`, sender_id: profile?.id, body, created_at: new Date().toISOString(), sender: profile, pending: true };
+          setDraft("");
+          setMessages((current) => [...current, temp]);
+          setIsSaving(true);
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/messages`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ body }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "side_message_failed");
+            setMessages((current) => [...current.filter((item) => item.id !== temp.id), data.message]);
+            await loadGroup(token, true);
+          } catch (_error) {
+            setMessages((current) => current.filter((item) => item.id !== temp.id));
+            setDraft(body);
+            setStatus("No se ha podido enviar el mensaje.");
+          } finally {
+            setIsSaving(false);
+          }
+        }
+
+        async function proposeMerge() {
+          setIsSaving(true);
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/merge-request`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "merge_request_failed");
+            setStatus("Solicitud enviada al otro grupo.");
+            await loadGroup(token, true);
+          } catch (_error) {
+            setStatus("No se ha podido enviar la solicitud.");
+          } finally {
+            setIsSaving(false);
+          }
+        }
+
+        async function acceptMerge(requestId) {
+          setIsSaving(true);
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/merge-request/${requestId}/accept`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "merge_accept_failed");
+            setStatus("Grupos unidos correctamente.");
+            await loadGroup(token, true);
+          } catch (_error) {
+            setStatus("No se ha podido unir los grupos.");
+          } finally {
+            setIsSaving(false);
+          }
+        }
+
+        const receivedRequests = mergeRequests.filter((request) => request.to_status === sideStatus);
+        const sentRequests = mergeRequests.filter((request) => request.from_status === sideStatus);
+
+        return (
+          <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-4 pt-4 sm:px-6">
+            <header className="sticky top-0 z-20 -mx-4 border-b border-white/10 bg-[#080C16]/88 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6">
+              <div className="flex items-center gap-3">
+                <a className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-2xl font-black text-white ring-1 ring-white/10" href="plans.html?tab=joined" onClick={goBack}>‹</a>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-sun">{statusText(sideStatus)}</p>
+                  <h1 className="truncate text-xl font-black text-white">{titleForStatus(sideStatus, merged)}</h1>
+                </div>
+                <span className="rounded-full bg-sun/10 px-3 py-2 text-xs font-black text-sun ring-1 ring-sun/20">{members.length}</span>
+              </div>
+              <p className="mt-3 rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold leading-5 text-slate-300">
+                {merged ? "Los grupos alternativos se han unido. Podéis organizaros juntos sin entrar en el grupo principal." : "Este espacio es solo para personas que no entraron en el grupo principal."}
+              </p>
+            </header>
+
+            {status && <p className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4 text-sm font-black leading-6 text-slate-300">{status}</p>}
+
+            <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {members.map((member) => (
+                <article key={member.id} className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055]">
+                  <div className="flex gap-2 overflow-x-auto bg-black/20 p-2">
+                    {(member.user?.plan_photo_data_urls || []).slice(0, 2).map((photo, index) => <img key={index} className="h-28 w-24 shrink-0 rounded-[22px] object-cover" src={photo} alt="" />)}
+                    {(!member.user?.plan_photo_data_urls || member.user.plan_photo_data_urls.length === 0) && <div className="grid h-28 w-full place-items-center text-xs font-bold text-slate-500">Sin fotos</div>}
+                  </div>
+                  <div className="p-3">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-sm font-black text-white">{member.user?.display_name || "Usuario"}</p>
+                      {member.user?.is_verified && <VerifiedBadge />}
+                    </div>
+                    <p className="mt-1 text-xs font-bold text-slate-500">{statusText(member.status)}</p>
+                  </div>
+                </article>
+              ))}
+            </section>
+
+            {!merged && otherCount > 0 && (
+              <section className="mt-4 rounded-[30px] border border-sun/20 bg-sun/10 p-4">
+                <p className="text-sm font-black text-white">Unir grupos</p>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-300">Hay {otherCount} persona(s) en el otro grupo alternativo. Podéis proponer uniros para organizaros juntos.</p>
+                {receivedRequests.length > 0 ? (
+                  <button className="mt-3 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={() => acceptMerge(receivedRequests[0].id)}>Aceptar unión</button>
+                ) : sentRequests.length > 0 ? (
+                  <p className="mt-3 rounded-2xl bg-black/20 px-3 py-2 text-xs font-black text-sun">Solicitud enviada. Esperando respuesta.</p>
+                ) : (
+                  <button className="mt-3 h-12 w-full rounded-2xl bg-sun text-sm font-black text-ink" disabled={isSaving} onClick={proposeMerge}>Proponer unir grupos</button>
+                )}
+              </section>
+            )}
+
+            <section ref={listRef} className="min-h-[260px] flex-1 overflow-y-auto py-5">
+              <div className="space-y-3">
+                {messages.map((message) => {
+                  const mine = message.sender_id === profile?.id;
+                  return (
+                    <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                      <article className={`max-w-[82%] rounded-[28px] px-4 py-3 shadow-2xl shadow-black/10 ${mine ? "rounded-br-md bg-sun text-ink" : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"}`}>
+                        {!mine && <p className="mb-1 text-xs font-black text-sun">{message.sender?.display_name || "Usuario Donos"}</p>}
+                        <p className="break-words text-sm font-bold leading-6">{message.body}</p>
+                        <p className={`mt-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>{message.pending ? "Enviando..." : formatTime(message.created_at)}</p>
+                      </article>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <form className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#080C16]/90 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6" onSubmit={sendMessage}>
+              <div className="flex items-end gap-2 rounded-[28px] border border-white/10 bg-white/[0.055] p-2">
+                <textarea className="max-h-32 min-h-12 flex-1 resize-none bg-transparent px-3 py-3 text-sm font-bold text-white outline-none placeholder:text-slate-500" value={draft} rows="1" onChange={(event) => setDraft(event.target.value)} placeholder="Escribe al grupo..." />
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sun text-xl font-black text-ink disabled:opacity-50" disabled={isSaving || !draft.trim()} type="submit">↑</button>
+              </div>
+            </form>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
