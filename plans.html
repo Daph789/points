@@ -313,7 +313,7 @@
         const canChat = plan.is_owner || plan.viewer_member?.status === "accepted";
         const sideStatus = ["waiting", "removed"].includes(plan.viewer_member?.status) ? plan.viewer_member.status : "";
         const sideCount = sideStatus ? Number(counts[sideStatus] || 0) : 0;
-        const canOpenSideGroup = plan.status === "confirmed" && sideStatus && sideCount >= 2;
+        const canOpenSideGroup = plan.status === "confirmed" && sideStatus;
         return (
           <article className={`overflow-hidden rounded-[32px] border bg-white/[0.055] shadow-2xl shadow-black/20 ${chatUnreadCount > 0 ? "border-coral/35 ring-1 ring-coral/25" : "border-white/10"}`}>
             <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
