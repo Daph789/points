@@ -1798,12 +1798,23 @@ async function enrichPlanChatMessages(messages = []) {
   let sendersById = {};
   let readsByMessageId = {};
   if (senderIds.length > 0) {
-    const { data: senders, error } = await supabaseAdmin
+    let { data: senders, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, transaction_id, is_verified")
+      .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
       .in("id", senderIds);
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, transaction_id, is_verified")
+        .in("id", senderIds);
+      senders = fallback.data;
+      error = fallback.error;
+    }
     if (error) console.error("Social plan chat senders error:", error);
-    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, {
+      ...transferPublicProfile(profile),
+      plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+    }]));
   }
   if (messageIds.length > 0) {
     const { data: reads, error } = await supabaseAdmin
@@ -1817,12 +1828,23 @@ async function enrichPlanChatMessages(messages = []) {
       const readerIds = [...new Set((reads || []).map((read) => read.reader_id).filter(Boolean))];
       let readersById = {};
       if (readerIds.length > 0) {
-        const { data: readers, error: readersError } = await supabaseAdmin
+        let { data: readers, error: readersError } = await supabaseAdmin
           .from("profiles")
-          .select("id, display_name, email, transaction_id, is_verified")
+          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
           .in("id", readerIds);
+        if (readersError?.code === "42703") {
+          const fallback = await supabaseAdmin
+            .from("profiles")
+            .select("id, display_name, email, transaction_id, is_verified")
+            .in("id", readerIds);
+          readers = fallback.data;
+          readersError = fallback.error;
+        }
         if (readersError) console.error("Social plan chat readers error:", readersError);
-        readersById = Object.fromEntries((readers || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+        readersById = Object.fromEntries((readers || []).map((profile) => [profile.id, {
+          ...transferPublicProfile(profile),
+          plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+        }]));
       }
       for (const read of reads || []) {
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
@@ -1892,16 +1914,86 @@ async function getAcceptedSideMerge(planId) {
 
 async function enrichSideMessages(messages = []) {
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
+  const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
+  let readsByMessageId = {};
   if (senderIds.length > 0) {
-    const { data: senders, error } = await supabaseAdmin
+    let { data: senders, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, transaction_id, is_verified")
+      .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
       .in("id", senderIds);
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, transaction_id, is_verified")
+        .in("id", senderIds);
+      senders = fallback.data;
+      error = fallback.error;
+    }
     if (error) console.error("Side group message senders error:", error);
-    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+    sendersById = Object.fromEntries((senders || []).map((profile) => [profile.id, {
+      ...transferPublicProfile(profile),
+      plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+    }]));
   }
-  return messages.map((message) => ({ ...message, sender: sendersById[message.sender_id] || null }));
+  if (messageIds.length > 0) {
+    const { data: reads, error } = await supabaseAdmin
+      .from("social_plan_side_group_message_reads")
+      .select("message_id, reader_id, read_at")
+      .in("message_id", messageIds)
+      .order("read_at", { ascending: true });
+    if (error) {
+      if (!["42P01", "42703"].includes(error.code)) console.error("Side group message reads error:", error);
+    } else {
+      const readerIds = [...new Set((reads || []).map((read) => read.reader_id).filter(Boolean))];
+      let readersById = {};
+      if (readerIds.length > 0) {
+        let { data: readers, error: readersError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .in("id", readerIds);
+        if (readersError?.code === "42703") {
+          const fallback = await supabaseAdmin
+            .from("profiles")
+            .select("id, display_name, email, transaction_id, is_verified")
+            .in("id", readerIds);
+          readers = fallback.data;
+          readersError = fallback.error;
+        }
+        if (readersError) console.error("Side group readers error:", readersError);
+        readersById = Object.fromEntries((readers || []).map((profile) => [profile.id, {
+          ...transferPublicProfile(profile),
+          plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+        }]));
+      }
+      for (const read of reads || []) {
+        if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
+        readsByMessageId[read.message_id].push({
+          read_at: read.read_at,
+          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donos" },
+        });
+      }
+    }
+  }
+  return messages.map((message) => ({ ...message, sender: sendersById[message.sender_id] || null, read_by: readsByMessageId[message.id] || [] }));
+}
+
+async function markSideGroupMessagesRead(messages = [], planId, readerId) {
+  const readableMessages = (messages || []).filter((message) => message.sender_id !== readerId && !message.deleted_at);
+  if (readableMessages.length === 0) return;
+  const now = new Date().toISOString();
+  const rows = readableMessages.map((message) => ({
+    message_id: message.id,
+    plan_id: planId,
+    reader_id: readerId,
+    read_at: now,
+  }));
+  const { error } = await supabaseAdmin
+    .from("social_plan_side_group_message_reads")
+    .upsert(rows, { onConflict: "message_id,reader_id" });
+  if (error && !["42P01", "42703"].includes(error.code)) {
+    console.error("Side group read receipt error:", error);
+  }
 }
 
 app.get("/api/me/purchases", async (request, response) => {
@@ -2509,12 +2601,13 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
 
     const { data: messages, error: messagesError } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .select("id, plan_id, group_status, sender_id, body, created_at")
+      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
       .eq("plan_id", access.plan.id)
       .in("group_status", messageStatuses)
       .order("created_at", { ascending: true })
       .limit(240);
     if (messagesError) return response.status(500).json({ error: ["42P01", "42703"].includes(messagesError.code) ? "side_groups_sql_missing" : "side_group_failed" });
+    await markSideGroupMessagesRead(messages || [], access.plan.id, profile.id);
 
     const { data: mergeRequests, error: mergeError } = await supabaseAdmin
       .from("social_plan_side_group_merges")
@@ -2560,7 +2653,7 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
       .insert({ plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body })
-      .select("id, plan_id, group_status, sender_id, body, created_at")
+      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
       .maybeSingle();
     if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_message_failed" });
     const [enriched] = await enrichSideMessages([message]);
@@ -2568,6 +2661,80 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
   } catch (error) {
     console.error("Side group message fatal error:", error);
     response.status(500).json({ error: "side_message_failed" });
+  }
+});
+
+app.patch("/api/social-plans/:id/side-group/:status/messages/:messageId", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    if (!body) return response.status(400).json({ error: "empty_message" });
+
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+    if (!canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .update({ body, edited_at: new Date().toISOString() })
+      .eq("id", current.id)
+      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .maybeSingle();
+    if (error) throw error;
+    const [enriched] = await enrichSideMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Side group edit fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "edit_message_failed" });
+  }
+});
+
+app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(403).json({ error: access.reason });
+
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select("id, plan_id, sender_id")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (currentError) throw currentError;
+    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+
+    const { data: message, error } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+      .eq("id", current.id)
+      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .maybeSingle();
+    if (error) throw error;
+    const [enriched] = await enrichSideMessages([message]);
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Side group delete fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "delete_message_failed" });
   }
 });
 

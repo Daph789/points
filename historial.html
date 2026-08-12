@@ -332,8 +332,8 @@
         const title = isRequest
           ? movement.status === "pending"
             ? isOut
-              ? `Solicitud de ${otherName}`
-              : `Pedido a ${otherName}`
+              ? `${otherName} te pide ${movement.points || 0} puntos`
+              : `Pediste ${movement.points || 0} puntos a ${otherName}`
             : movement.status === "declined"
               ? isOut
                 ? `Solicitud rechazada`
@@ -347,8 +347,8 @@
         const directionText = isRequest
           ? movement.status === "pending"
             ? isOut
-              ? "Te está pidiendo puntos"
-              : "Solicitud enviada"
+              ? `${movement.points || 0} puntos solicitados`
+              : "Solicitud enviada · pendiente de pago"
             : movement.status === "declined"
               ? "Solicitud rechazada"
               : isOut
@@ -382,10 +382,10 @@
                 {movement.note && <p className="mt-2 max-w-full truncate rounded-2xl bg-black/20 px-3 py-2 text-xs font-bold text-slate-300">{movement.note}</p>}
               </div>
               <div className="flex min-w-[74px] flex-col items-end gap-1">
-                <p className={`inline-flex min-h-11 min-w-[70px] items-center justify-center rounded-2xl px-3 text-center text-base font-black ${pointsToneClass}`}>
-                  {movement.status === "declined" ? "No" : movement.status === "pending" ? "Pend." : `${pointsSign}${movement.points || 0}`}
+                <p className={`inline-flex min-h-11 min-w-[78px] items-center justify-center rounded-2xl px-3 text-center text-base font-black ${pointsToneClass}`}>
+                  {movement.status === "declined" ? "No" : movement.status === "pending" ? `${movement.points || 0}` : `${pointsSign}${movement.points || 0}`}
                 </p>
-                <p className="text-[11px] font-black text-slate-500">ptos.</p>
+                <p className="text-[11px] font-black text-slate-500">{movement.status === "pending" ? "pendiente" : "ptos."}</p>
               </div>
             </div>
             {isPendingRequestToMe && (
@@ -430,6 +430,7 @@
         const [search, setSearch] = React.useState("");
         const [incomingFilter, setIncomingFilter] = React.useState("all");
         const [stockFilter, setStockFilter] = React.useState(0);
+        const [pointFilter, setPointFilter] = React.useState("all");
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
@@ -444,6 +445,7 @@
         function selectHistoryMode(nextMode) {
           setMode(nextMode);
           setSearch("");
+          if (nextMode !== "points") setPointFilter("all");
           scrollToHistoryContent();
         }
 
@@ -646,7 +648,15 @@
           })
           .sort((a, b) => getRemainingStock(a) - getRemainingStock(b));
 
-        const filteredPointMovements = pointMovements.filter((movement) => {
+        const pointMovementBase = pointMovements.filter((movement) => {
+          if (pointFilter === "sent") return movement.transfer_type === "send" && movement.from_profile_id === profileId;
+          if (pointFilter === "received") return movement.transfer_type === "send" && movement.to_profile_id === profileId;
+          if (pointFilter === "requests_in") return movement.transfer_type === "request" && movement.from_profile_id === profileId;
+          if (pointFilter === "requests_out") return movement.transfer_type === "request" && movement.to_profile_id === profileId;
+          return true;
+        });
+
+        const filteredPointMovements = pointMovementBase.filter((movement) => {
           const query = search.trim().toLowerCase();
           if (!query) return true;
           return [
@@ -1116,6 +1126,25 @@
                     {movementStatus}
                   </div>
                 )}
+                <div className="mt-4 flex snap-x gap-2 overflow-x-auto pb-1">
+                  {[
+                    ["all", "Todo", pointMovements.length],
+                    ["sent", "Enviados", pointMovements.filter((item) => item.transfer_type === "send" && item.from_profile_id === profileId).length],
+                    ["received", "Recibidos", pointMovements.filter((item) => item.transfer_type === "send" && item.to_profile_id === profileId).length],
+                    ["requests_in", "Me piden", pointMovements.filter((item) => item.transfer_type === "request" && item.from_profile_id === profileId).length],
+                    ["requests_out", "Pedí", pointMovements.filter((item) => item.transfer_type === "request" && item.to_profile_id === profileId).length],
+                  ].map(([value, label, count]) => (
+                    <button
+                      key={value}
+                      className={`snap-start whitespace-nowrap rounded-2xl px-4 py-3 text-xs font-black transition ${
+                        pointFilter === value ? "bg-mint text-ink shadow-glow" : "bg-white/[0.065] text-slate-300 ring-1 ring-white/10"
+                      }`}
+                      onClick={() => setPointFilter(value)}
+                    >
+                      {label} · {count}
+                    </button>
+                  ))}
+                </div>
                 {unreadCount("points") > 0 && (
                   <button className="mt-3 h-10 rounded-2xl bg-white/[0.08] px-4 text-xs font-black text-slate-200 ring-1 ring-white/10" onClick={() => markSubsectionRead("points")}>
                     Marcar movimientos como leídos

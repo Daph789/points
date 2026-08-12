@@ -15,6 +15,24 @@ create index if not exists social_plan_side_group_messages_plan_idx
 create index if not exists social_plan_side_group_messages_sender_idx
   on public.social_plan_side_group_messages(sender_id, created_at desc);
 
+alter table public.social_plan_side_group_messages
+  add column if not exists edited_at timestamptz,
+  add column if not exists deleted_at timestamptz;
+
+create table if not exists public.social_plan_side_group_message_reads (
+  message_id uuid not null references public.social_plan_side_group_messages(id) on delete cascade,
+  plan_id uuid not null references public.social_plans(id) on delete cascade,
+  reader_id uuid not null references public.profiles(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (message_id, reader_id)
+);
+
+create index if not exists social_plan_side_group_message_reads_plan_idx
+  on public.social_plan_side_group_message_reads(plan_id, read_at desc);
+
+create index if not exists social_plan_side_group_message_reads_reader_idx
+  on public.social_plan_side_group_message_reads(reader_id, read_at desc);
+
 create table if not exists public.social_plan_side_group_merges (
   id uuid primary key default gen_random_uuid(),
   plan_id uuid not null references public.social_plans(id) on delete cascade,
@@ -33,8 +51,9 @@ create index if not exists social_plan_side_group_merges_plan_idx
   on public.social_plan_side_group_merges(plan_id, status, created_at desc);
 
 alter table public.social_plan_side_group_messages enable row level security;
+alter table public.social_plan_side_group_message_reads enable row level security;
 alter table public.social_plan_side_group_merges enable row level security;
 
 notify pgrst, 'reload schema';
 
-select 'side_groups listo' as status;
+select 'side_groups con chat completo listo' as status;

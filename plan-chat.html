@@ -103,6 +103,15 @@
         );
       }
 
+      function Avatar({ user, mine = false }) {
+        const photo = user?.plan_photo_data_urls?.[0];
+        return (
+          <span className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-2xl text-xs font-black ${mine ? "bg-mint text-ink" : "bg-white/[0.08] text-white ring-1 ring-white/10"}`}>
+            {photo ? <img className="h-full w-full object-cover" src={photo} alt="" /> : String(user?.display_name || "D").slice(0, 1).toUpperCase()}
+          </span>
+        );
+      }
+
       function mergeMessagesWithPending(serverMessages, currentMessages) {
         const confirmed = Array.isArray(serverMessages) ? serverMessages : [];
         const confirmedBodies = new Set(confirmed.map((message) => `${message.sender_id || ""}:${message.body || ""}`));
@@ -123,6 +132,7 @@
         const [isSending, setIsSending] = React.useState(false);
         const [selectedMessage, setSelectedMessage] = React.useState(null);
         const [readListMessage, setReadListMessage] = React.useState(null);
+        const [showParticipants, setShowParticipants] = React.useState(false);
         const [editingMessage, setEditingMessage] = React.useState(null);
         const [editDraft, setEditDraft] = React.useState("");
         const [messageToDelete, setMessageToDelete] = React.useState(null);
@@ -306,11 +316,18 @@
                   <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Chat del grupo</p>
                   <h1 className="truncate text-xl font-black text-white">{plan ? planTitle(plan) : "Quedar"}</h1>
                 </div>
-                <span className="rounded-full bg-mint/10 px-3 py-2 text-xs font-black text-mint ring-1 ring-mint/20">En directo</span>
+                <button className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-white ring-1 ring-white/10" onClick={() => setShowParticipants(true)} aria-label="Ver participantes">
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+                    <circle cx="9.5" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                </button>
               </div>
               {plan?.creator && (
                 <div className="mt-3 flex items-center gap-2 overflow-hidden rounded-2xl bg-white/[0.055] px-3 py-2">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-mint text-sm font-black text-ink">{String(plan.creator.display_name || "D").slice(0, 1).toUpperCase()}</span>
+                  <Avatar user={plan.creator} mine />
                   <p className="truncate text-xs font-bold text-slate-300">Creado por <span className="text-white">{plan.creator.display_name || "Usuario Donos"}</span></p>
                   {plan.creator.is_verified && verifiedBadge()}
                 </div>
@@ -332,9 +349,10 @@
                 {messages.map((message) => {
                   const mine = message.sender_id === profile?.id;
                   return (
-                    <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                    <div key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                      {!mine && <Avatar user={message.sender} />}
                       <article
-                        className={`max-w-[82%] rounded-[28px] px-4 py-3 shadow-2xl shadow-black/10 ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
+                        className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
                         mine
                           ? "rounded-br-md bg-mint text-ink"
                           : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"
@@ -347,12 +365,13 @@
                             {message.sender?.is_verified && verifiedBadge()}
                           </div>
                         )}
-                        <p className={`whitespace-pre-wrap break-words text-sm font-bold leading-6 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
+                        <p className={`whitespace-pre-wrap break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                         <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
                           <span>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
                           {mine && !message.deleted_at && <ReadTicks message={message} />}
                         </p>
                       </article>
+                      {mine && <Avatar user={profile} mine />}
                     </div>
                   );
                 })}
@@ -443,6 +462,34 @@
                         <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Cuando alguien del grupo abra el chat, aparecerá aquí.</p>
                       </div>
                     )}
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {showParticipants && (
+              <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 px-4 pb-5 backdrop-blur-sm" onClick={() => setShowParticipants(false)}>
+                <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Participantes</p>
+                      <h2 className="mt-1 text-2xl font-black text-white">Miembros del chat</h2>
+                    </div>
+                    <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setShowParticipants(false)}>×</button>
+                  </div>
+                  <div className="mt-4 max-h-[58vh] space-y-2 overflow-y-auto pr-1">
+                    {[plan?.creator, ...(plan?.members || []).filter((member) => member.status === "accepted").map((member) => member.user)].filter(Boolean).map((user, index) => (
+                      <div key={`${user.id || index}-${index}`} className="flex items-center gap-3 rounded-3xl bg-white/[0.055] p-3 ring-1 ring-white/10">
+                        <Avatar user={user} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-black text-white">{user.display_name || "Usuario Donos"}</p>
+                            {user.is_verified && verifiedBadge()}
+                          </div>
+                          <p className="truncate text-xs font-bold text-slate-500">{index === 0 ? "Creador/a del plan" : user.transaction_id || "Participante aceptado"}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               </div>
