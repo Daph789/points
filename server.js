@@ -211,7 +211,7 @@ async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
-  const profileColumns = `${baseProfileColumns}, plan_gender_preference`;
+  const profileColumns = `${baseProfileColumns}, plan_gender_preference, plan_photo_data_url`;
   let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -2440,7 +2440,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
     await markPlanChatMessagesRead(messages || [], access.plan.id, profile.id);
 
     response.json({
-      profile: transferPublicProfile(profile),
+      profile: privatePlanProfile(profile),
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
       messages: await enrichPlanChatMessages(messages || []),
     });
@@ -2619,7 +2619,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
     if (mergeError) return response.status(500).json({ error: ["42P01", "42703"].includes(mergeError.code) ? "side_groups_sql_missing" : "side_group_failed" });
 
     response.json({
-      profile: transferPublicProfile(profile),
+      profile: privatePlanProfile(profile),
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
       status: access.status,
       other_status: otherStatus,

@@ -97,9 +97,19 @@
 
       function mergeMessagesWithPending(serverMessages, currentMessages) {
         const confirmed = Array.isArray(serverMessages) ? serverMessages : [];
-        const confirmedBodies = new Set(confirmed.map((message) => `${message.sender_id || ""}:${message.body || ""}`));
-        const pending = (Array.isArray(currentMessages) ? currentMessages : []).filter((message) => message.pending && !confirmedBodies.has(`${message.sender_id || ""}:${message.body || ""}`));
-        return [...confirmed, ...pending];
+        const current = Array.isArray(currentMessages) ? currentMessages : [];
+        const currentById = new Map(current.filter((message) => message.id).map((message) => [message.id, message]));
+        const confirmedIds = new Set(confirmed.map((message) => message.id).filter(Boolean));
+        const hydratedConfirmed = confirmed.map((message) => {
+          const local = currentById.get(message.id);
+          return local?.local_key ? { ...message, local_key: local.local_key } : message;
+        });
+        const localStillNeeded = current.filter((message) => {
+          if (message.pending) return Date.now() - new Date(message.created_at).getTime() < 30000;
+          if (!message.local_confirmed_at || confirmedIds.has(message.id)) return false;
+          return Date.now() - new Date(message.local_confirmed_at).getTime() < 30000;
+        });
+        return [...hydratedConfirmed, ...localStillNeeded];
       }
 
       function App() {
@@ -120,9 +130,17 @@
         const [editingMessage, setEditingMessage] = React.useState(null);
         const [editDraft, setEditDraft] = React.useState("");
         const [messageToDelete, setMessageToDelete] = React.useState(null);
+        const [showIntro, setShowIntro] = React.useState(false);
         const listRef = React.useRef(null);
 
         React.useEffect(() => { bootstrap(); }, []);
+        React.useEffect(() => {
+          const introKey = `donos-side-group-intro-${planId}-${sideStatus}`;
+          if (!window.localStorage.getItem(introKey)) {
+            setShowIntro(true);
+            window.localStorage.setItem(introKey, "1");
+          }
+        }, []);
         React.useEffect(() => {
           if (!token) return undefined;
           const timer = window.setInterval(() => loadGroup(token, true), 2500);
@@ -202,7 +220,8 @@
           event.preventDefault();
           const body = draft.trim();
           if (!body || isSaving) return;
-          const temp = { id: `tmp-${Date.now()}`, sender_id: profile?.id, body, created_at: new Date().toISOString(), sender: profile, pending: true, read_by: [] };
+          const tempId = `tmp-${Date.now()}`;
+          const temp = { id: tempId, local_key: tempId, sender_id: profile?.id, body, created_at: new Date().toISOString(), sender: profile, pending: true, read_by: [] };
           setDraft("");
           setMessages((current) => [...current, temp]);
           setIsSaving(true);
@@ -214,8 +233,8 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "side_message_failed");
-            setMessages((current) => [...current.filter((item) => item.id !== temp.id), data.message]);
-            await loadGroup(token, true);
+            setMessages((current) => current.map((item) => item.id === temp.id ? { ...data.message, local_key: tempId, local_confirmed_at: new Date().toISOString() } : item));
+            window.setTimeout(() => loadGroup(token, true), 450);
           } catch (_error) {
             setMessages((current) => current.filter((item) => item.id !== temp.id));
             setDraft(body);
@@ -320,9 +339,6 @@
                   </svg>
                 </button>
               </div>
-              <p className="mt-3 rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold leading-5 text-slate-300">
-                {merged ? "Los grupos alternativos se han unido. Podéis veros, hablar y organizaros juntos sin entrar en el grupo principal." : "Este espacio muestra las personas de tu mismo estado. Puedes ver sus fotos, chatear y proponer unir grupos si hay otra gente disponible."}
-              </p>
             </header>
 
             {status && <p className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4 text-sm font-black leading-6 text-slate-300">{status}</p>}
@@ -364,7 +380,7 @@
                 {messages.map((message) => {
                   const mine = message.sender_id === profile?.id;
                   return (
-                    <div key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                    <div key={message.local_key || message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                       {!mine && <Avatar user={message.sender} />}
                       <article
                         className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${mine ? "rounded-br-md bg-sun text-ink" : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"} ${message.deleted_at ? "opacity-70" : ""}`}
@@ -510,6 +526,19 @@
                       </div>
                     ))}
                   </div>
+                </section>
+              </div>
+            )}
+
+            {showIntro && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+                <section className="w-full max-w-md rounded-[34px] border border-sun/20 bg-[#0D111D] p-5 text-center shadow-2xl">
+                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-sun text-2xl font-black text-ink">i</div>
+                  <h2 className="mt-4 text-2xl font-black text-white">{merged ? "Grupo unido" : titleForStatus(sideStatus, merged)}</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                    {merged ? "Podéis veros, hablar y organizaros juntos sin entrar en el grupo principal." : "Aquí ves la gente de tu mismo estado. Puedes chatear y, si hay otro grupo disponible, proponer unirlos."}
+                  </p>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-sun text-sm font-black text-ink" onClick={() => setShowIntro(false)}>Entendido</button>
                 </section>
               </div>
             )}

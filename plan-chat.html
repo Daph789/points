@@ -114,12 +114,19 @@
 
       function mergeMessagesWithPending(serverMessages, currentMessages) {
         const confirmed = Array.isArray(serverMessages) ? serverMessages : [];
-        const confirmedBodies = new Set(confirmed.map((message) => `${message.sender_id || ""}:${message.body || ""}`));
-        const pending = (Array.isArray(currentMessages) ? currentMessages : []).filter((message) => {
-          if (!message.pending) return false;
-          return !confirmedBodies.has(`${message.sender_id || ""}:${message.body || ""}`);
+        const current = Array.isArray(currentMessages) ? currentMessages : [];
+        const currentById = new Map(current.filter((message) => message.id).map((message) => [message.id, message]));
+        const confirmedIds = new Set(confirmed.map((message) => message.id).filter(Boolean));
+        const hydratedConfirmed = confirmed.map((message) => {
+          const local = currentById.get(message.id);
+          return local?.local_key ? { ...message, local_key: local.local_key } : message;
         });
-        return [...confirmed, ...pending];
+        const localStillNeeded = current.filter((message) => {
+          if (message.pending) return Date.now() - new Date(message.created_at).getTime() < 30000;
+          if (!message.local_confirmed_at || confirmedIds.has(message.id)) return false;
+          return Date.now() - new Date(message.local_confirmed_at).getTime() < 30000;
+        });
+        return [...hydratedConfirmed, ...localStillNeeded];
       }
 
       function App() {
@@ -136,10 +143,19 @@
         const [editingMessage, setEditingMessage] = React.useState(null);
         const [editDraft, setEditDraft] = React.useState("");
         const [messageToDelete, setMessageToDelete] = React.useState(null);
+        const [showIntro, setShowIntro] = React.useState(false);
         const listRef = React.useRef(null);
 
         React.useEffect(() => {
           bootstrap();
+        }, []);
+
+        React.useEffect(() => {
+          const introKey = `donos-plan-chat-intro-${planId}`;
+          if (!window.localStorage.getItem(introKey)) {
+            setShowIntro(true);
+            window.localStorage.setItem(introKey, "1");
+          }
         }, []);
 
         React.useEffect(() => {
@@ -226,21 +242,20 @@
           const body = draft.trim();
           if (!body || isSending) return;
           const temporaryId = `temp-${Date.now()}`;
+          const optimisticMessage = {
+            id: temporaryId,
+            local_key: temporaryId,
+            plan_id: planId,
+            sender_id: profile?.id,
+            body,
+            created_at: new Date().toISOString(),
+            sender: profile,
+            pending: true,
+            read_by: [],
+          };
           setIsSending(true);
           setDraft("");
-          setMessages((current) => [
-            ...current,
-            {
-              id: temporaryId,
-              plan_id: planId,
-              sender_id: profile?.id,
-              body,
-              created_at: new Date().toISOString(),
-              sender: profile,
-              pending: true,
-              read_by: [],
-            },
-          ]);
+          setMessages((current) => [...current, optimisticMessage]);
           try {
             const response = await fetch(`/api/social-plans/${planId}/chat`, {
               method: "POST",
@@ -249,9 +264,9 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "send_message_failed");
-            setMessages((current) => [...current.filter((item) => item.id !== temporaryId && item.id !== data.message?.id), data.message].filter(Boolean));
+            setMessages((current) => current.map((item) => item.id === temporaryId ? { ...data.message, local_key: temporaryId, local_confirmed_at: new Date().toISOString() } : item).filter(Boolean));
             setStatus("");
-            await loadChat(token, true);
+            window.setTimeout(() => loadChat(token, true), 450);
           } catch (error) {
             setMessages((current) => current.filter((item) => item.id !== temporaryId));
             setDraft(body);
@@ -349,7 +364,7 @@
                 {messages.map((message) => {
                   const mine = message.sender_id === profile?.id;
                   return (
-                    <div key={message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                    <div key={message.local_key || message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                       {!mine && <Avatar user={message.sender} />}
                       <article
                         className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
@@ -518,6 +533,17 @@
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setMessageToDelete(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-coral text-sm font-black text-white" disabled={isSending} onClick={deleteMessage}>Eliminar</button>
                   </div>
+                </section>
+              </div>
+            )}
+
+            {showIntro && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
+                <section className="w-full max-w-md rounded-[34px] border border-mint/20 bg-[#0D111D] p-5 text-center shadow-2xl">
+                  <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-mint text-2xl font-black text-ink">i</div>
+                  <h2 className="mt-4 text-2xl font-black text-white">Chat del grupo</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Aquí solo hablan las personas aceptadas y el creador del plan. Puedes ver participantes desde el icono superior.</p>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => setShowIntro(false)}>Entendido</button>
                 </section>
               </div>
             )}
