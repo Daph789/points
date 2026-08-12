@@ -132,6 +132,8 @@
         const [messageToDelete, setMessageToDelete] = React.useState(null);
         const [showIntro, setShowIntro] = React.useState(false);
         const listRef = React.useRef(null);
+        const bottomRef = React.useRef(null);
+        const forceScrollRef = React.useRef(false);
 
         React.useEffect(() => { bootstrap(); }, []);
         React.useEffect(() => {
@@ -146,10 +148,17 @@
           const timer = window.setInterval(() => loadGroup(token, true), 2500);
           return () => window.clearInterval(timer);
         }, [token]);
-        React.useEffect(() => {
-          window.setTimeout(() => {
+        function scrollChatToBottom(behavior = "smooth") {
+          window.requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior, block: "end" });
             if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-          }, 40);
+          });
+        }
+
+        React.useEffect(() => {
+          if (!forceScrollRef.current) return;
+          forceScrollRef.current = false;
+          scrollChatToBottom("smooth");
         }, [messages.length]);
         React.useEffect(() => {
           function handleMessage(event) {
@@ -223,6 +232,7 @@
           const tempId = `tmp-${Date.now()}`;
           const temp = { id: tempId, local_key: tempId, sender_id: profile?.id, body, created_at: new Date().toISOString(), sender: profile, pending: true, read_by: [] };
           setDraft("");
+          forceScrollRef.current = true;
           setMessages((current) => [...current, temp]);
           setIsSaving(true);
           try {
@@ -233,8 +243,10 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "side_message_failed");
+            forceScrollRef.current = true;
             setMessages((current) => current.map((item) => item.id === temp.id ? { ...data.message, local_key: tempId, local_confirmed_at: new Date().toISOString() } : item));
             window.setTimeout(() => loadGroup(token, true), 450);
+            window.setTimeout(() => scrollChatToBottom("smooth"), 80);
           } catch (_error) {
             setMessages((current) => current.filter((item) => item.id !== temp.id));
             setDraft(body);
@@ -397,6 +409,7 @@
                     </div>
                   );
                 })}
+                <div ref={bottomRef} className="h-1" />
               </div>
             </section>
 
