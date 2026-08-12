@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Editar oferta</title>
+    <title>Donoss | Editar oferta</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -325,7 +325,7 @@
                 if (!editId) {
                   setReceiverId(profile.transaction_id);
                   setReceiverName(profile.display_name);
-                  setReceiverStatus("Usando el ID Donos de la empresa.");
+                  setReceiverStatus("Usando el ID Donoss de la empresa.");
                 }
               } else {
                 redirectToLogin();
@@ -355,10 +355,10 @@
               if (!editId) {
                 setReceiverId(profile.transaction_id);
                 setReceiverName(profile.display_name);
-                setReceiverStatus("Usando el ID Donos de la empresa.");
+                setReceiverStatus("Usando el ID Donoss de la empresa.");
               }
             } else {
-              setReceiverStatus("No encontramos el ID Donos de esta empresa. Prueba a iniciar sesión otra vez.");
+              setReceiverStatus("No encontramos el ID Donoss de esta empresa. Prueba a iniciar sesión otra vez.");
             }
             setIsProfileLoading(false);
           }
@@ -431,14 +431,14 @@
 
           if (receiverMode === "business" && cleanId && cleanId === businessId) {
             setReceiverName(businessProfile?.display_name || "");
-            setReceiverStatus("Usando el ID Donos de la empresa.");
+            setReceiverStatus("Usando el ID Donoss de la empresa.");
             return;
           }
 
           setReceiverName("");
 
           if (cleanId.length !== 12) {
-            setReceiverStatus(cleanId ? "Introduce los 12 caracteres del ID Donos." : "");
+            setReceiverStatus(cleanId ? "Introduce los 12 caracteres del ID Donoss." : "");
             return;
           }
 
@@ -475,15 +475,15 @@
         function useBusinessReceiverId() {
           setReceiverMode("business");
           if (isProfileLoading) {
-            setReceiverStatus("Cargando el ID Donos de la empresa...");
+            setReceiverStatus("Cargando el ID Donoss de la empresa...");
             return;
           }
           setReceiverId(businessProfile?.transaction_id || "");
           setReceiverName(businessProfile?.display_name || "");
           setReceiverStatus(
             businessProfile?.transaction_id
-              ? "Usando el ID Donos de la empresa."
-              : "No encontramos el ID Donos de esta empresa. Prueba a iniciar sesión otra vez."
+              ? "Usando el ID Donoss de la empresa."
+              : "No encontramos el ID Donoss de esta empresa. Prueba a iniciar sesión otra vez."
           );
         }
 
@@ -523,7 +523,7 @@
           setReceiverMode("business");
           setReceiverId(businessProfile?.transaction_id || "");
           setReceiverName(businessProfile?.display_name || "");
-          setReceiverStatus(businessProfile?.transaction_id ? "Usando el ID Donos de la empresa." : "");
+          setReceiverStatus(businessProfile?.transaction_id ? "Usando el ID Donoss de la empresa." : "");
           setHomeDeliveryEnabled(false);
           setHomeDeliveryPrice("");
           setPickupEnabled(true);
@@ -687,7 +687,7 @@
               <a href="home.html?type=business" className="flex min-w-0 items-center gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow sm:h-11 sm:w-11">D</div>
                 <div className="min-w-0">
-                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-lg font-black leading-tight">Donoss</p>
                   <p className="text-xs font-semibold text-slate-400">Panel empresa</p>
                 </div>
               </a>
@@ -706,7 +706,7 @@
               <aside className="rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:rounded-[34px] sm:p-6 lg:sticky lg:top-6">
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Editar oferta</p>
                 <h1 className="mt-3 break-words text-3xl font-black leading-tight tracking-normal text-white sm:text-4xl">
-                  {editId ? "Modifica tu publicación." : "Crea tu propuesta para Donos."}
+                  {editId ? "Modifica tu publicación." : "Crea tu propuesta para Donoss."}
                 </h1>
                 <p className="mt-4 text-sm leading-6 text-slate-400">
                   {editId
@@ -911,7 +911,7 @@
                         />
                         <span>
                           <span className="block text-sm font-black text-white">Entrega a domicilio</span>
-                          <span className="mt-1 block text-xs leading-5 text-slate-400">Indica el coste en euros y Donos lo convierte automáticamente a puntos.</span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-400">Indica el coste en euros y Donoss lo convierte automáticamente a puntos.</span>
                         </span>
                       </span>
 
@@ -937,7 +937,7 @@
                 </div>
 
                 <div>
-                  <p className="mb-2 text-sm font-medium text-slate-300">ID Donos con el que quieres recibir tus puntos</p>
+                  <p className="mb-2 text-sm font-medium text-slate-300">ID Donoss con el que quieres recibir tus puntos</p>
                   <div className="grid gap-2 min-[430px]:grid-cols-2">
                     <button
                       type="button"
@@ -949,7 +949,7 @@
                           : "border-line bg-white/[0.055] text-slate-300 hover:bg-white/[0.08]"
                       } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
-                      {isProfileLoading ? "Cargando ID de empresa..." : "Con el ID Donos de la empresa"}
+                      {isProfileLoading ? "Cargando ID de empresa..." : "Con el ID Donoss de la empresa"}
                     </button>
                     <button
                       type="button"

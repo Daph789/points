@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Historial</title>
+    <title>Donoss | Historial</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -152,7 +152,7 @@
 
       function PurchaseCard({ purchase, isUnread, onRead }) {
         const offer = purchase.offer || {};
-        const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donoss";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         return (
@@ -173,7 +173,7 @@
                 <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-mint">{businessName}</p>
                 {isBusinessVerified && <VerifiedBadge />}
               </div>
-              <h2 className="mt-1 break-words text-lg font-black leading-tight text-white">{offer.title || "Pedido Donos"}</h2>
+              <h2 className="mt-1 break-words text-lg font-black leading-tight text-white">{offer.title || "Pedido Donoss"}</h2>
               <p className="mt-2 text-sm font-bold text-slate-400">{formatDate(purchase.created_at)} · {formatTime(purchase.created_at)}</p>
               <p className="mt-2 text-xs font-bold text-slate-500">Pedido #{String(purchase.id).slice(0, 8).toUpperCase()}</p>
             </div>
@@ -190,7 +190,7 @@
       function IncomingCard({ purchase, isUnread, onRead }) {
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
-        const buyerName = buyer.display_name || buyer.email || "Cliente Donos";
+        const buyerName = buyer.display_name || buyer.email || "Cliente Donoss";
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         return (
           <a
@@ -204,7 +204,7 @@
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-black text-white">+{purchase.total_points || 0} puntos de {buyerName}</p>
-              <p className="mt-1 truncate text-sm font-bold text-slate-400">{offer.title || "Pedido Donos"}</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{offer.title || "Pedido Donoss"}</p>
               <p className="mt-1 text-xs font-bold text-slate-500">{formatDate(purchase.created_at)} · {formatTime(purchase.created_at)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
@@ -232,7 +232,7 @@
         const purchase = scan.purchase || {};
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
-        const buyerName = buyer.display_name || buyer.email || "Cliente Donos";
+        const buyerName = buyer.display_name || buyer.email || "Cliente Donoss";
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         return (
@@ -245,7 +245,7 @@
               {scan.method === "qr" ? "▣" : "⌨"}
             </div>
             <div className="min-w-0">
-              <p className="truncate text-base font-black text-white">{offer.title || "Billete Donos"}</p>
+              <p className="truncate text-base font-black text-white">{offer.title || "Billete Donoss"}</p>
               <p className="mt-1 truncate text-sm font-bold text-slate-400">{buyerName} · {purchase.total_points || 0} ptos.</p>
               {businessName && (
                 <p className="mt-1 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-black text-slate-200 ring-1 ring-white/10">
@@ -307,7 +307,7 @@
             <div className="grid h-14 w-14 place-items-center rounded-2xl bg-mint/10 text-xl font-black text-mint ring-1 ring-mint/20">€</div>
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <p className="truncate text-base font-black text-white">Pago recibido de Donos</p>
+                <p className="truncate text-base font-black text-white">Pago recibido de Donoss</p>
                 {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-coral shadow-[0_0_14px_rgba(255,107,107,0.75)]"></span>}
               </div>
               <p className="mt-1 text-sm font-bold text-slate-400">{period}</p>
@@ -328,7 +328,7 @@
         const other = isOut ? movement.to_profile : movement.from_profile;
         const isRequest = movement.transfer_type === "request";
         const isPendingRequestToMe = isRequest && movement.status === "pending" && isOut;
-        const otherName = other?.display_name || "Cuenta Donos";
+        const otherName = other?.display_name || "Cuenta Donoss";
         const title = isRequest
           ? movement.status === "pending"
             ? isOut
@@ -796,7 +796,7 @@
               <a href="home.html" className="flex min-w-0 items-center gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
                 <div className="min-w-0">
-                  <p className="text-lg font-black leading-tight">Donos</p>
+                  <p className="text-lg font-black leading-tight">Donoss</p>
                   <p className="text-xs font-semibold text-slate-400">Historial</p>
                 </div>
               </a>
@@ -807,7 +807,7 @@
 
             <section className="mt-6 rounded-[34px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:p-7">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Tu actividad</p>
-              <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donos</h1>
+              <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donoss</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
 	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-7" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
@@ -1074,7 +1074,7 @@
                 </div>
 
                 <div className="mt-5 rounded-[30px] border border-mint/20 bg-mint/10 p-5 shadow-glow">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Total liquidado por Donos</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Total liquidado por Donoss</p>
                   <p className="mt-2 text-4xl font-black text-white">
                     {money(businessPayouts.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0))}
                   </p>
@@ -1098,7 +1098,7 @@
                     })
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                      {businessPayouts.length === 0 ? "Todavía no has recibido liquidaciones de Donos." : "No hay resultados para esta búsqueda."}
+                      {businessPayouts.length === 0 ? "Todavía no has recibido liquidaciones de Donoss." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>

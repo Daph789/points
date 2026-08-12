@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Deudas Stripe</title>
+    <title>Donoss | Deudas Stripe</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -121,9 +121,9 @@
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadDebts}>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donoss</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Deudas Stripe</h1>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Recargas donde la comisión Stripe supera los gastos Donos.</p>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Recargas donde la comisión Stripe supera los gastos Donoss.</p>
                 <input
                   className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-coral/70 focus:ring-4 focus:ring-coral/10"
                   type="password"
@@ -144,7 +144,7 @@
           <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donoss</p>
                 <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Deuda por comisiones</h1>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -160,14 +160,14 @@
               <div className="rounded-3xl border border-coral/25 bg-coral/10 p-5">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-coral">
                   <span>Deuda total</span>
-                  <InfoTip title="Deuda total Stripe" text="Suma de los casos donde el extra Donos no alcanza para cubrir el corte Stripe estimado." example="Extra 1,20 €, corte 1,91 €: deuda 0,71 €." />
+                  <InfoTip title="Deuda total Stripe" text="Suma de los casos donde el extra Donoss no alcanza para cubrir el corte Stripe estimado." example="Extra 1,20 €, corte 1,91 €: deuda 0,71 €." />
                 </p>
                 <p className="mt-2 text-3xl font-black text-white">{money(summary.total_debt_cents)}</p>
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
                   <span>Recargas afectadas</span>
-                  <InfoTip title="Recargas afectadas" text="Número de recargas donde Donos salió en negativo por comisión Stripe." example="Si 3 packs generan deuda, aquí verás 3." />
+                  <InfoTip title="Recargas afectadas" text="Número de recargas donde Donoss salió en negativo por comisión Stripe." example="Si 3 packs generan deuda, aquí verás 3." />
                 </p>
                 <p className="mt-2 text-3xl font-black text-white">{summary.total_items || 0}</p>
               </div>
@@ -180,7 +180,7 @@
                   className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar cuenta, email, ID Donos, pack..."
+                  placeholder="Buscar cuenta, email, ID Donoss, pack..."
                 />
               </label>
             </section>
@@ -193,7 +193,7 @@
                 <span>Pack</span>
                 <span>Pagó</span>
                 <span>Corte Stripe</span>
-                <span>Gastos Donos</span>
+                <span>Gastos Donoss</span>
                 <span>Deuda</span>
               </div>
               <div className="divide-y divide-white/10">

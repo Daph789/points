@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Chat del grupo</title>
+    <title>Donoss | Chat del grupo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -355,7 +355,7 @@
               {plan?.creator && (
                 <div className="mt-3 flex items-center gap-2 overflow-hidden rounded-2xl bg-white/[0.055] px-3 py-2">
                   <Avatar user={plan.creator} mine />
-                  <p className="truncate text-xs font-bold text-slate-300">Creado por <span className="text-white">{plan.creator.display_name || "Usuario Donos"}</span></p>
+                  <p className="truncate text-xs font-bold text-slate-300">Creado por <span className="text-white">{plan.creator.display_name || "Usuario Donoss"}</span></p>
                   {plan.creator.is_verified && verifiedBadge()}
                 </div>
               )}
@@ -388,7 +388,7 @@
                       >
                         {!mine && (
                           <div className="mb-1 flex items-center gap-2">
-                            <p className="truncate text-xs font-black text-mint">{message.sender?.display_name || "Usuario Donos"}</p>
+                            <p className="truncate text-xs font-black text-mint">{message.sender?.display_name || "Usuario Donoss"}</p>
                             {message.sender?.is_verified && verifiedBadge()}
                           </div>
                         )}
@@ -476,10 +476,10 @@
                         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint text-sm font-black text-ink">{String(read.reader?.display_name || "D").slice(0, 1).toUpperCase()}</span>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-black text-white">{read.reader?.display_name || "Usuario Donos"}</p>
+                            <p className="truncate text-sm font-black text-white">{read.reader?.display_name || "Usuario Donoss"}</p>
                             {read.reader?.is_verified && verifiedBadge()}
                           </div>
-                          <p className="truncate text-xs font-bold text-slate-500">{read.reader?.email || read.reader?.transaction_id || "Cuenta Donos"}</p>
+                          <p className="truncate text-xs font-bold text-slate-500">{read.reader?.email || read.reader?.transaction_id || "Cuenta Donoss"}</p>
                         </div>
                         <p className="shrink-0 text-xs font-black text-mint">{formatTime(read.read_at)}</p>
                       </div>
@@ -511,7 +511,7 @@
                         <Avatar user={user} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-black text-white">{user.display_name || "Usuario Donos"}</p>
+                            <p className="truncate text-sm font-black text-white">{user.display_name || "Usuario Donoss"}</p>
                             {user.is_verified && verifiedBadge()}
                           </div>
                           <p className="truncate text-xs font-bold text-slate-500">{index === 0 ? "Creador/a del plan" : user.transaction_id || "Participante aceptado"}</p>

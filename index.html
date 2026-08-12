@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Registro</title>
+    <title>Donoss | Registro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -99,7 +99,7 @@
       const perks = [
         { label: "Cine barato", value: "2x1" },
         { label: "Ropa circular", value: "+80" },
-        { label: "Puntos Donos", value: "1.240" },
+        { label: "Puntos Donoss", value: "1.240" },
       ];
 
       const customNeighborhoodValue = "custom";
@@ -222,15 +222,60 @@
         return message;
       }
 
+      const termsSections = [
+        {
+          title: "1. Qué es Donoss",
+          text: "Donoss es una plataforma local para jóvenes en Donostia / San Sebastián donde puedes descubrir ofertas, comprar entradas o planes con puntos, participar en grupos para ir con otras personas y, si eres comercio, publicar propuestas para la comunidad.",
+        },
+        {
+          title: "2. Cuenta y datos reales",
+          text: "Al crear una cuenta aceptas dar datos correctos: nombre o apodo, correo, teléfono y barrio. Las empresas deben añadir datos profesionales reales. Donoss puede bloquear cuentas falsas, duplicadas, fraudulentas o que intenten manipular puntos, compras, QR o grupos.",
+        },
+        {
+          title: "3. Puntos Donoss",
+          text: "Los puntos funcionan dentro de Donoss para comprar ofertas, enviar puntos, pedir puntos y participar en experiencias. La referencia interna es 1 euro = 10 puntos. Los puntos no son dinero bancario y solo se gestionan dentro de la plataforma.",
+        },
+        {
+          title: "4. Pagos, recargas y comisiones",
+          text: "Las recargas de puntos se procesan con Stripe. Donoss puede añadir gastos de servicio visibles antes del pago para cubrir costes técnicos, transacción, tratamiento y seguridad. Los puntos se acreditan cuando el pago queda confirmado por Stripe.",
+        },
+        {
+          title: "5. Compras, QR y validaciones",
+          text: "Al comprar una oferta, Donoss puede generar códigos, QR y datos de validación. Estos datos son personales y secretos: no los compartas salvo con el comercio responsable cuando te los pida. Un QR ya validado puede aparecer como usado o comprobado.",
+        },
+        {
+          title: "6. Planes con más gente",
+          text: "En la sección Quedar puedes publicar o unirte a planes. Tus fotos de planes solo deben usarse para que otros participantes autorizados sepan con quién van. No publiques fotos de otra persona sin permiso ni contenido ofensivo, falso o peligroso.",
+        },
+        {
+          title: "7. Comercios y publicaciones",
+          text: "Los comercios son responsables de la información que publican: título, precio, stock, dirección, horarios, fecha, condiciones, entrega y disponibilidad. Donoss puede ocultar publicaciones agotadas, sospechosas o que incumplan estas condiciones.",
+        },
+        {
+          title: "8. Seguridad y buen uso",
+          text: "No está permitido intentar añadir puntos sin pagar, modificar datos ajenos, revender códigos, acosar usuarios, suplantar comercios o usar Donoss para actividades ilegales. Si detectamos abuso podemos limitar, suspender o eliminar la cuenta.",
+        },
+        {
+          title: "9. Privacidad",
+          text: "Usamos tus datos para crear tu cuenta, mostrar tu perfil, gestionar puntos, pagos, compras, grupos, chats, validaciones y avisos importantes. No vendemos tus datos personales. Algunos datos necesarios pueden mostrarse a comercios o participantes cuando sea imprescindible para completar una compra o plan.",
+        },
+        {
+          title: "10. Cambios y contacto",
+          text: "Donoss puede mejorar estas condiciones cuando la app evolucione. Si hay cambios importantes, se avisará dentro de la cuenta. Al continuar usando Donoss aceptas las condiciones vigentes.",
+        },
+      ];
+
       function App() {
         const formRef = React.useRef(null);
         const [accountType, setAccountType] = React.useState("");
         const [displayName, setDisplayName] = React.useState("");
         const [email, setEmail] = React.useState("");
+        const [emailConfirm, setEmailConfirm] = React.useState("");
         const [phone, setPhone] = React.useState("");
         const [password, setPassword] = React.useState("");
         const [passwordConfirm, setPasswordConfirm] = React.useState("");
         const [acceptedTerms, setAcceptedTerms] = React.useState(false);
+        const [isTermsOpen, setIsTermsOpen] = React.useState(false);
         const [neighborhood, setNeighborhood] = React.useState("");
         const [customNeighborhood, setCustomNeighborhood] = React.useState("");
         const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState([]);
@@ -244,15 +289,18 @@
         const isCustomNeighborhood = neighborhood === customNeighborhoodValue;
         const finalNeighborhood = isCustomNeighborhood ? customNeighborhood.trim() : neighborhood;
         const normalizedEmail = email.trim().toLowerCase();
+        const normalizedEmailConfirm = emailConfirm.trim().toLowerCase();
+        const emailsMatch = normalizedEmail && normalizedEmail === normalizedEmailConfirm;
         const canSubmit =
           accountType &&
           displayName.trim() &&
-          normalizedEmail &&
+          emailsMatch &&
+          phone.trim() &&
           finalNeighborhood &&
           password.length >= 8 &&
           password === passwordConfirm &&
           acceptedTerms &&
-          (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && phone.trim() && businessAddress.trim()));
+          (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim()));
 
         function chooseAccountType(type) {
           setAccountType(type);
@@ -271,7 +319,7 @@
             account_type: accountType,
             display_name: displayName.trim(),
             email: normalizedEmail,
-            phone: isBusiness ? `+34 ${phone.trim()}` : null,
+            phone: `+34 ${phone.trim()}`,
             neighborhood: finalNeighborhood,
             transaction_id: transactionId,
             business_categories: isBusiness ? businessCategoriesSelected : null,
@@ -291,6 +339,16 @@
         async function handleSubmit(event) {
           event.preventDefault();
           setStatus({ type: "", message: "" });
+
+          if (normalizedEmail !== normalizedEmailConfirm) {
+            setStatus({ type: "error", message: "Los correos electrónicos no coinciden." });
+            return;
+          }
+
+          if (password !== passwordConfirm) {
+            setStatus({ type: "error", message: "Las contraseñas no coinciden." });
+            return;
+          }
 
           if (!canSubmit) {
             setStatus({ type: "error", message: "Completa todos los campos necesarios para continuar." });
@@ -323,12 +381,12 @@
               if (profile?.display_name) localStorage.setItem("donosDisplayName", profile.display_name);
               setStatus({
                 type: "success",
-                message: `Cuenta creada. Tu ID Donos es ${formatTransactionId(profile?.transaction_id || transactionId)}.`,
+                message: `Cuenta creada. Tu ID Donoss es ${formatTransactionId(profile?.transaction_id || transactionId)}.`,
               });
             } else {
               setStatus({
                 type: "success",
-                message: `Revisa tu correo. Tu ID Donos es ${formatTransactionId(transactionId)}.`,
+                message: `Revisa tu correo. Tu ID Donoss es ${formatTransactionId(transactionId)}.`,
               });
             }
 
@@ -388,12 +446,13 @@
             >
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl sm:h-14 sm:w-14 sm:text-3xl">🏢</div>
               <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un comercio / Empresa</p>
-              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donos.</p>
+              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donoss.</p>
             </button>
           </div>
         );
 
         return (
+          <React.Fragment>
           <main className="mesh min-h-screen overflow-hidden">
             <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-3 py-4 sm:px-6 lg:grid-cols-[1fr_0.92fr] lg:px-8 lg:py-10">
               <aside className="hidden lg:block">
@@ -407,7 +466,7 @@
                     Chollos, planes y comercio local en una sola app.
                   </h1>
                   <p className="mt-5 max-w-lg text-lg leading-8 text-slate-300">
-                    Donos conecta jóvenes, tiendas y cultura local con puntos, descuentos y experiencias cerca de tu barrio.
+                    Donoss conecta jóvenes, tiendas y cultura local con puntos, descuentos y experiencias cerca de tu barrio.
                   </p>
 
                   <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
@@ -446,7 +505,7 @@
                   <div className="flex min-w-0 items-center gap-3">
                     <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink sm:h-11 sm:w-11">D</div>
                     <div className="min-w-0">
-                      <p className="text-lg font-black">Donos</p>
+                      <p className="text-lg font-black">Donoss</p>
                       <p className="text-xs font-medium text-slate-400">Chollos locales</p>
                     </div>
                   </div>
@@ -457,7 +516,7 @@
                   <div className="hidden items-center gap-3 lg:flex">
                     <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-xl font-black text-ink">D</div>
                     <div>
-                      <p className="text-xl font-black">Donos</p>
+                      <p className="text-xl font-black">Donoss</p>
                       <p className="text-sm font-medium text-slate-400">Tu barrio, tus puntos</p>
                     </div>
                   </div>
@@ -469,8 +528,8 @@
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
                       {accountType
-                        ? "Completa solo lo necesario para entrar en Donos."
-                        : "Selecciona cómo vas a usar Donos para adaptar el registro."}
+                        ? "Completa solo lo necesario para entrar en Donoss."
+                        : "Selecciona cómo vas a usar Donoss para adaptar el registro."}
                     </p>
                   </div>
 
@@ -481,7 +540,7 @@
                       <div className="flex items-center justify-between gap-3 rounded-2xl bg-mint/10 px-4 py-3">
                         <div>
                           <p className="text-sm font-black text-white">{isBusiness ? "Formulario empresa" : "Formulario usuario"}</p>
-                          <p className="mt-1 text-xs font-bold text-slate-400">Rellena estos datos para crear tu cuenta Donos.</p>
+                          <p className="mt-1 text-xs font-bold text-slate-400">Rellena estos datos para crear tu cuenta Donoss.</p>
                         </div>
                         <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
                       </div>
@@ -518,7 +577,7 @@
                         <input
                           className={inputClass}
                           type="text"
-                          placeholder={isBusiness ? "Ej. Donos Vintage" : "Ej. Ane, Markel..."}
+                          placeholder={isBusiness ? "Ej. Donoss Vintage" : "Ej. Ane, Markel..."}
                           autoComplete={isBusiness ? "organization" : "nickname"}
                           value={displayName}
                           onChange={(event) => setDisplayName(event.target.value)}
@@ -573,26 +632,40 @@
                         />
                       </Field>
 
+                      <Field label={isBusiness ? "Repetir correo profesional" : "Repetir correo electrónico"}>
+                        <input
+                          className={inputClass}
+                          type="email"
+                          placeholder="Vuelve a escribir tu correo"
+                          autoComplete="email"
+                          value={emailConfirm}
+                          onChange={(event) => setEmailConfirm(event.target.value)}
+                        />
+                        {emailConfirm.trim() && !emailsMatch && (
+                          <p className="mt-2 text-xs font-bold text-coral">Los correos no coinciden.</p>
+                        )}
+                      </Field>
+
+                      <Field label={isBusiness ? "Teléfono de contacto" : "Teléfono móvil"}>
+                        <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
+                          <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
+                            <span>🇪🇸</span>
+                            <span>+34</span>
+                          </button>
+                          <input
+                            className={inputClass}
+                            type="tel"
+                            inputMode="tel"
+                            placeholder={isBusiness ? "943 000 000" : "600 000 000"}
+                            autoComplete="tel"
+                            value={phone}
+                            onChange={(event) => setPhone(event.target.value)}
+                          />
+                        </div>
+                      </Field>
+
                       {isBusiness && (
                         <>
-                          <Field label="Teléfono de contacto">
-	                            <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
-                              <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
-                                <span>🇪🇸</span>
-                                <span>+34</span>
-                              </button>
-                              <input
-                                className={inputClass}
-                                type="tel"
-                                inputMode="tel"
-                                placeholder="943 000 000"
-                                autoComplete="tel"
-                                value={phone}
-                                onChange={(event) => setPhone(event.target.value)}
-                              />
-                            </div>
-                          </Field>
-
                           <Field label="Dirección">
                             <input
                               className={inputClass}
@@ -659,6 +732,9 @@
                             value={passwordConfirm}
                             onChange={(event) => setPasswordConfirm(event.target.value)}
                           />
+                          {passwordConfirm && password !== passwordConfirm && (
+                            <p className="mt-2 text-xs font-bold text-coral">Las contraseñas no coinciden.</p>
+                          )}
                         </Field>
                       </div>
 
@@ -669,8 +745,20 @@
                           checked={acceptedTerms}
                           onChange={(event) => setAcceptedTerms(event.target.checked)}
                         />
-	                        <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
-                          Acepto las condiciones de Donos y recibir avisos importantes de mi cuenta.
+                        <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
+                          Acepto las{" "}
+                          <button
+                            type="button"
+                            className="font-black text-white underline decoration-mint/70 underline-offset-4"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              setIsTermsOpen(true);
+                            }}
+                          >
+                            condiciones de Donoss
+                          </button>{" "}
+                          y recibir avisos importantes de mi cuenta.
                         </span>
                       </label>
 
@@ -717,6 +805,47 @@
               </section>
             </section>
           </main>
+          {isTermsOpen && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-3 py-5 backdrop-blur-xl">
+              <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0f1a] shadow-2xl shadow-black/60">
+                <div className="border-b border-white/10 p-5 sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Condiciones</p>
+                  <h3 className="mt-2 text-2xl font-black leading-tight text-white">Condiciones de uso y privacidad de Donoss</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Lee esto antes de crear tu cuenta. Está escrito para que se entienda, no para esconder nada.
+                  </p>
+                </div>
+                <div className="max-h-[55vh] space-y-4 overflow-y-auto p-5 sm:p-6">
+                  {termsSections.map((section) => (
+                    <section key={section.title} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
+                      <h4 className="text-sm font-black text-white">{section.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">{section.text}</p>
+                    </section>
+                  ))}
+                </div>
+                <div className="grid gap-3 border-t border-white/10 p-5 sm:grid-cols-2 sm:p-6">
+                  <button
+                    type="button"
+                    className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white"
+                    onClick={() => setIsTermsOpen(false)}
+                  >
+                    Cerrar
+                  </button>
+                  <button
+                    type="button"
+                    className="h-12 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow"
+                    onClick={() => {
+                      setAcceptedTerms(true);
+                      setIsTermsOpen(false);
+                    }}
+                  >
+                    Aceptar condiciones
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          </React.Fragment>
         );
       }
 

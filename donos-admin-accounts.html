@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Admin cuentas</title>
+    <title>Donoss | Admin cuentas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -179,7 +179,7 @@
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadAccounts}>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Cuentas</h1>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Zona privada para ver saldos y certificar empresas.</p>
                 <input
@@ -202,7 +202,7 @@
           <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-1 break-words text-3xl font-black text-white sm:text-4xl">Cuentas y reserva</h1>
               </div>
               <div className="flex w-full gap-2 sm:w-auto">
@@ -215,28 +215,28 @@
             </header>
 
             <section className="mt-6 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Valor € puntos existentes" value={money(summary.total_point_value_cents)} tone="mint" info={{ title: "Valor € puntos existentes", text: "En gros, c'est la valeur en € des points total existant todavía en las cuentas. No es beneficio: es una obligación potencial.", example: "1400 ptos. existentes = 140 € que Donos debe poder cubrir." }} />
+              <StatCard label="Valor € puntos existentes" value={money(summary.total_point_value_cents)} tone="mint" info={{ title: "Valor € puntos existentes", text: "En gros, c'est la valeur en € des points total existant todavía en las cuentas. No es beneficio: es una obligación potencial.", example: "1400 ptos. existentes = 140 € que Donoss debe poder cubrir." }} />
               <StatCard label="Caja estimada" value={money(summary.estimated_cash_cents)} info={{ title: "Caja estimada", text: "Neto recibido por Stripe menos lo que ya pagaste a empresas y menos frais bancarios.", example: "238,60 € - 100 € - 0,65 € = 137,95 €." }} />
               <StatCard label="Cobertura de reserva" value={money(summary.reserve_margin_cents)} tone={Number(summary.reserve_margin_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Cobertura de reserva", text: "No es tu beneficio. Es un test de seguridad: caja estimada menos valor de puntos existentes. Si sale negativo, tu caja no cubre todos los puntos vivos.", example: "Caja 137,95 € - puntos vivos 140 € = -2,05 € de cobertura." }} />
-              <StatCard label="Cuentas" value={`${summary.total_accounts || 0}`} info={{ title: "Cuentas", text: "Total de perfiles registrados en Donos, usuarios y empresas juntos.", example: "1 usuario + 1 empresa = 2 cuentas." }} />
+              <StatCard label="Cuentas" value={`${summary.total_accounts || 0}`} info={{ title: "Cuentas", text: "Total de perfiles registrados en Donoss, usuarios y empresas juntos.", example: "1 usuario + 1 empresa = 2 cuentas." }} />
             </section>
 
             <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
               <StatCard label="Neto Stripe recibido" value={money(summary.total_net_cents)} info={{ title: "Neto Stripe recibido", text: "Dinero que Stripe deja después de sus cortes por los pagos de recarga.", example: "Cliente paga 51,20 €, Stripe corta 1,91 €, neto 49,29 €." }} />
-              <StatCard label="Pagado a empresas" value={money(summary.business_payouts_paid_cents)} info={{ title: "Pagado a empresas", text: "Total que registraste como enviado fuera de Donos a empresas.", example: "Retiras 250 ptos. = 25 € pagados." }} />
+              <StatCard label="Pagado a empresas" value={money(summary.business_payouts_paid_cents)} info={{ title: "Pagado a empresas", text: "Total que registraste como enviado fuera de Donoss a empresas.", example: "Retiras 250 ptos. = 25 € pagados." }} />
               <StatCard label="Usuarios" value={summary.total_users || 0} info={{ title: "Usuarios", text: "Cuentas normales de clientes.", example: "Daphnel se registra como usuario = +1." }} />
               <StatCard label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Cuentas registradas como comercio/empresa.", example: "Karcharelle se registra como empresa = +1." }} />
               <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" info={{ title: "Certificadas", text: "Cuentas que marcaste como verificadas para mostrar badge de confianza.", example: "Certificas una empresa y aparece el check azul." }} />
             </section>
 
             <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
-              <StatCard label="Dinero empresa Donos" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donos", text: "Parte de los gastos Donos que queda para la empresa Donos tras estimar cortes Stripe.", example: "Cobras 1,20 € extra y Stripe corta 0,61 €: quedan 0,59 €." }} />
-              <StatCard label="Beneficio Donos disponible" value={money(summary.donos_available_profit_cents)} tone={Number(summary.donos_available_profit_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Beneficio Donos disponible", text: "Este es el contador que debes mirar para saber si el dinero propio de Donos puede cubrir sus deudas operativas.", example: "Dinero Donos 15 € - deudas 2,45 € = 12,55 € disponibles." }} />
-              <StatCard label="Falta para estar en verde" value={money(summary.missing_to_green_cents)} tone={Number(summary.missing_to_green_cents || 0) > 0 ? "coral" : "mint"} info={{ title: "Falta para estar en verde", text: "Cantidad que Donos necesita ganar o añadir para que el beneficio disponible vuelva a 0 € o positivo.", example: "Dinero Donos 1,44 €, deudas 3,49 €: faltan 2,05 €." }} />
+              <StatCard label="Dinero empresa Donoss" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donoss", text: "Parte de los gastos Donoss que queda para la empresa Donoss tras estimar cortes Stripe.", example: "Cobras 1,20 € extra y Stripe corta 0,61 €: quedan 0,59 €." }} />
+              <StatCard label="Beneficio Donoss disponible" value={money(summary.donos_available_profit_cents)} tone={Number(summary.donos_available_profit_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Beneficio Donoss disponible", text: "Este es el contador que debes mirar para saber si el dinero propio de Donoss puede cubrir sus deudas operativas.", example: "Dinero Donoss 15 € - deudas 2,45 € = 12,55 € disponibles." }} />
+              <StatCard label="Falta para estar en verde" value={money(summary.missing_to_green_cents)} tone={Number(summary.missing_to_green_cents || 0) > 0 ? "coral" : "mint"} info={{ title: "Falta para estar en verde", text: "Cantidad que Donoss necesita ganar o añadir para que el beneficio disponible vuelva a 0 € o positivo.", example: "Dinero Donoss 1,44 €, deudas 3,49 €: faltan 2,05 €." }} />
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-80">
                   <span>Deuda por comisiones</span>
-                  <InfoTip title="Deuda por comisiones" text="Casos donde el extra cobrado por Donos no cubre el corte estimado de Stripe." example="Extra Donos 1,20 €, Stripe corta 1,91 €: deuda 0,71 €." />
+                  <InfoTip title="Deuda por comisiones" text="Casos donde el extra cobrado por Donoss no cubre el corte estimado de Stripe." example="Extra Donoss 1,20 €, Stripe corta 1,91 €: deuda 0,71 €." />
                 </p>
                 <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.donos_debt_cents)}</p>
                 <p className="mt-2 text-xs font-black text-coral/80">Ver detalle</p>
@@ -258,7 +258,7 @@
                 <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
                   <p className="text-sm font-black text-mint">1. Valor € puntos existentes</p>
                   <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
-                    En gros, c'est la valeur en € des points total existant en las cuentas. Si usuarios y empresas tienen 1400 ptos., Donos tiene una obligación potencial de 140 €. No es ganancia.
+                    En gros, c'est la valeur en € des points total existant en las cuentas. Si usuarios y empresas tienen 1400 ptos., Donoss tiene una obligación potencial de 140 €. No es ganancia.
                   </p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
@@ -268,19 +268,19 @@
                   </p>
                 </div>
                 <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                  <p className="text-sm font-black text-mint">3. Beneficio Donos disponible</p>
+                  <p className="text-sm font-black text-mint">3. Beneficio Donoss disponible</p>
                   <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
-                    Este sí responde a tu pregunta: si Donos gana dinero, puede cubrir deudas. Fórmula: dinero empresa Donos - deuda Stripe - deudas bancarias.
+                    Este sí responde a tu pregunta: si Donoss gana dinero, puede cubrir deudas. Fórmula: dinero empresa Donoss - deuda Stripe - deudas bancarias.
                   </p>
                 </div>
               </div>
               <div className="mt-4 rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral">
                 <p className="text-sm font-black">Ejemplo claro</p>
                 <p className="mt-2 text-sm font-bold leading-6">
-                  Si Dinero empresa Donos = 15 €, Deuda por comisiones = 2 €, y Deudas bancarias = 0,45 €, entonces Beneficio Donos disponible = 12,55 €. Eso significa que Donos puede cubrir esas deudas y todavía le quedan 12,55 € de beneficio disponible.
+                  Si Dinero empresa Donoss = 15 €, Deuda por comisiones = 2 €, y Deudas bancarias = 0,45 €, entonces Beneficio Donoss disponible = 12,55 €. Eso significa que Donoss puede cubrir esas deudas y todavía le quedan 12,55 € de beneficio disponible.
                 </p>
                 <p className="mt-3 text-sm font-bold leading-6">
-                  Con tu captura: Dinero empresa Donos = 1,44 €, Deuda por comisiones = 2,84 €, Deudas bancarias = 0,65 €. Total deudas = 3,49 €. Entonces 1,44 € - 3,49 € = -2,05 €. Para volver en verde, Donos necesita 2,05 €.
+                  Con tu captura: Dinero empresa Donoss = 1,44 €, Deuda por comisiones = 2,84 €, Deudas bancarias = 0,65 €. Total deudas = 3,49 €. Entonces 1,44 € - 3,49 € = -2,05 €. Para volver en verde, Donoss necesita 2,05 €.
                 </p>
               </div>
             </section>
@@ -292,7 +292,7 @@
                   className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por nombre, email, ID Donos, barrio, categoría..."
+                  placeholder="Buscar por nombre, email, ID Donoss, barrio, categoría..."
                 />
               </label>
             </section>
@@ -303,7 +303,7 @@
               <div className="hidden grid-cols-[1.2fr_.7fr_.8fr_.7fr_.9fr_auto] gap-3 border-b border-white/10 px-5 py-4 text-xs font-black uppercase tracking-[0.12em] text-slate-500 lg:grid">
                 <span>Cuenta</span>
                 <span>Tipo</span>
-                <span>ID Donos</span>
+                <span>ID Donoss</span>
                 <span>Puntos</span>
                 <span>Valor reservado</span>
                 <span></span>
@@ -314,7 +314,7 @@
                   <article key={account.id} className="grid gap-3 px-4 py-4 lg:grid-cols-[1.2fr_.7fr_.8fr_.7fr_.9fr_auto] lg:items-center lg:px-5">
                     <div className="min-w-0">
                       <p className="flex items-center gap-2 font-black text-white">
-                        <span className="truncate">{account.display_name || "Cuenta Donos"}</span>
+                        <span className="truncate">{account.display_name || "Cuenta Donoss"}</span>
                         {account.is_verified && <VerifiedBadge />}
                       </p>
                       <p className="mt-1 truncate text-sm font-bold text-slate-400">{account.email || "Sin email"}</p>

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Billete escaneado</title>
+    <title>Donoss | Billete escaneado</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -127,7 +127,7 @@
         const purchase = scan.purchase || {};
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
-        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donos";
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donoss";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
 
         return (
@@ -162,7 +162,7 @@
                   <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
                   <Detail label="Email cliente" value={buyer.email} />
                   <Detail label="Teléfono cliente" value={buyer.phone} />
-                  <Detail label="ID Donos cliente" value={buyer.transaction_id} />
+                  <Detail label="ID Donoss cliente" value={buyer.transaction_id} />
                   <Detail label="Entrega" value={purchase.delivery_method === "home" ? "Entrega a domicilio" : "Recogida en tienda"} />
                   <Detail label="Dirección entrega" value={purchase.delivery_address || "Recogida en tienda"} />
                   <Detail label="Veces comprobado total" value={`${purchase.verification_count || 0}`} />

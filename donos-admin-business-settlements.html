@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Transferencias a empresas</title>
+    <title>Donoss | Transferencias a empresas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -216,9 +216,9 @@
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadBusinesses}>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Transferencias a empresas</h1>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Gestiona puntos que ya pagaste a empresas fuera de Donos.</p>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Gestiona puntos que ya pagaste a empresas fuera de Donoss.</p>
                 <input className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contraseña" />
                 {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
                 <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-base font-black text-ink shadow-glow" disabled={isLoading}>{isLoading ? "Entrando..." : "Entrar"}</button>
@@ -231,7 +231,7 @@
           <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Transferencias a empresas</h1>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -243,7 +243,7 @@
             </header>
 
             <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <Stat label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Número de cuentas comercio/empresa registradas en Donos.", example: "Si hay 4 comercios, verás 4." }} />
+              <Stat label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Número de cuentas comercio/empresa registradas en Donoss.", example: "Si hay 4 comercios, verás 4." }} />
               <Stat label="Puntos empresas" value={`${summary.total_current_points || 0} ptos.`} tone="mint" info={{ title: "Puntos empresas", text: "Puntos que siguen dentro de cuentas empresa y que pueden equivaler a dinero pendiente.", example: "250 ptos. = 25 € pendientes." }} />
               <Stat label="Equivalente" value={money(summary.total_current_value_cents)} tone="mint" info={{ title: "Equivalente", text: "Conversión de los puntos empresa actuales a euros.", example: "1400 ptos. x 0,10 € = 140 €." }} />
               <Stat label="Ganado en ventas" value={`${summary.total_sold_points || 0} ptos.`} tone="sun" info={{ title: "Ganado en ventas", text: "Puntos que empresas recibieron por compras de clientes.", example: "3 ventas de 100 ptos. = 300 ptos." }} />
@@ -253,7 +253,7 @@
             <section className="mt-6 rounded-[26px] border border-white/10 bg-white/[0.055] p-3">
               <label className="flex items-center gap-3">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
-                <input className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, email, ID Donos..." />
+                <input className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar empresa, email, ID Donoss..." />
               </label>
             </section>
 
@@ -303,8 +303,8 @@
                   </div>
 
                   <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.045] p-4">
-                    <p className="text-sm font-black text-white">Registrar dinero enviado fuera de Donos</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes. Si tu banco te cobra comisión, apúntala como gasto Donos.</p>
+                    <p className="text-sm font-black text-white">Registrar dinero enviado fuera de Donoss</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes. Si tu banco te cobra comisión, apúntala como gasto Donoss.</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_2fr_auto]">
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="number" min="1" value={pointsToRemove} onChange={(event) => setPointsToRemove(event.target.value)} placeholder="Puntos" />
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" inputMode="decimal" value={bankFeeEuros} onChange={(event) => setBankFeeEuros(event.target.value)} placeholder="Frais banco € (0)" />
@@ -313,7 +313,7 @@
                     </div>
                     {Number(String(bankFeeEuros || "0").replace(",", ".")) > 0 && (
                       <p className="mt-3 rounded-2xl border border-coral/20 bg-coral/10 px-4 py-3 text-xs font-black text-coral">
-                        Esta comisión se sumará a Deudas bancarias Donos: {money(Math.round(Number(String(bankFeeEuros || "0").replace(",", ".")) * 100))}
+                        Esta comisión se sumará a Deudas bancarias Donoss: {money(Math.round(Number(String(bankFeeEuros || "0").replace(",", ".")) * 100))}
                       </p>
                     )}
                   </section>
@@ -340,7 +340,7 @@
                         {(detail ? filteredPurchases : []).map((purchase) => (
                           <article key={purchase.id} className="grid gap-2 border-b border-white/10 px-4 py-3 sm:grid-cols-[1fr_auto]">
                             <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-white">{purchase.buyer?.display_name || purchase.buyer?.email || "Cliente Donos"}</p>
+                              <p className="truncate text-sm font-black text-white">{purchase.buyer?.display_name || purchase.buyer?.email || "Cliente Donoss"}</p>
                               <p className="mt-1 truncate text-xs font-bold text-slate-400">{purchase.offer?.title || "Compra"} · {purchase.buyer?.email || "Sin email"}</p>
                               <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(purchase.created_at)}</p>
                             </div>

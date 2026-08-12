@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>Donos | App</title>
+    <title>Donoss | App</title>
     <link rel="stylesheet" href="app-shell.css" />
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -155,17 +155,17 @@
   </head>
   <body>
     <main class="spa-root" aria-live="polite">
-      <iframe class="spa-frame is-active" data-route="inicio" data-index="0" title="Inicio Donos" src="home.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donos" src="historial.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donos" src="plans.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donos" src="transfer.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donos" src="profile.html?embedded=1"></iframe>
+      <iframe class="spa-frame is-active" data-route="inicio" data-index="0" title="Inicio Donoss" src="home.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donoss" src="historial.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donoss" src="plans.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donoss" src="transfer.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donoss" src="profile.html?embedded=1"></iframe>
     </main>
 
     <div id="spa-boot" class="spa-boot" aria-hidden="true">
       <section class="spa-boot-card">
         <div class="spa-logo">D</div>
-        <h1 class="spa-boot-title">Donos</h1>
+        <h1 class="spa-boot-title">Donoss</h1>
         <p class="spa-boot-text">Preparando tu app para que las secciones cambien sin recargar.</p>
         <div class="spa-progress"></div>
       </section>
@@ -308,7 +308,7 @@
             frame.dataset.route = "categoria";
             frame.dataset.categoryKey = key;
             frame.dataset.index = "0";
-            frame.title = `${cleanCategory} Donos`;
+            frame.title = `${cleanCategory} Donoss`;
             frame.src = `category.html?embedded=1&category=${encodeURIComponent(cleanCategory)}`;
             watchFrame(frame);
             root.appendChild(frame);
@@ -333,7 +333,7 @@
             frame.dataset.route = "detalle";
             frame.dataset.offerId = cleanId;
             frame.dataset.index = "0";
-            frame.title = "Detalle Donos";
+            frame.title = "Detalle Donoss";
             frame.src = `offer-detail.html?embedded=1&id=${encodeURIComponent(cleanId)}`;
             watchFrame(frame);
             root.appendChild(frame);

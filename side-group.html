@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Grupo alternativo</title>
+    <title>Donoss | Grupo alternativo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -398,7 +398,7 @@
                         className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${mine ? "rounded-br-md bg-sun text-ink" : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"} ${message.deleted_at ? "opacity-70" : ""}`}
                         onClick={() => mine && !message.pending && !message.deleted_at ? setSelectedMessage(message) : null}
                       >
-                        {!mine && <p className="mb-1 text-xs font-black text-sun">{message.sender?.display_name || "Usuario Donos"}</p>}
+                        {!mine && <p className="mb-1 text-xs font-black text-sun">{message.sender?.display_name || "Usuario Donoss"}</p>}
                         <p className={`break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                         <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
                           <span>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
@@ -469,10 +469,10 @@
                         <Avatar user={read.reader} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-black text-white">{read.reader?.display_name || "Usuario Donos"}</p>
+                            <p className="truncate text-sm font-black text-white">{read.reader?.display_name || "Usuario Donoss"}</p>
                             {read.reader?.is_verified && <VerifiedBadge />}
                           </div>
-                          <p className="truncate text-xs font-bold text-slate-500">{read.reader?.email || read.reader?.transaction_id || "Cuenta Donos"}</p>
+                          <p className="truncate text-xs font-bold text-slate-500">{read.reader?.email || read.reader?.transaction_id || "Cuenta Donoss"}</p>
                         </div>
                         <p className="shrink-0 text-xs font-black text-sun">{formatTime(read.read_at)}</p>
                       </div>
@@ -531,7 +531,7 @@
                         <Avatar user={member.user} />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-black text-white">{member.user?.display_name || "Usuario Donos"}</p>
+                            <p className="truncate text-sm font-black text-white">{member.user?.display_name || "Usuario Donoss"}</p>
                             {member.user?.is_verified && <VerifiedBadge />}
                           </div>
                           <p className="truncate text-xs font-bold text-slate-500">{statusText(member.status)}</p>

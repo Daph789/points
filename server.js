@@ -1067,8 +1067,8 @@ async function buildNotificationsForProfile(profile) {
         pushNotification(events, {
           key: `purchase:${purchase.id}:buyer`,
           subsection: "purchases",
-          title: `Compra confirmada: ${offer.title || "pedido Donos"}`,
-          detail: `${purchase.total_points || 0} ptos. · ${offer.business_display_name || "Donos"}`,
+          title: `Compra confirmada: ${offer.title || "pedido Donoss"}`,
+          detail: `${purchase.total_points || 0} ptos. · ${offer.business_display_name || "Donoss"}`,
           href: `order-detail.html?id=${purchase.id}`,
           created_at: purchase.created_at,
         });
@@ -1130,7 +1130,7 @@ async function buildNotificationsForProfile(profile) {
             key: `quedar:mine:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
             subsection: "mine",
             title: member.status === "waiting" ? "Nueva persona en espera" : member.status === "accepted" ? "Nueva persona aceptada" : "Movimiento en tu plan",
-            detail: plan.title || "Plan Donos",
+            detail: plan.title || "Plan Donoss",
             created_at: member.updated_at || member.created_at,
           });
         }
@@ -1155,7 +1155,7 @@ async function buildNotificationsForProfile(profile) {
             kind: "admin_transfer",
             plan_id: oldAdmin.plan_id,
             title: "Ahora administras este plan",
-            detail: plan.title || "Plan Donos",
+            detail: plan.title || "Plan Donoss",
             created_at: oldAdmin.updated_at || oldAdmin.created_at,
           });
         }
@@ -1188,7 +1188,7 @@ async function buildNotificationsForProfile(profile) {
           key: `quedar:joined:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
           subsection: "joined",
           title: member.status === "accepted" ? "Te aceptaron en un plan" : member.status === "waiting" ? "Sigues en lista de espera" : member.status === "removed" ? "Ya no estás en este plan" : "Actualización de plan",
-          detail: plan.title || "Plan Donos",
+          detail: plan.title || "Plan Donoss",
           created_at: member.updated_at || member.created_at,
         });
         if (["waiting", "removed"].includes(member.status) && plan.status === "confirmed") {
@@ -1201,7 +1201,7 @@ async function buildNotificationsForProfile(profile) {
             plan_id: member.plan_id,
             side_status: member.status,
             title: member.status === "waiting" ? "Grupo alternativo disponible" : "Grupo aparte disponible",
-            detail: plan.title || "Plan Donos",
+            detail: plan.title || "Plan Donoss",
             created_at: member.updated_at || member.created_at,
           });
         }
@@ -1237,7 +1237,7 @@ async function buildNotificationsForProfile(profile) {
             plan_id: message.plan_id,
             side_status: member.status,
             title: member.status === "waiting" ? "Mensaje en grupo alternativo" : "Mensaje en grupo aparte",
-            detail: `${plan.title || "Plan Donos"} · ${String(message.body || "").slice(0, 80)}`,
+            detail: `${plan.title || "Plan Donoss"} · ${String(message.body || "").slice(0, 80)}`,
             created_at: message.created_at,
           });
         }
@@ -1267,7 +1267,7 @@ async function buildNotificationsForProfile(profile) {
               plan_id: requestRow.plan_id,
               side_status: member.status,
               title: "Solicitud para unir grupos",
-              detail: plan.title || "Plan Donos",
+              detail: plan.title || "Plan Donoss",
               created_at: requestRow.created_at,
             });
           }
@@ -1281,7 +1281,7 @@ async function buildNotificationsForProfile(profile) {
               plan_id: requestRow.plan_id,
               side_status: member.status,
               title: "Grupos unidos",
-              detail: plan.title || "Plan Donos",
+              detail: plan.title || "Plan Donoss",
               created_at: requestRow.accepted_at || requestRow.created_at,
             });
           }
@@ -1324,7 +1324,7 @@ async function buildNotificationsForProfile(profile) {
             kind: "chat",
             plan_id: message.plan_id,
             title: "Nuevo mensaje en el grupo",
-            detail: `${plan.title || "Plan Donos"} · ${String(message.body || "").slice(0, 80)}`,
+            detail: `${plan.title || "Plan Donoss"} · ${String(message.body || "").slice(0, 80)}`,
             created_at: message.created_at,
           });
         }
@@ -1435,7 +1435,7 @@ async function buildNotificationsForProfile(profile) {
             key: `payout:${payout.id}`,
             subsection: "payouts",
             title: `Liquidación recibida: ${payout.points || 0} ptos.`,
-            detail: `${((Number(payout.amount_cents || 0)) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ enviados por Donos`,
+            detail: `${((Number(payout.amount_cents || 0)) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€ enviados por Donoss`,
             href: "historial.html?tab=payouts",
             created_at: payout.created_at,
           });
@@ -1850,7 +1850,7 @@ async function enrichPlanChatMessages(messages = []) {
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
-          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donos" },
+          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" },
         });
       }
     }
@@ -1970,7 +1970,7 @@ async function enrichSideMessages(messages = []) {
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
-          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donos" },
+          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" },
         });
       }
     }
@@ -3837,7 +3837,7 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
             currency: "eur",
             unit_amount: selectedPack.amount,
             product_data: {
-              name: `Recarga Donos · ${selectedPack.label}`,
+              name: `Recarga Donoss · ${selectedPack.label}`,
               description: `Incluye ${formatCents(selectedPack.baseAmount)} de puntos + ${formatCents(selectedPack.feeAmount)} de gastos operativos`,
             },
           },
@@ -3900,5 +3900,5 @@ async function getStripeAmounts(session) {
 app.use(express.static(__dirname));
 
 app.listen(port, () => {
-  console.log(`Donos server running on http://localhost:${port}`);
+  console.log(`Donoss server running on http://localhost:${port}`);
 });

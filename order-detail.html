@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Detalle del pedido</title>
+    <title>Donoss | Detalle del pedido</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -141,7 +141,7 @@
         }
 
         const offer = purchase.offer || {};
-        const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donos";
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donoss";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
 
@@ -163,7 +163,7 @@
                     <span>{businessName}</span>
                     {isBusinessVerified && <VerifiedBadge />}
                   </div>
-                  <h1 className="mt-3 break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Pedido Donos"}</h1>
+                  <h1 className="mt-3 break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Pedido Donoss"}</h1>
                   <p className="mt-2 text-sm font-bold text-slate-300">{formatDateTime(purchase.created_at)}</p>
                 </div>
               </div>
@@ -180,7 +180,7 @@
                     <div ref={qrRef} className="grid h-44 w-44 place-items-center text-xs font-black text-ink"></div>
                   </div>
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Billete Donos</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Billete Donoss</p>
                     <h2 className="mt-2 text-2xl font-black text-white">Código de validación</h2>
                     <div className="mt-4 grid gap-3 min-[430px]:grid-cols-2">
                       <InfoCard label="Validación" value={purchase.validation_code} />

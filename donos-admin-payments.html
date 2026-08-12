@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Admin pagos</title>
+    <title>Donoss | Admin pagos</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -177,7 +177,7 @@
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadRecharges}>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Pagos Stripe</h1>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Zona privada. Introduce la contraseña para ver las recargas.</p>
                 <input
@@ -220,7 +220,7 @@
             <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
               <header className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donos</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
                 <h1 className="mt-1 break-words text-3xl font-black text-white sm:text-4xl">Pagos Stripe</h1>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -253,7 +253,7 @@
 
             <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2">
               <div className="rounded-3xl border border-mint/25 bg-mint/10 p-4 sm:p-5">
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Dinero empresa Donos</p>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Dinero empresa Donoss</p>
                 <p className="mt-2 text-2xl font-black text-white sm:text-3xl">{money(donosMoney)}</p>
               </div>
               <a className="rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
@@ -295,7 +295,7 @@
                   className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar pago, email, ID Donos, cliente..."
+                  placeholder="Buscar pago, email, ID Donoss, cliente..."
                 />
               </label>
             </section>
@@ -373,14 +373,14 @@
                     <DetailItem label="Teléfono" value={selected.profiles?.phone} />
                     <DetailItem label="Barrio" value={selected.profiles?.neighborhood} />
                     <DetailItem label="Dirección" value={selected.profiles?.address} />
-                    <DetailItem label="ID Donos" value={formatDonosId(selected.profiles?.transaction_id)} />
+                    <DetailItem label="ID Donoss" value={formatDonosId(selected.profiles?.transaction_id)} />
                     <DetailItem label="Tipo de cuenta" value={selected.profiles?.account_type} />
                     <DetailItem label="Puntos comprados" value={`${selected.points} ptos.`} />
                     <DetailItem label="Puntos actuales" value={`${selected.profiles?.points || 0} ptos.`} />
                     <DetailItem label="Pagó" value={money(selected.amount_total, selected.currency)} />
                     <DetailItem label="Stripe cortó" value={`-${money(selected.stripe_fee_amount, selected.currency)}`} />
                     <DetailItem label="Neto recibido" value={money(selected.net_amount, selected.currency)} />
-                    <DetailItem label="Dinero Donos" value={money(selected.donos_company_margin_cents, selected.currency)} />
+                    <DetailItem label="Dinero Donoss" value={money(selected.donos_company_margin_cents, selected.currency)} />
                     <DetailItem label="Deuda generada" value={money(selected.donos_debt_cents, selected.currency)} />
                   </div>
 

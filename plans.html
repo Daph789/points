@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Quedar</title>
+    <title>Donoss | Quedar</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -117,7 +117,7 @@
       }
 
       function planTitle(plan) {
-        return plan.title || plan.purchase?.offer?.title || "Plan Donos";
+        return plan.title || plan.purchase?.offer?.title || "Plan Donoss";
       }
 
       function ticketImage(ticket) {
@@ -138,7 +138,7 @@
       }
 
       function offerMerchant(ticket) {
-        return ticket?.offer?.business_display_name || ticket?.receiver?.display_name || "Donos";
+        return ticket?.offer?.business_display_name || ticket?.receiver?.display_name || "Donoss";
       }
 
       function offerCategories(ticket) {
@@ -260,8 +260,8 @@
               <div className="absolute left-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[10px] font-black text-white backdrop-blur">Billete verificado</div>
             </div>
             <div className="min-w-0">
-              <p className="truncate text-base font-black text-white">{ticket.offer?.title || "Billete Donos"}</p>
-              <p className="mt-1 truncate text-sm font-bold text-slate-400">{ticket.offer?.business_display_name || ticket.receiver?.display_name || "Donos"}</p>
+              <p className="truncate text-base font-black text-white">{ticket.offer?.title || "Billete Donoss"}</p>
+              <p className="mt-1 truncate text-sm font-bold text-slate-400">{ticket.offer?.business_display_name || ticket.receiver?.display_name || "Donoss"}</p>
               <p className="mt-2 text-xs font-bold text-slate-500">{formatDate(ticket.created_at)} · {ticket.total_points || 0} ptos.</p>
             </div>
           </button>
@@ -304,7 +304,7 @@
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
         const offer = plan.purchase?.offer || {};
-        const creatorName = plan.creator?.display_name || "Usuario Donos";
+        const creatorName = plan.creator?.display_name || "Usuario Donoss";
         const counts = plan.counts || {};
         const full = Number(plan.wanted_women || 0) + Number(plan.wanted_men || 0) + Number(plan.wanted_open || 0);
         const accepted = Number(counts.accepted || 0);
@@ -329,7 +329,7 @@
                   {plan.viewer_member && <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-black text-white">{statusLabel(plan.viewer_member.status)}</span>}
                 </div>
                 <h2 className="mt-3 text-2xl font-black leading-tight text-white">{planTitle(plan)}</h2>
-                <p className="mt-1 truncate text-sm font-bold text-slate-200">{plan.purchase?.offer?.title || "Billete Donos"}</p>
+                <p className="mt-1 truncate text-sm font-bold text-slate-200">{plan.purchase?.offer?.title || "Billete Donoss"}</p>
               </div>
             </div>
             <div className="p-4">
@@ -960,7 +960,7 @@
               <header className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</div>
                 <div>
-                  <p className="text-lg font-black">Donos</p>
+                  <p className="text-lg font-black">Donoss</p>
                   <p className="text-xs font-semibold text-slate-400">Zona empresa</p>
                 </div>
               </header>
@@ -983,7 +983,7 @@
               <a href="home.html" className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</div>
                 <div>
-                  <p className="text-lg font-black">Donos</p>
+                  <p className="text-lg font-black">Donoss</p>
                   <p className="text-xs font-semibold text-slate-400">Quedar</p>
                 </div>
               </a>
@@ -1127,7 +1127,7 @@
                       )}
                     </div>
                   )}
-                  <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donos lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
+                  <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donoss lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
                   {status && mode === "create" && !status.includes("correctamente") && !status.includes("Editando") && (
                     <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
                       {status}
@@ -1279,10 +1279,10 @@
                   </div>
                   <div className="p-5">
                     <p className="text-sm font-bold leading-6 text-slate-300">
-                      Para ir con {purchaseRequiredPlan.creator?.display_name || "esta persona"} y garantizar tu presencia, primero tienes que comprar este mismo billete en Donos.
+                      Para ir con {purchaseRequiredPlan.creator?.display_name || "esta persona"} y garantizar tu presencia, primero tienes que comprar este mismo billete en Donoss.
                     </p>
                     <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
-                      <p className="text-lg font-black text-white">{purchaseRequiredPlan.purchase?.offer?.title || "Billete Donos"}</p>
+                      <p className="text-lg font-black text-white">{purchaseRequiredPlan.purchase?.offer?.title || "Billete Donoss"}</p>
                       <p className="mt-1 text-sm font-bold text-slate-400">{offerMerchant(purchaseRequiredPlan.purchase)}</p>
                       {purchaseRequiredPlan.purchase?.offer?.address && <p className="mt-2 text-xs font-bold text-slate-500">{purchaseRequiredPlan.purchase.offer.address}</p>}
                     </div>
@@ -1348,7 +1348,7 @@
                           {categories && <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{categories}</span>}
                           <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">Billete verificado</span>
                         </div>
-                        <h3 className="mt-3 text-2xl font-black text-white">{offer.title || "Billete Donos"}</h3>
+                        <h3 className="mt-3 text-2xl font-black text-white">{offer.title || "Billete Donoss"}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-200">
                           <span>{merchant}</span>
                           {offer.business_is_verified && <VerifiedBadge />}
@@ -1478,7 +1478,7 @@
                                 <div className="grid gap-3 p-4">
                                   <div>
                                     <div className="flex items-center gap-2">
-                                      <p className="font-black text-white">{member.user?.display_name || "Usuario Donos"}</p>
+                                      <p className="font-black text-white">{member.user?.display_name || "Usuario Donoss"}</p>
                                       {member.user?.is_verified && <VerifiedBadge />}
                                     </div>
                                     <p className="mt-1 text-sm font-bold text-slate-400">{genderLabel(member.gender)} · {statusLabel(member.status)} · {formatDate(member.created_at)} {formatTime(member.created_at)}</p>
@@ -1555,7 +1555,7 @@
                         <h2 className="mt-4 text-2xl font-black text-white">{hasGroup ? "Dejar administración" : "Cancelar plan"}</h2>
                         <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
                           {hasGroup
-                            ? "Este plan ya tiene participantes. Si continúas, no se eliminará: Donos elegirá un nuevo administrador entre las personas aceptadas y tú pasarás a lista de espera."
+                            ? "Este plan ya tiene participantes. Si continúas, no se eliminará: Donoss elegirá un nuevo administrador entre las personas aceptadas y tú pasarás a lista de espera."
                             : "Este plan todavía no tiene participantes aceptados. Si continúas, se cancelará y dejará de aparecer en Quedar."}
                         </p>
                         <div className="mt-5 grid grid-cols-2 gap-3">

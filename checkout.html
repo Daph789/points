@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Pago</title>
+    <title>Donoss | Pago</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -239,11 +239,11 @@
             localStorage.setItem("donosPoints", String(updatedPoints));
             setSuccessPurchase({
               id: data?.purchase_id,
-              title: offer.title || "Oferta Donos",
+              title: offer.title || "Oferta Donoss",
               totalPoints,
               remainingPoints: updatedPoints,
               deliveryLabel,
-              receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donos",
+              receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donoss",
             });
             setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
             setProfile((current) => ({ ...current, points: updatedPoints, address: deliveryAddress.trim() || current?.address }));
@@ -320,7 +320,7 @@
 
                 <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Cuenta que recibe los puntos</p>
-                  <p className="mt-2 text-base font-black text-white">{offer.receiver_display_name || "Comercio Donos"}</p>
+                  <p className="mt-2 text-base font-black text-white">{offer.receiver_display_name || "Comercio Donoss"}</p>
                   <p className="mt-1 text-sm font-bold text-slate-400">{formatDonosId(offer.receiver_transaction_id)}</p>
                 </div>
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donos | Ingreso recibido</title>
+    <title>Donoss | Ingreso recibido</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -111,7 +111,7 @@
         const offer = purchase.offer || {};
         const buyer = purchase.buyer || {};
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
-        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donos";
+        const businessName = offer.business_display_name || purchase.receiver?.display_name || "Comercio Donoss";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
 
         return (
@@ -132,8 +132,8 @@
                     <span className="truncate">{businessName}</span>
                     {isBusinessVerified && <VerifiedBadge />}
                   </div>
-                  <p className="mt-3 break-words text-lg font-black text-white">De {buyer.display_name || buyer.email || "Cliente Donos"}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-300">{offer.title || "Pedido Donos"}</p>
+                  <p className="mt-3 break-words text-lg font-black text-white">De {buyer.display_name || buyer.email || "Cliente Donoss"}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-300">{offer.title || "Pedido Donoss"}</p>
                 </div>
               </div>
 
@@ -150,7 +150,7 @@
                   <Detail label="Comprador" value={buyer.display_name} />
                   <Detail label="Email" value={buyer.email} />
                   <Detail label="Teléfono" value={buyer.phone} />
-                  <Detail label="ID Donos cliente" value={buyer.transaction_id} />
+                  <Detail label="ID Donoss cliente" value={buyer.transaction_id} />
                   <Detail label="Producto" value={offer.title} />
                   <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
                   <Detail label="Entrega" value={purchase.delivery_method === "home" ? "Entrega a domicilio" : "Recogida en tienda"} />
