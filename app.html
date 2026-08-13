@@ -194,6 +194,8 @@
         const offerFrames = new Map();
         const chatFrames = new Map();
         const sideGroupFrames = new Map();
+        const pendingChatPrefetches = new Set();
+        const pendingSidePrefetches = new Set();
         const boot = document.getElementById("spa-boot");
         let activeIndex = 0;
         let activeRoute = "inicio";
@@ -294,6 +296,10 @@
                 return;
               }
             } catch (_error) {}
+            if (frame.dataset.shouldActivate === "1") {
+              const messageType = frame.dataset.route === "side" ? "donos:activate-side-group" : frame.dataset.route === "chat" ? "donos:activate-chat" : "";
+              if (messageType) frame.contentWindow?.postMessage({ type: messageType }, window.location.origin);
+            }
             hideBootWhenReady();
           }, { once: false });
         }
@@ -346,23 +352,45 @@
         }
 
         let activePlanChatId = "";
-        function openPlanChat(planId, options = {}) {
+        function ensurePlanChatFrame(planId, options = {}) {
           const cleanId = String(planId || "").trim();
-          if (!cleanId) return;
-          activePlanChatId = cleanId;
+          if (!cleanId) return null;
           if (!chatFrames.has(cleanId)) {
             const frame = document.createElement("iframe");
             frame.className = "spa-frame";
             frame.dataset.route = "chat";
             frame.dataset.planId = cleanId;
             frame.dataset.index = "2";
+            frame.dataset.prefetched = options.prefetch ? "1" : "0";
             frame.title = "Chat Quedar";
-            frame.src = `plan-chat.html?embedded=1&id=${encodeURIComponent(cleanId)}`;
+            frame.src = `plan-chat.html?embedded=1&id=${encodeURIComponent(cleanId)}${options.prefetch ? "&prefetch=1" : ""}`;
             watchFrame(frame);
             root.appendChild(frame);
             chatFrames.set(cleanId, frame);
-          } else {
-            chatFrames.get(cleanId).contentWindow?.postMessage({ type: "donos:refresh-chat" }, window.location.origin);
+          }
+          return chatFrames.get(cleanId);
+        }
+
+        function prefetchPlanChat(planId) {
+          const cleanId = String(planId || "").trim();
+          if (!cleanId || chatFrames.has(cleanId) || pendingChatPrefetches.has(cleanId) || pendingChatPrefetches.size > 5 || chatFrames.size > 8) return;
+          pendingChatPrefetches.add(cleanId);
+          const run = () => {
+            ensurePlanChatFrame(cleanId, { prefetch: true });
+            pendingChatPrefetches.delete(cleanId);
+          };
+          (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 450)))(run);
+        }
+
+        function openPlanChat(planId, options = {}) {
+          const cleanId = String(planId || "").trim();
+          if (!cleanId) return;
+          activePlanChatId = cleanId;
+          const frame = ensurePlanChatFrame(cleanId);
+          if (frame) {
+            frame.dataset.prefetched = "0";
+            frame.dataset.shouldActivate = "1";
+            frame.contentWindow?.postMessage({ type: "donos:activate-chat" }, window.location.origin);
           }
           setRoute("chat", { skipHash: true });
           if (!options.skipHash) {
@@ -371,25 +399,51 @@
         }
 
         let activeSideGroupKey = "";
-        function openSideGroup(planId, status, options = {}) {
+        function ensureSideGroupFrame(planId, status, options = {}) {
           const cleanId = String(planId || "").trim();
           const cleanStatus = ["waiting", "removed"].includes(status) ? status : "";
-          if (!cleanId || !cleanStatus) return;
+          if (!cleanId || !cleanStatus) return null;
           const key = `${cleanId}:${cleanStatus}`;
-          activeSideGroupKey = key;
           if (!sideGroupFrames.has(key)) {
             const frame = document.createElement("iframe");
             frame.className = "spa-frame";
             frame.dataset.route = "side";
             frame.dataset.sideKey = key;
             frame.dataset.index = "2";
+            frame.dataset.prefetched = options.prefetch ? "1" : "0";
             frame.title = "Grupo alternativo";
-            frame.src = `side-group.html?embedded=1&id=${encodeURIComponent(cleanId)}&status=${encodeURIComponent(cleanStatus)}`;
+            frame.src = `side-group.html?embedded=1&id=${encodeURIComponent(cleanId)}&status=${encodeURIComponent(cleanStatus)}${options.prefetch ? "&prefetch=1" : ""}`;
             watchFrame(frame);
             root.appendChild(frame);
             sideGroupFrames.set(key, frame);
-          } else {
-            sideGroupFrames.get(key).contentWindow?.postMessage({ type: "donos:refresh-side-group" }, window.location.origin);
+          }
+          return sideGroupFrames.get(key);
+        }
+
+        function prefetchSideGroup(planId, status) {
+          const cleanId = String(planId || "").trim();
+          const cleanStatus = ["waiting", "removed"].includes(status) ? status : "";
+          const key = `${cleanId}:${cleanStatus}`;
+          if (!cleanId || !cleanStatus || sideGroupFrames.has(key) || pendingSidePrefetches.has(key) || pendingSidePrefetches.size > 5 || sideGroupFrames.size > 8) return;
+          pendingSidePrefetches.add(key);
+          const run = () => {
+            ensureSideGroupFrame(cleanId, cleanStatus, { prefetch: true });
+            pendingSidePrefetches.delete(key);
+          };
+          (window.requestIdleCallback || ((callback) => window.setTimeout(callback, 600)))(run);
+        }
+
+        function openSideGroup(planId, status, options = {}) {
+          const cleanId = String(planId || "").trim();
+          const cleanStatus = ["waiting", "removed"].includes(status) ? status : "";
+          if (!cleanId || !cleanStatus) return;
+          const key = `${cleanId}:${cleanStatus}`;
+          activeSideGroupKey = key;
+          const frame = ensureSideGroupFrame(cleanId, cleanStatus);
+          if (frame) {
+            frame.dataset.prefetched = "0";
+            frame.dataset.shouldActivate = "1";
+            frame.contentWindow?.postMessage({ type: "donos:activate-side-group" }, window.location.origin);
           }
           setRoute("side", { skipHash: true });
           if (!options.skipHash) {
@@ -434,8 +488,16 @@
             openPlanChat(event.data.id);
             return;
           }
+          if (event.data?.type === "donos:prefetch-plan-chat") {
+            prefetchPlanChat(event.data.id);
+            return;
+          }
           if (event.data?.type === "donos:side-group") {
             openSideGroup(event.data.id, event.data.status);
+            return;
+          }
+          if (event.data?.type === "donos:prefetch-side-group") {
+            prefetchSideGroup(event.data.id, event.data.status);
             return;
           }
           if (event.data?.type === "donos:detail-back") {

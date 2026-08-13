@@ -299,7 +299,7 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, chatUnreadCount = 0, sideUnreadCount = 0 }) {
+      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0 }) {
         const image = ticketImage(plan.purchase);
         const merchant = offerMerchant(plan.purchase);
         const address = plan.purchase?.offer?.address || "";
@@ -366,12 +366,22 @@
                 </button>
               </div>
               {canChat && (
-                <button className="mt-2 h-12 w-full rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" onClick={() => onChat(plan)}>
+                <button
+                  className="mt-2 h-12 w-full rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint"
+                  onClick={() => onChat(plan)}
+                  onPointerEnter={() => onWarmChat?.(plan)}
+                  onTouchStart={() => onWarmChat?.(plan)}
+                >
                   Chatear con el grupo{chatUnreadCount > 0 ? ` · +${chatUnreadCount > 9 ? "9" : chatUnreadCount}` : ""}
                 </button>
               )}
               {canOpenSideGroup && (
-                <button className="mt-2 h-12 w-full rounded-2xl border border-sun/25 bg-sun/10 text-sm font-black text-sun" onClick={() => onSideGroup(plan, sideStatus)}>
+                <button
+                  className="mt-2 h-12 w-full rounded-2xl border border-sun/25 bg-sun/10 text-sm font-black text-sun"
+                  onClick={() => onSideGroup(plan, sideStatus)}
+                  onPointerEnter={() => onWarmSideGroup?.(plan, sideStatus)}
+                  onTouchStart={() => onWarmSideGroup?.(plan, sideStatus)}
+                >
                   {sideStatus === "waiting" ? "Ver grupo alternativo" : "Ver grupo aparte"}{sideUnreadCount > 0 ? ` · +${sideUnreadCount > 9 ? "9" : sideUnreadCount}` : ""}
                 </button>
               )}
@@ -415,10 +425,16 @@
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
+        const warmedChatIdsRef = React.useRef(new Set());
+        const warmedSideKeysRef = React.useRef(new Set());
 
         React.useEffect(() => {
           bootstrap();
         }, []);
+
+        React.useEffect(() => {
+          warmVisibleChats();
+        }, [plans, ownedPlans, joinedPlans, notificationEvents.length, mode]);
 
         async function api(path, options = {}) {
           const response = await fetch(path, {
@@ -523,6 +539,55 @@
 
         function sideUnreadCountForPlan(planId, status) {
           return sideUnreadEventsForPlan(planId, status).length;
+        }
+
+        function canUseMainChat(plan) {
+          return Boolean(plan?.id && (plan.is_owner || plan.viewer_member?.status === "accepted"));
+        }
+
+        function sideStatusForPlan(plan) {
+          return ["waiting", "removed"].includes(plan?.viewer_member?.status) ? plan.viewer_member.status : "";
+        }
+
+        function canUseSideGroup(plan) {
+          return Boolean(plan?.id && plan.status === "confirmed" && sideStatusForPlan(plan));
+        }
+
+        function warmPlanChat(plan) {
+          if (!isEmbeddedPlans || window.parent === window || !canUseMainChat(plan)) return;
+          if (warmedChatIdsRef.current.has(plan.id)) return;
+          warmedChatIdsRef.current.add(plan.id);
+          window.parent.postMessage({ type: "donos:prefetch-plan-chat", id: plan.id }, window.location.origin);
+        }
+
+        function warmSideGroup(plan, status = sideStatusForPlan(plan)) {
+          if (!isEmbeddedPlans || window.parent === window || !canUseSideGroup(plan)) return;
+          const key = `${plan.id}:${status}`;
+          if (warmedSideKeysRef.current.has(key)) return;
+          warmedSideKeysRef.current.add(key);
+          window.parent.postMessage({ type: "donos:prefetch-side-group", id: plan.id, status }, window.location.origin);
+        }
+
+        function warmVisibleChats() {
+          if (!isEmbeddedPlans || window.parent === window) return;
+          const visibleByMode =
+            mode === "mine"
+              ? ownedPlans
+              : mode === "joined"
+                ? joinedPlans
+                : [...joinedPlans, ...ownedPlans, ...plans];
+          const uniquePlans = [...new Map(visibleByMode.filter(Boolean).map((plan) => [plan.id, plan])).values()];
+          uniquePlans
+            .sort((first, second) => {
+              const firstUnread = chatUnreadCountForPlan(first.id) + sideUnreadCountForPlan(first.id, sideStatusForPlan(first));
+              const secondUnread = chatUnreadCountForPlan(second.id) + sideUnreadCountForPlan(second.id, sideStatusForPlan(second));
+              return secondUnread - firstUnread;
+            })
+            .slice(0, 4)
+            .forEach((plan) => {
+              warmPlanChat(plan);
+              warmSideGroup(plan);
+            });
         }
 
         async function markQuedarSubsectionRead(subsection) {
@@ -1016,7 +1081,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -1140,14 +1205,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
