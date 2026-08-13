@@ -88,6 +88,10 @@
         box-shadow: 0 40px 120px rgba(0, 0, 0, 0.50);
       }
 
+      .brand-logo-card {
+        background: linear-gradient(180deg, #ffffff 0%, #f6f8ff 100%);
+      }
+
       .float-card {
         animation: drift 8s ease-in-out infinite;
       }
@@ -115,69 +119,74 @@
   </head>
   <body class="antialiased">
     <header class="fixed left-0 right-0 top-0 z-50 px-4 pt-4">
-      <nav class="mx-auto flex max-w-6xl items-center justify-between rounded-[26px] border border-white/10 bg-[#070A12]/72 px-4 py-3 shadow-soft backdrop-blur-2xl">
+      <nav class="mx-auto flex max-w-6xl items-center justify-between rounded-[24px] border border-white/10 bg-[#070A12]/72 px-3 py-3 shadow-soft backdrop-blur-2xl sm:rounded-[26px] sm:px-4">
         <a href="index.html" class="flex items-center gap-3" aria-label="Donoss">
-          <span class="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</span>
+          <span class="brand-logo-card grid h-10 w-10 place-items-center overflow-hidden rounded-2xl p-1.5 shadow-glow sm:h-11 sm:w-11">
+            <img src="assets/logo-donoss-original.jpg" alt="" class="h-full w-full object-contain" />
+          </span>
           <span class="leading-tight">
-            <span class="block text-lg font-black">Donoss</span>
-            <span class="block text-xs font-bold text-slate-400">Donostia en puntos</span>
+            <span class="block text-base font-black sm:text-lg">Donoss</span>
+            <span class="hidden text-xs font-bold text-slate-400 min-[380px]:block">Donostia en puntos</span>
           </span>
         </a>
         <div class="flex items-center gap-2">
           <a href="login.html" class="hidden h-11 place-items-center rounded-2xl border border-white/10 px-4 text-sm font-black text-white transition hover:bg-white/[0.07] sm:grid">Entrar</a>
-          <a href="signup.html" class="grid h-11 place-items-center rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]">Crear cuenta</a>
+          <a href="signup.html" class="grid h-10 place-items-center rounded-2xl bg-mint px-3 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0] sm:h-11 sm:px-4">Crear cuenta</a>
         </div>
       </nav>
     </header>
 
     <main>
-      <section class="relative min-h-screen overflow-hidden px-4 pb-16 pt-28 sm:pt-32">
+      <section class="relative overflow-hidden px-4 pb-12 pt-24 sm:min-h-screen sm:pb-16 sm:pt-32">
         <div class="hero-scene" aria-hidden="true"></div>
-        <div class="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_.98fr]">
+        <div class="relative mx-auto grid max-w-6xl items-center gap-7 sm:gap-10 lg:grid-cols-[1.02fr_.98fr]">
           <div class="max-w-3xl">
-            <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200 backdrop-blur-xl">
+            <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-200 backdrop-blur-xl sm:px-4 sm:text-sm">
               <span class="h-2.5 w-2.5 rounded-full bg-mint shadow-[0_0_24px_rgba(66,242,179,.95)]"></span>
-              Nueva forma de salir por Donostia
+              Chollos, planes y puntos en una app
             </div>
-            <h1 class="mt-7 max-w-4xl text-[46px] font-black leading-[0.98] tracking-normal text-white sm:text-7xl lg:text-8xl">
+            <h1 class="mt-5 max-w-4xl text-[40px] font-black leading-[0.98] tracking-normal text-white min-[390px]:text-[44px] sm:mt-7 sm:text-7xl lg:text-8xl">
               Tus planes cuestan menos cuando tu ciudad se mueve contigo.
             </h1>
-            <p class="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-300 sm:text-xl">
-              Donoss une chollos culturales, entradas con descuento, puntos y grupos para ir con gente real. Descubre qué hacer, compra mejor y queda sin empezar de cero.
+            <p class="mt-4 max-w-2xl text-base font-semibold leading-7 text-slate-300 sm:mt-6 sm:text-xl sm:leading-8">
+              Donoss reúne entradas con descuento, puntos, comercios locales y grupos para ir con gente real. Descubre qué hacer, compra mejor y queda sin empezar de cero.
             </p>
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div class="mt-6 flex flex-col gap-3 sm:mt-8 sm:flex-row">
               <a href="signup.html" class="grid h-14 place-items-center rounded-2xl bg-mint px-6 text-base font-black text-ink shadow-glow transition hover:translate-y-[-1px] hover:bg-[#66ffd0]">Empezar gratis</a>
-              <a href="#como-funciona" class="grid h-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] px-6 text-base font-black text-white backdrop-blur transition hover:bg-white/[0.10]">Ver cómo funciona</a>
+              <a href="#como-funciona" class="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] px-6 text-sm font-black text-white backdrop-blur transition hover:bg-white/[0.10] sm:h-14 sm:text-base">Ver cómo funciona</a>
             </div>
-            <div class="mt-8 grid max-w-xl grid-cols-3 gap-3">
-              <div class="glass rounded-3xl p-4">
-                <p class="text-2xl font-black text-white">10 pts</p>
-                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">por cada euro de valor</p>
+            <div class="mt-5 grid max-w-xl grid-cols-3 gap-2 sm:mt-8 sm:gap-3">
+              <div class="glass rounded-2xl p-3 sm:rounded-3xl sm:p-4">
+                <p class="text-lg font-black text-white sm:text-2xl">Puntos</p>
+                <p class="mt-1 text-[11px] font-bold leading-4 text-slate-400 sm:text-xs sm:leading-5">para pagar menos</p>
               </div>
-              <div class="glass rounded-3xl p-4">
-                <p class="text-2xl font-black text-white">QR</p>
-                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">validación rápida</p>
+              <div class="glass rounded-2xl p-3 sm:rounded-3xl sm:p-4">
+                <p class="text-lg font-black text-white sm:text-2xl">QR</p>
+                <p class="mt-1 text-[11px] font-bold leading-4 text-slate-400 sm:text-xs sm:leading-5">sin líos</p>
               </div>
-              <div class="glass rounded-3xl p-4">
-                <p class="text-2xl font-black text-white">+ gente</p>
-                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">planes compartidos</p>
+              <div class="glass rounded-2xl p-3 sm:rounded-3xl sm:p-4">
+                <p class="text-lg font-black text-white sm:text-2xl">Quedar</p>
+                <p class="mt-1 text-[11px] font-bold leading-4 text-slate-400 sm:text-xs sm:leading-5">con gente real</p>
               </div>
             </div>
           </div>
 
-          <div class="relative mx-auto w-full max-w-[420px] lg:mr-0">
-            <div class="float-card glass absolute -left-6 top-16 z-20 hidden w-44 rounded-[28px] p-4 shadow-soft sm:block" style="--rotate:-7deg">
-              <p class="text-xs font-black uppercase tracking-[0.14em] text-sun">Hoy</p>
-              <p class="mt-2 text-lg font-black">Cine con descuento</p>
-              <p class="mt-1 text-sm font-bold text-slate-400">100 puntos para desbloquear</p>
+          <div class="relative mx-auto w-full max-w-[335px] pt-2 min-[390px]:max-w-[360px] sm:max-w-[420px] sm:pt-0 lg:mr-0">
+            <div class="float-card glass absolute -left-1 top-[132px] z-20 w-[132px] rounded-[22px] p-3 shadow-soft min-[390px]:-left-5 min-[390px]:top-[145px] min-[390px]:w-40 sm:-left-6 sm:top-16 sm:w-44 sm:rounded-[28px] sm:p-4" style="--rotate:-7deg">
+              <p class="text-[10px] font-black uppercase tracking-[0.14em] text-sun sm:text-xs">Hoy</p>
+              <p class="mt-1 text-base font-black leading-tight sm:mt-2 sm:text-lg">Cine con descuento</p>
+              <p class="mt-1 text-xs font-bold leading-5 text-slate-400 sm:text-sm">100 puntos para desbloquear</p>
             </div>
-            <div class="float-card glass absolute -right-5 top-64 z-20 hidden w-44 rounded-[28px] p-4 shadow-soft sm:block" style="--rotate:6deg">
-              <p class="text-xs font-black uppercase tracking-[0.14em] text-mint">Quedar</p>
-              <p class="mt-2 text-lg font-black">3 personas se apuntaron</p>
-              <p class="mt-1 text-sm font-bold text-slate-400">Chat del grupo activo</p>
+            <div class="float-card glass absolute -right-1 top-[352px] z-20 w-[136px] rounded-[22px] p-3 shadow-soft min-[390px]:-right-5 min-[390px]:top-[380px] min-[390px]:w-40 sm:-right-5 sm:top-64 sm:w-44 sm:rounded-[28px] sm:p-4" style="--rotate:6deg">
+              <p class="text-[10px] font-black uppercase tracking-[0.14em] text-mint sm:text-xs">Quedar</p>
+              <p class="mt-1 text-base font-black leading-tight sm:mt-2 sm:text-lg">3 personas se apuntaron</p>
+              <p class="mt-1 text-xs font-bold leading-5 text-slate-400 sm:text-sm">Chat del grupo activo</p>
             </div>
-            <div class="phone relative z-10 overflow-hidden rounded-[46px] p-4">
-              <div class="rounded-[34px] border border-white/10 bg-[#070A12] p-4">
+            <div class="brand-logo-card mx-auto mb-3 w-[84%] rounded-[30px] p-4 shadow-soft sm:mb-4 sm:w-full sm:rounded-[34px] sm:p-5">
+              <img src="assets/logo-donoss-original.jpg" alt="Donoss" class="mx-auto h-20 w-full object-contain min-[390px]:h-24 sm:h-32" />
+            </div>
+            <div class="phone relative z-10 overflow-hidden rounded-[34px] p-3 sm:rounded-[46px] sm:p-4">
+              <div class="rounded-[26px] border border-white/10 bg-[#070A12] p-3 sm:rounded-[34px] sm:p-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <p class="text-sm font-black text-white">Donoss</p>
@@ -185,27 +194,27 @@
                   </div>
                   <span class="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
                 </div>
-                <div class="mt-5 rounded-[30px] border border-mint/25 bg-mint/10 p-5">
+                <div class="mt-4 rounded-[24px] border border-mint/25 bg-mint/10 p-4 sm:mt-5 sm:rounded-[30px] sm:p-5">
                   <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Saldo</p>
-                  <p class="mt-2 text-5xl font-black">650</p>
+                  <p class="mt-1 text-4xl font-black sm:mt-2 sm:text-5xl">320</p>
                   <p class="text-sm font-bold text-slate-300">puntos</p>
-                  <div class="mt-5 rounded-3xl border border-mint/20 bg-black/20 p-4">
+                  <div class="mt-4 rounded-2xl border border-mint/20 bg-black/20 p-3 sm:mt-5 sm:rounded-3xl sm:p-4">
                     <p class="text-xs font-black text-mint">ID Donoss</p>
-                    <p class="mt-1 text-lg font-black">BNP7-5Y22-5253</p>
+                    <p class="mt-1 text-sm font-black min-[390px]:text-base sm:text-lg">DEMO-2026-APP</p>
                   </div>
                 </div>
-                <div class="mt-5">
+                <div class="mt-4 sm:mt-5">
                   <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Cerca de ti</p>
-                  <div class="mt-3 flex gap-3 overflow-hidden">
-                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-mint text-4xl">📚</div>
-                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-coral text-4xl">🎬</div>
-                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-sun text-4xl">🎪</div>
+                  <div class="mt-3 flex gap-2 overflow-hidden sm:gap-3">
+                    <div class="grid h-20 w-20 shrink-0 place-items-center rounded-[22px] bg-mint text-3xl sm:h-24 sm:w-24 sm:rounded-[28px] sm:text-4xl">📚</div>
+                    <div class="grid h-20 w-20 shrink-0 place-items-center rounded-[22px] bg-coral text-3xl sm:h-24 sm:w-24 sm:rounded-[28px] sm:text-4xl">🎬</div>
+                    <div class="grid h-20 w-20 shrink-0 place-items-center rounded-[22px] bg-sun text-3xl sm:h-24 sm:w-24 sm:rounded-[28px] sm:text-4xl">🎪</div>
                   </div>
                 </div>
-                <div class="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-4">
+                <div class="mt-4 rounded-[24px] border border-white/10 bg-white/[0.055] p-4 sm:mt-5 sm:rounded-[30px]">
                   <p class="text-xs font-black uppercase tracking-[0.14em] text-mint">Plan abierto</p>
-                  <p class="mt-2 text-xl font-black">Concierto en Gros</p>
-                  <p class="mt-1 text-sm font-bold text-slate-400">2 chicas · 2 chicos · chat protegido</p>
+                  <p class="mt-2 text-lg font-black sm:text-xl">Concierto en Gros</p>
+                  <p class="mt-1 text-xs font-bold text-slate-400 sm:text-sm">Chat de grupo protegido</p>
                 </div>
               </div>
             </div>
@@ -213,64 +222,229 @@
         </div>
       </section>
 
-      <section id="como-funciona" class="px-4 py-16 sm:py-24">
+      <section id="como-funciona" class="px-4 py-12 sm:py-24">
         <div class="mx-auto max-w-6xl">
-          <div class="max-w-2xl">
-            <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">La idea</p>
-            <h2 class="mt-3 text-4xl font-black leading-tight sm:text-6xl">Salir más, gastar menos, quedar mejor.</h2>
+          <div class="grid items-end gap-5 md:grid-cols-[1fr_.8fr]">
+            <div class="max-w-2xl">
+              <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">La idea</p>
+              <h2 class="mt-3 text-3xl font-black leading-tight sm:text-6xl">Salir más. Gastar menos. Quedar mejor.</h2>
+            </div>
+            <p class="text-sm font-semibold leading-6 text-slate-400 sm:text-base sm:leading-7">
+              En vez de buscar planes por un lado, pagar por otro y organizar gente en mil chats, Donoss lo junta en un flujo simple.
+            </p>
           </div>
-          <div class="mt-8 grid gap-4 md:grid-cols-3">
-            <article class="glass rounded-[34px] p-6">
-              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-mint text-3xl">🎟️</span>
-              <h3 class="mt-5 text-2xl font-black">Compra con puntos</h3>
-              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Recarga puntos, desbloquea precios reducidos y enseña tu QR cuando llegue el momento.</p>
+
+          <div class="mt-7 grid gap-3 lg:grid-cols-3">
+            <article class="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-soft sm:p-5">
+              <div class="flex items-center gap-3">
+                <span class="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-2xl">1</span>
+                <div>
+                  <p class="text-lg font-black text-white">Encuentra algo cerca</p>
+                  <p class="mt-1 text-sm font-bold text-slate-400">Cine, conciertos, libros, museos o eventos del barrio.</p>
+                </div>
+              </div>
             </article>
-            <article class="glass rounded-[34px] p-6">
-              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-sun text-3xl">🧭</span>
-              <h3 class="mt-5 text-2xl font-black">Descubre planes locales</h3>
-              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Cine, libros, conciertos, museos, gaming y eventos cerca de tu barrio.</p>
+            <article class="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-soft sm:p-5">
+              <div class="flex items-center gap-3">
+                <span class="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl text-ink">2</span>
+                <div>
+                  <p class="text-lg font-black text-white">Paga mejor con puntos</p>
+                  <p class="mt-1 text-sm font-bold text-slate-400">Desbloquea precios reducidos y guarda tu billete.</p>
+                </div>
+              </div>
             </article>
-            <article class="glass rounded-[34px] p-6">
-              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-coral text-3xl">👥</span>
-              <h3 class="mt-5 text-2xl font-black">Ve con gente real</h3>
-              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Publica un plan, acepta participantes, chatea y organiza el grupo sin enseñar códigos privados.</p>
+            <article class="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-soft sm:p-5">
+              <div class="flex items-center gap-3">
+                <span class="grid h-12 w-12 place-items-center rounded-2xl bg-coral text-2xl">3</span>
+                <div>
+                  <p class="text-lg font-black text-white">Ve acompañado</p>
+                  <p class="mt-1 text-sm font-bold text-slate-400">Crea un grupo, acepta gente y chatea sin exponer tus códigos.</p>
+                </div>
+              </div>
             </article>
           </div>
+
+          <div class="mt-8 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.045] p-4 shadow-soft sm:mt-12 sm:rounded-[44px] sm:p-6 lg:p-8">
+            <div class="grid gap-5 lg:grid-cols-[.88fr_1.12fr] lg:items-center">
+              <div>
+                <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Dentro de Donoss</p>
+                <h3 class="mt-3 text-3xl font-black leading-tight sm:text-5xl">La app se entiende viéndola.</h3>
+                <p class="mt-3 max-w-xl text-sm font-semibold leading-6 text-slate-400 sm:text-base sm:leading-7">
+                  Saldo, ofertas, grupos, QR y chat viven en una experiencia única. Sin pantallas raras, sin enseñar códigos privados y sin perder el hilo del plan.
+                </p>
+              </div>
+              <div class="grid gap-3 sm:relative sm:min-h-[470px]">
+                <article class="float-card glass relative rounded-[30px] p-5 shadow-soft sm:absolute sm:left-0 sm:top-2 sm:w-[48%]" style="--rotate:-3deg">
+                  <div class="flex items-start justify-between gap-4">
+                    <div>
+                      <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Plan activo</p>
+                      <p class="mt-3 text-2xl font-black leading-tight">Cine con descuento</p>
+                      <p class="mt-2 text-sm font-bold text-slate-400">Hoy · 20:00 · Centro</p>
+                    </div>
+                    <span class="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/15 text-2xl">🎬</span>
+                  </div>
+                  <div class="mt-5 h-2 rounded-full bg-white/10">
+                    <div class="h-full w-2/3 rounded-full bg-mint"></div>
+                  </div>
+                </article>
+
+                <article class="float-card glass relative rounded-[30px] p-5 shadow-soft sm:absolute sm:right-0 sm:top-10 sm:w-[42%]" style="--rotate:4deg">
+                  <div class="flex items-center justify-between">
+                    <p class="text-xs font-black uppercase tracking-[0.18em] text-sun">Puntos</p>
+                    <span class="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">-25%</span>
+                  </div>
+                  <p class="mt-4 text-4xl font-black">100</p>
+                  <p class="text-sm font-bold text-slate-400">para desbloquear</p>
+                </article>
+
+                <article class="float-card glass relative rounded-[30px] p-5 shadow-soft sm:absolute sm:left-[20%] sm:top-[180px] sm:w-[34%]" style="--rotate:-6deg">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">QR seguro</p>
+                  <div class="mt-4 grid aspect-square place-items-center rounded-[24px] bg-white p-4">
+                    <div class="grid h-full w-full grid-cols-5 gap-1">
+                      <span class="rounded bg-ink"></span><span></span><span class="rounded bg-ink"></span><span class="rounded bg-ink"></span><span></span>
+                      <span></span><span class="rounded bg-ink"></span><span></span><span class="rounded bg-ink"></span><span class="rounded bg-ink"></span>
+                      <span class="rounded bg-ink"></span><span class="rounded bg-ink"></span><span></span><span></span><span class="rounded bg-ink"></span>
+                      <span></span><span class="rounded bg-ink"></span><span class="rounded bg-ink"></span><span></span><span></span>
+                      <span class="rounded bg-ink"></span><span></span><span></span><span class="rounded bg-ink"></span><span class="rounded bg-ink"></span>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="float-card glass relative rounded-[30px] p-5 shadow-soft sm:absolute sm:bottom-8 sm:right-0 sm:w-[48%]" style="--rotate:5deg">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-violet">Quedar</p>
+                  <p class="mt-3 text-2xl font-black leading-tight">Grupo protegido</p>
+                  <p class="mt-2 text-sm font-bold text-slate-400">Participantes aceptados + chat privado.</p>
+                  <div class="mt-4 flex items-center justify-between gap-3">
+                    <div class="flex -space-x-2">
+                      <span class="grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-mint text-xs font-black text-ink">A</span>
+                      <span class="grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-coral text-xs font-black text-white">M</span>
+                      <span class="grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-sun text-xs font-black text-ink">I</span>
+                      <span class="grid h-9 w-9 place-items-center rounded-full border border-white/20 bg-violet text-xs font-black text-white">+2</span>
+                    </div>
+                    <div class="rounded-2xl bg-mint px-4 py-3 text-sm font-black text-ink">Chat activo</div>
+                  </div>
+                </article>
+
+                <article class="glass hidden rounded-[30px] p-5 shadow-soft sm:absolute sm:bottom-10 sm:left-0 sm:block sm:w-[38%]">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Comercio</p>
+                  <p class="mt-3 text-2xl font-black leading-tight">Validado</p>
+                  <p class="mt-2 text-sm font-bold text-slate-400">Entrada comprobada sin exponer códigos.</p>
+                </article>
+
+                <div class="absolute inset-x-6 top-1/2 -z-10 hidden h-32 -translate-y-1/2 rounded-full bg-mint/20 blur-3xl sm:block"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 grid gap-3 md:mt-10 md:grid-cols-3 md:gap-4">
+            <article class="glass rounded-[28px] p-4 sm:rounded-[34px] sm:p-6">
+              <span class="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-2xl sm:h-14 sm:w-14 sm:text-3xl">🎟️</span>
+              <h3 class="mt-4 text-xl font-black sm:mt-5 sm:text-2xl">Compra con puntos</h3>
+              <p class="mt-2 text-sm font-semibold leading-6 text-slate-400 sm:mt-3">Recarga puntos, desbloquea precios reducidos y enseña tu QR cuando llegue el momento.</p>
+            </article>
+            <article class="glass rounded-[28px] p-4 sm:rounded-[34px] sm:p-6">
+              <span class="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl sm:h-14 sm:w-14 sm:text-3xl">🧭</span>
+              <h3 class="mt-4 text-xl font-black sm:mt-5 sm:text-2xl">Descubre planes locales</h3>
+              <p class="mt-2 text-sm font-semibold leading-6 text-slate-400 sm:mt-3">Cine, libros, conciertos, museos, gaming y eventos cerca de tu barrio.</p>
+            </article>
+            <article class="glass rounded-[28px] p-4 sm:rounded-[34px] sm:p-6">
+              <span class="grid h-12 w-12 place-items-center rounded-2xl bg-coral text-2xl sm:h-14 sm:w-14 sm:text-3xl">👥</span>
+              <h3 class="mt-4 text-xl font-black sm:mt-5 sm:text-2xl">Ve con gente</h3>
+              <p class="mt-2 text-sm font-semibold leading-6 text-slate-400 sm:mt-3">Publica un plan, acepta participantes, chatea y organiza el grupo sin enseñar códigos privados.</p>
+            </article>
+          </div>
+
+          <div class="mt-6 grid gap-4 lg:grid-cols-[1.05fr_.95fr]">
+            <article class="relative overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.045] p-5 shadow-soft sm:p-7">
+              <div class="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-mint/20 blur-3xl"></div>
+              <div class="relative">
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Comprar sin líos</p>
+                <h3 class="mt-3 text-2xl font-black leading-tight sm:text-4xl">Puntos, QR y descuento en la misma tarjeta.</h3>
+                <div class="mt-5 grid gap-3 sm:grid-cols-[.8fr_1.2fr]">
+                  <div class="rounded-[28px] bg-mint p-5 text-ink">
+                    <p class="text-xs font-black uppercase tracking-[0.16em]">Descuento</p>
+                    <p class="mt-3 text-5xl font-black">-25%</p>
+                    <p class="mt-1 text-sm font-black">100 puntos</p>
+                  </div>
+                  <div class="glass rounded-[28px] p-5">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-white">Entrada cine</p>
+                        <p class="mt-1 text-xs font-bold text-slate-400">QR protegido hasta validar</p>
+                      </div>
+                      <span class="rounded-full bg-mint/15 px-3 py-1 text-xs font-black text-mint">Seguro</span>
+                    </div>
+                    <div class="mt-5 h-3 rounded-full bg-white/10">
+                      <div class="h-full w-3/4 rounded-full bg-mint"></div>
+                    </div>
+                    <p class="mt-3 text-xs font-bold text-slate-500">El usuario compra, guarda el billete y lo enseña solo cuando toca.</p>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="relative overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.045] p-5 shadow-soft sm:p-7">
+              <div class="absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-violet/20 blur-3xl"></div>
+              <div class="relative">
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-violet">Quedar mejor</p>
+                <h3 class="mt-3 text-2xl font-black leading-tight sm:text-4xl">Planes con gente real, no chats perdidos.</h3>
+                <div class="mt-5 rounded-[28px] border border-white/10 bg-black/20 p-5">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black">Grupo abierto</p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">Concierto · Gros</p>
+                    </div>
+                    <span class="rounded-full bg-violet px-3 py-1 text-xs font-black text-white">4/5</span>
+                  </div>
+                  <div class="mt-5 flex items-center justify-between gap-3">
+                    <div class="flex -space-x-3">
+                      <span class="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-mint text-sm font-black text-ink">A</span>
+                      <span class="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-coral text-sm font-black text-white">M</span>
+                      <span class="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-sun text-sm font-black text-ink">I</span>
+                      <span class="grid h-12 w-12 place-items-center rounded-full border border-white/20 bg-violet text-sm font-black text-white">+1</span>
+                    </div>
+                    <span class="rounded-2xl bg-white/10 px-4 py-3 text-sm font-black text-white">Chat activo</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </div>
+
         </div>
       </section>
 
-      <section class="px-4 py-16 sm:py-24">
+      <section class="px-4 py-10 sm:py-24">
         <div class="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
-          <article class="overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] p-6 shadow-soft">
+          <article class="overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055] p-5 shadow-soft sm:rounded-[38px] sm:p-6">
             <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Para jóvenes</p>
-            <h2 class="mt-3 text-4xl font-black leading-tight">El plan ya no empieza en el chat de siempre.</h2>
-            <p class="mt-4 text-base font-semibold leading-7 text-slate-400">Entra, mira qué hay cerca, compra si te interesa y únete a gente que quiere ir al mismo sitio.</p>
-            <div class="mt-6 grid gap-3">
+            <h2 class="mt-3 text-3xl font-black leading-tight sm:text-4xl">El plan ya no empieza en el chat de siempre.</h2>
+            <p class="mt-3 text-sm font-semibold leading-6 text-slate-400 sm:mt-4 sm:text-base sm:leading-7">Mira qué hay cerca, compra si te interesa y únete a gente que quiere ir al mismo sitio.</p>
+            <div class="mt-5 grid gap-2 sm:mt-6 sm:gap-3">
               <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ahorra con puntos y descuentos reales.</div>
               <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Participa en planes con fotos privadas y chat de grupo.</div>
-              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ten tu historial, QR y compras en un solo lugar.</div>
+              <div class="hidden rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300 sm:block">Ten tu historial, QR y compras en un solo lugar.</div>
             </div>
           </article>
-          <article class="overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] p-6 shadow-soft">
+          <article class="overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055] p-5 shadow-soft sm:rounded-[38px] sm:p-6">
             <p class="text-sm font-black uppercase tracking-[0.18em] text-sun">Para comercios</p>
-            <h2 class="mt-3 text-4xl font-black leading-tight">Convierte huecos libres en movimiento local.</h2>
-            <p class="mt-4 text-base font-semibold leading-7 text-slate-400">Publica ofertas, controla stock, valida entradas y recibe puntos por cada compra confirmada.</p>
-            <div class="mt-6 grid gap-3">
+            <h2 class="mt-3 text-3xl font-black leading-tight sm:text-4xl">Convierte huecos libres en movimiento local.</h2>
+            <p class="mt-3 text-sm font-semibold leading-6 text-slate-400 sm:mt-4 sm:text-base sm:leading-7">Publica ofertas, controla stock y valida entradas desde una página simple.</p>
+            <div class="mt-5 grid gap-2 sm:mt-6 sm:gap-3">
               <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ofertas editables con precio, fechas, horarios y categorías.</div>
               <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Validación por QR o códigos de seguridad.</div>
-              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Historial de ingresos, publicaciones y billetes escaneados.</div>
+              <div class="hidden rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300 sm:block">Historial de ingresos, publicaciones y billetes escaneados.</div>
             </div>
           </article>
         </div>
       </section>
 
-      <section class="px-4 pb-20 pt-10 sm:pb-28">
-        <div class="mx-auto max-w-6xl overflow-hidden rounded-[42px] border border-mint/20 bg-mint/10 p-6 shadow-glow sm:p-10">
+      <section class="px-4 pb-16 pt-8 sm:pb-28 sm:pt-10">
+        <div class="mx-auto max-w-6xl overflow-hidden rounded-[32px] border border-mint/20 bg-mint/10 p-5 shadow-glow sm:rounded-[42px] sm:p-10">
           <div class="grid items-center gap-6 lg:grid-cols-[1fr_auto]">
             <div>
               <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Lanzamiento Donostia</p>
-              <h2 class="mt-3 text-4xl font-black leading-tight sm:text-6xl">Sé de los primeros en moverte con Donoss.</h2>
-              <p class="mt-4 max-w-2xl text-base font-semibold leading-7 text-slate-300">Crea tu cuenta y empieza con una app pensada para planes reales, barrios reales y gente real.</p>
+              <h2 class="mt-3 text-3xl font-black leading-tight sm:text-6xl">Sé de los primeros en moverte con Donoss.</h2>
+              <p class="mt-3 max-w-2xl text-sm font-semibold leading-6 text-slate-300 sm:mt-4 sm:text-base sm:leading-7">Crea tu cuenta y entra antes de que empiece a moverse tu barrio.</p>
             </div>
             <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
               <a href="signup.html" class="grid h-14 place-items-center rounded-2xl bg-mint px-8 text-base font-black text-ink shadow-glow transition hover:bg-[#66ffd0]">Crear cuenta</a>
@@ -280,5 +454,47 @@
         </div>
       </section>
     </main>
+
+    <footer class="border-t border-white/10 px-4 py-8 sm:py-10">
+      <div class="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1.2fr_1fr_auto] lg:items-start">
+        <div>
+          <a href="index.html" class="inline-flex items-center gap-3" aria-label="Donoss">
+            <span class="brand-logo-card grid h-11 w-11 place-items-center overflow-hidden rounded-2xl p-1.5 shadow-glow">
+              <img src="assets/logo-donoss-original.jpg" alt="" class="h-full w-full object-contain" />
+            </span>
+            <span>
+              <span class="block text-xl font-black">Donoss</span>
+              <span class="block text-xs font-bold text-slate-500">Planes, puntos y cultura local.</span>
+            </span>
+          </a>
+          <p class="mt-4 max-w-md text-sm font-semibold leading-6 text-slate-500">
+            Una app pensada para jóvenes, comercios y planes reales en Donostia. Comprar, quedar y validar sin complicarse.
+          </p>
+        </div>
+        <div class="grid grid-cols-2 gap-5 text-sm font-bold text-slate-400">
+          <div class="grid gap-3">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-600">App</p>
+            <a href="#como-funciona" class="transition hover:text-white">Cómo funciona</a>
+            <a href="signup.html" class="transition hover:text-white">Crear cuenta</a>
+            <a href="login.html" class="transition hover:text-white">Iniciar sesión</a>
+          </div>
+          <div class="grid gap-3">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-600">Donoss</p>
+            <a href="signup.html" class="transition hover:text-white">Para jóvenes</a>
+            <a href="signup.html" class="transition hover:text-white">Para comercios</a>
+            <a href="login.html" class="transition hover:text-white">Acceso privado</a>
+          </div>
+        </div>
+        <div class="rounded-[28px] border border-white/10 bg-white/[0.045] p-4">
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Lanzamiento</p>
+          <p class="mt-2 text-2xl font-black">Donostia</p>
+          <p class="mt-1 text-xs font-bold text-slate-500">Primeros usuarios y comercios.</p>
+        </div>
+      </div>
+      <div class="mx-auto mt-8 flex max-w-6xl flex-col gap-3 border-t border-white/10 pt-5 text-xs font-bold text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+        <p>© 2026 Donoss. Todos los derechos reservados.</p>
+        <p>Hecho para moverse mejor por la ciudad.</p>
+      </div>
+    </footer>
   </body>
 </html>
