@@ -2,13 +2,10 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Donoss | Registro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Donoss | Planes, puntos y cultura local</title>
+    <meta name="description" content="Donoss es la app para jóvenes en Donostia: descubre planes, compra entradas con puntos, queda con gente y apoya comercios locales." />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
       tailwind.config = {
         theme: {
@@ -17,839 +14,271 @@
               sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
             },
             colors: {
-              ink: "#070A12",
+              ink: "#060914",
               panel: "#0D111D",
               line: "#20273A",
               mint: "#42F2B3",
               coral: "#FF6B6B",
               sun: "#FFD166",
+              violet: "#A78BFA",
             },
             boxShadow: {
-              glow: "0 24px 80px rgba(66, 242, 179, 0.18)",
+              glow: "0 28px 90px rgba(66, 242, 179, 0.20)",
+              soft: "0 24px 80px rgba(0, 0, 0, 0.34)",
             },
           },
         },
       };
     </script>
     <style>
-      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
-
-      html {
-        background: #070a12;
-        overflow-x: hidden;
-      }
-
-      body {
-        overflow-x: hidden;
-      }
-
-      #root, main {
-        max-width: 100%;
-        overflow-x: hidden;
-      }
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap");
 
       * {
+        box-sizing: border-box;
         min-width: 0;
       }
 
-      .mesh {
+      html {
+        scroll-behavior: smooth;
+        background: #060914;
+      }
+
+      body {
+        margin: 0;
+        overflow-x: hidden;
+        color: white;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         background:
-          linear-gradient(135deg, rgba(66, 242, 179, 0.12), transparent 32%),
-          linear-gradient(225deg, rgba(255, 107, 107, 0.11), transparent 30%),
-          linear-gradient(180deg, #0b0f1a 0%, #070a12 55%, #05070d 100%);
+          radial-gradient(circle at 18% 0%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(255, 107, 107, 0.12), transparent 26%),
+          linear-gradient(180deg, #060914 0%, #0a0e19 46%, #050711 100%);
+      }
+
+      .hero-scene {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .hero-scene::before {
+        content: "";
+        position: absolute;
+        inset: -18%;
+        background:
+          linear-gradient(120deg, rgba(66, 242, 179, 0.20), transparent 30%),
+          linear-gradient(240deg, rgba(167, 139, 250, 0.18), transparent 34%),
+          linear-gradient(0deg, rgba(255, 209, 102, 0.08), transparent 48%);
+        filter: blur(12px);
+        transform: rotate(-8deg);
       }
 
       .glass {
-        background: rgba(13, 17, 29, 0.78);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        background: rgba(13, 17, 29, 0.72);
+        -webkit-backdrop-filter: blur(22px);
         backdrop-filter: blur(22px);
       }
 
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
+      .phone {
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        background:
+          radial-gradient(circle at 50% 0%, rgba(66, 242, 179, 0.18), transparent 34%),
+          linear-gradient(180deg, rgba(13, 17, 29, 0.96), rgba(6, 9, 20, 0.98));
+        box-shadow: 0 40px 120px rgba(0, 0, 0, 0.50);
       }
 
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
+      .float-card {
+        animation: drift 8s ease-in-out infinite;
+      }
+
+      .float-card:nth-child(2) {
+        animation-delay: -2.2s;
+      }
+
+      .float-card:nth-child(3) {
+        animation-delay: -4.5s;
+      }
+
+      @keyframes drift {
+        0%, 100% { transform: translate3d(0, 0, 0) rotate(var(--rotate)); }
+        50% { transform: translate3d(0, -14px, 0) rotate(var(--rotate)); }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          scroll-behavior: auto !important;
+        }
       }
     </style>
   </head>
-  <body class="min-h-screen text-white antialiased">
-    <div id="root"></div>
+  <body class="antialiased">
+    <header class="fixed left-0 right-0 top-0 z-50 px-4 pt-4">
+      <nav class="mx-auto flex max-w-6xl items-center justify-between rounded-[26px] border border-white/10 bg-[#070A12]/72 px-4 py-3 shadow-soft backdrop-blur-2xl">
+        <a href="index.html" class="flex items-center gap-3" aria-label="Donoss">
+          <span class="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</span>
+          <span class="leading-tight">
+            <span class="block text-lg font-black">Donoss</span>
+            <span class="block text-xs font-bold text-slate-400">Donostia en puntos</span>
+          </span>
+        </a>
+        <div class="flex items-center gap-2">
+          <a href="login.html" class="hidden h-11 place-items-center rounded-2xl border border-white/10 px-4 text-sm font-black text-white transition hover:bg-white/[0.07] sm:grid">Entrar</a>
+          <a href="signup.html" class="grid h-11 place-items-center rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]">Crear cuenta</a>
+        </div>
+      </nav>
+    </header>
 
-    <script type="text/babel">
-      const neighborhoods = [
-        "Gros",
-        "Amara",
-        "Centro",
-        "Altza",
-        "Herrera",
-        "Egia",
-        "Antiguo",
-        "Intxaurrondo",
-        "Aiete",
-        "Loiola",
-        "Martutene",
-        "Ibaeta",
-        "Miramon-Zorroaga",
-        "Ulia",
-        "Añadir otro barrio",
-      ];
-
-      const perks = [
-        { label: "Cine barato", value: "2x1" },
-        { label: "Ropa circular", value: "+80" },
-        { label: "Puntos Donoss", value: "1.240" },
-      ];
-
-      const customNeighborhoodValue = "custom";
-      const businessCategories = [
-        "Cine / Cultura",
-        "Moda / Segunda mano",
-        "Restauración",
-        "Eventos",
-        "Librería",
-        "Gaming",
-        "Otro",
-      ];
-      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
-      const supabaseAnonKey =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
-      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
-
-      function redirectToHome(accountType) {
-        localStorage.setItem("donosAccountType", accountType);
-        localStorage.setItem("donosDisplayName", localStorage.getItem("donosPendingDisplayName") || "");
-        window.setTimeout(() => {
-          window.location.href = "app.html#inicio";
-        }, 1200);
-      }
-
-      function generateTransactionId() {
-        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const digits = "0123456789";
-        const values = new Uint32Array(24);
-        crypto.getRandomValues(values);
-
-        const characters = [
-          ...Array.from(values.slice(0, 4), (value) => letters[value % letters.length]),
-          ...Array.from(values.slice(4, 12), (value) => digits[value % digits.length]),
-        ];
-
-        for (let index = characters.length - 1; index > 0; index -= 1) {
-          const swapIndex = values[12 + index] % (index + 1);
-          [characters[index], characters[swapIndex]] = [characters[swapIndex], characters[index]];
-        }
-
-        return characters.join("");
-      }
-
-      function formatTransactionId(transactionId) {
-        return transactionId.replace(/(.{4})(.{4})(.{4})/, "$1-$2-$3");
-      }
-
-      async function syncServerProfile() {
-        const { data: sessionData } = await supabaseClient.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (!accessToken) return null;
-
-        const response = await fetch("/api/me/profile", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const data = await response.json().catch(() => ({}));
-        return response.ok ? data.profile : null;
-      }
-
-      function GoogleIcon() {
-        return (
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5">
-            <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.7 3.8-5.5 3.8a6 6 0 0 1 0-12c1.9 0 3.1.8 3.8 1.5l2.6-2.5A9.7 9.7 0 0 0 12 2.4a9.6 9.6 0 1 0 0 19.2c5.5 0 9.2-3.9 9.2-9.4 0-.6-.1-1.1-.2-1.6h-9z" />
-            <path fill="#34A853" d="M3.3 7.9l3.2 2.4A5.8 5.8 0 0 1 12 6.1c1.9 0 3.1.8 3.8 1.5l2.6-2.5A9.7 9.7 0 0 0 12 2.4a9.6 9.6 0 0 0-8.7 5.5z" />
-            <path fill="#4A90E2" d="M12 21.6c2.6 0 4.9-.9 6.5-2.4l-3.1-2.4c-.8.6-1.9 1-3.4 1a5.8 5.8 0 0 1-5.5-4l-3.2 2.5a9.6 9.6 0 0 0 8.7 5.3z" />
-            <path fill="#FBBC05" d="M6.5 13.8a5.8 5.8 0 0 1 0-3.5L3.3 7.9a9.6 9.6 0 0 0 0 8.4l3.2-2.5z" />
-          </svg>
-        );
-      }
-
-      function AppleIcon() {
-        return (
-          <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-white">
-            <path d="M16.7 12.8c0-2 1.6-3 1.7-3.1-1-.1-2.1-.6-3-.6-1.3 0-2.4.8-3 .8-.7 0-1.7-.8-2.8-.8-1.4 0-2.7.8-3.4 2.1-1.5 2.6-.4 6.4 1 8.5.7 1 1.5 2.1 2.6 2.1 1 0 1.5-.7 2.8-.7s1.7.7 2.8.7 1.9-1 2.6-2c.8-1.1 1.1-2.2 1.1-2.3 0 0-2.3-.9-2.4-3.7z" />
-            <path d="M14.6 6.9c.6-.7 1-1.7.9-2.7-.9 0-1.9.6-2.5 1.3-.6.6-1 1.6-.9 2.6.9.1 1.9-.5 2.5-1.2z" />
-          </svg>
-        );
-      }
-
-      function Field({ label, children }) {
-        return (
-          <label className="block">
-            <span className="mb-2 block text-sm font-medium text-slate-300">{label}</span>
-            {children}
-          </label>
-        );
-      }
-
-      const inputClass =
-        "h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
-
-      function readableSignupError(error) {
-        const rawMessage =
-          typeof error === "string"
-            ? error
-            : error?.message || error?.error_description || error?.msg || "";
-        const message = String(rawMessage || "").trim();
-        const lowerMessage = message.toLowerCase();
-
-        if (!message || message === "{}" || message === "[object Object]") {
-          return "Supabase está bloqueando la creación de cuentas. Ejecuta supabase-fix-signup-auth.sql.";
-        }
-        if (lowerMessage.includes("database error saving new user") || lowerMessage.includes("unexpected_failure")) {
-          return "Supabase está bloqueando la creación de cuentas. Ejecuta supabase-fix-signup-auth.sql.";
-        }
-        if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
-          return "Este correo ya tiene una cuenta. Inicia sesión o usa otro correo.";
-        }
-        if (lowerMessage.includes("invalid email")) {
-          return "El correo electrónico no parece válido.";
-        }
-        if (lowerMessage.includes("password")) {
-          return "La contraseña no cumple los requisitos. Usa mínimo 8 caracteres.";
-        }
-        if (lowerMessage.includes("network") || lowerMessage.includes("failed")) {
-          return "No se ha podido conectar. Revisa internet y vuelve a intentarlo.";
-        }
-
-        return message;
-      }
-
-      const termsSections = [
-        {
-          title: "1. Qué es Donoss",
-          text: "Donoss es una plataforma local para jóvenes en Donostia / San Sebastián donde puedes descubrir ofertas, comprar entradas o planes con puntos, participar en grupos para ir con otras personas y, si eres comercio, publicar propuestas para la comunidad.",
-        },
-        {
-          title: "2. Cuenta y datos reales",
-          text: "Al crear una cuenta aceptas dar datos correctos: nombre o apodo, correo, teléfono y barrio. Las empresas deben añadir datos profesionales reales. Donoss puede bloquear cuentas falsas, duplicadas, fraudulentas o que intenten manipular puntos, compras, QR o grupos.",
-        },
-        {
-          title: "3. Puntos Donoss",
-          text: "Los puntos funcionan dentro de Donoss para comprar ofertas, enviar puntos, pedir puntos y participar en experiencias. La referencia interna es 1 euro = 10 puntos. Los puntos no son dinero bancario y solo se gestionan dentro de la plataforma.",
-        },
-        {
-          title: "4. Pagos, recargas y comisiones",
-          text: "Las recargas de puntos se procesan con Stripe. Donoss puede añadir gastos de servicio visibles antes del pago para cubrir costes técnicos, transacción, tratamiento y seguridad. Los puntos se acreditan cuando el pago queda confirmado por Stripe.",
-        },
-        {
-          title: "5. Compras, QR y validaciones",
-          text: "Al comprar una oferta, Donoss puede generar códigos, QR y datos de validación. Estos datos son personales y secretos: no los compartas salvo con el comercio responsable cuando te los pida. Un QR ya validado puede aparecer como usado o comprobado.",
-        },
-        {
-          title: "6. Planes con más gente",
-          text: "En la sección Quedar puedes publicar o unirte a planes. Tus fotos de planes solo deben usarse para que otros participantes autorizados sepan con quién van. No publiques fotos de otra persona sin permiso ni contenido ofensivo, falso o peligroso.",
-        },
-        {
-          title: "7. Comercios y publicaciones",
-          text: "Los comercios son responsables de la información que publican: título, precio, stock, dirección, horarios, fecha, condiciones, entrega y disponibilidad. Donoss puede ocultar publicaciones agotadas, sospechosas o que incumplan estas condiciones.",
-        },
-        {
-          title: "8. Seguridad y buen uso",
-          text: "No está permitido intentar añadir puntos sin pagar, modificar datos ajenos, revender códigos, acosar usuarios, suplantar comercios o usar Donoss para actividades ilegales. Si detectamos abuso podemos limitar, suspender o eliminar la cuenta.",
-        },
-        {
-          title: "9. Privacidad",
-          text: "Usamos tus datos para crear tu cuenta, mostrar tu perfil, gestionar puntos, pagos, compras, grupos, chats, validaciones y avisos importantes. No vendemos tus datos personales. Algunos datos necesarios pueden mostrarse a comercios o participantes cuando sea imprescindible para completar una compra o plan.",
-        },
-        {
-          title: "10. Cambios y contacto",
-          text: "Donoss puede mejorar estas condiciones cuando la app evolucione. Si hay cambios importantes, se avisará dentro de la cuenta. Al continuar usando Donoss aceptas las condiciones vigentes.",
-        },
-      ];
-
-      function App() {
-        const formRef = React.useRef(null);
-        const [accountType, setAccountType] = React.useState("");
-        const [displayName, setDisplayName] = React.useState("");
-        const [email, setEmail] = React.useState("");
-        const [emailConfirm, setEmailConfirm] = React.useState("");
-        const [phone, setPhone] = React.useState("");
-        const [password, setPassword] = React.useState("");
-        const [passwordConfirm, setPasswordConfirm] = React.useState("");
-        const [acceptedTerms, setAcceptedTerms] = React.useState(false);
-        const [isTermsOpen, setIsTermsOpen] = React.useState(false);
-        const [neighborhood, setNeighborhood] = React.useState("");
-        const [customNeighborhood, setCustomNeighborhood] = React.useState("");
-        const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState([]);
-        const [taxId, setTaxId] = React.useState("");
-        const [businessAddress, setBusinessAddress] = React.useState("");
-        const [status, setStatus] = React.useState({ type: "", message: "" });
-        const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-        const isBusiness = accountType === "business";
-        const isUser = accountType === "user";
-        const isCustomNeighborhood = neighborhood === customNeighborhoodValue;
-        const finalNeighborhood = isCustomNeighborhood ? customNeighborhood.trim() : neighborhood;
-        const normalizedEmail = email.trim().toLowerCase();
-        const normalizedEmailConfirm = emailConfirm.trim().toLowerCase();
-        const emailsMatch = normalizedEmail && normalizedEmail === normalizedEmailConfirm;
-        const canSubmit =
-          accountType &&
-          displayName.trim() &&
-          emailsMatch &&
-          phone.trim() &&
-          finalNeighborhood &&
-          password.length >= 8 &&
-          password === passwordConfirm &&
-          acceptedTerms &&
-          (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim()));
-
-        function chooseAccountType(type) {
-          setAccountType(type);
-          setStatus({
-            type: "info",
-            message: type === "business" ? "Perfil empresa seleccionado. Completa el formulario de abajo." : "Perfil usuario seleccionado. Completa el formulario de abajo.",
-          });
-          localStorage.setItem("donosAccountType", type);
-          window.setTimeout(() => {
-            formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }, 120);
-        }
-
-        function profilePayload(transactionId) {
-          return {
-            account_type: accountType,
-            display_name: displayName.trim(),
-            email: normalizedEmail,
-            phone: `+34 ${phone.trim()}`,
-            neighborhood: finalNeighborhood,
-            transaction_id: transactionId,
-            business_categories: isBusiness ? businessCategoriesSelected : null,
-            tax_id: isBusiness ? taxId.trim().toUpperCase() : null,
-            address: isBusiness ? businessAddress.trim() : null,
-          };
-        }
-
-        function toggleBusinessCategory(category) {
-          setBusinessCategoriesSelected((current) =>
-            current.includes(category)
-              ? current.filter((item) => item !== category)
-              : [...current, category]
-          );
-        }
-
-        async function handleSubmit(event) {
-          event.preventDefault();
-          setStatus({ type: "", message: "" });
-
-          if (normalizedEmail !== normalizedEmailConfirm) {
-            setStatus({ type: "error", message: "Los correos electrónicos no coinciden." });
-            return;
-          }
-
-          if (password !== passwordConfirm) {
-            setStatus({ type: "error", message: "Las contraseñas no coinciden." });
-            return;
-          }
-
-          if (!canSubmit) {
-            setStatus({ type: "error", message: "Completa todos los campos necesarios para continuar." });
-            return;
-          }
-
-          setIsSubmitting(true);
-          localStorage.setItem("donosAccountType", accountType);
-          localStorage.setItem("donosPendingDisplayName", displayName.trim());
-          localStorage.setItem("donosDisplayName", displayName.trim());
-
-          try {
-            const transactionId = generateTransactionId();
-            const { data, error } = await supabaseClient.auth.signUp({
-              email: normalizedEmail,
-              password,
-              options: {
-                data: {
-                  ...profilePayload(transactionId),
-                  formatted_transaction_id: formatTransactionId(transactionId),
-                },
-              },
-            });
-
-            if (error) throw error;
-
-            if (data.user && data.session) {
-              const profile = await syncServerProfile();
-              if (profile?.transaction_id) localStorage.setItem("donosTransactionId", profile.transaction_id);
-              if (profile?.display_name) localStorage.setItem("donosDisplayName", profile.display_name);
-              setStatus({
-                type: "success",
-                message: `Cuenta creada. Tu ID Donoss es ${formatTransactionId(profile?.transaction_id || transactionId)}.`,
-              });
-            } else {
-              setStatus({
-                type: "success",
-                message: `Revisa tu correo. Tu ID Donoss es ${formatTransactionId(transactionId)}.`,
-              });
-            }
-
-            redirectToHome(accountType);
-          } catch (error) {
-            setStatus({
-              type: "error",
-              message: readableSignupError(error),
-            });
-          } finally {
-            setIsSubmitting(false);
-          }
-        }
-
-        async function handleSocialLogin(provider) {
-          setStatus({ type: "", message: "" });
-          localStorage.setItem("donosAccountType", accountType || "user");
-          const { error } = await supabaseClient.auth.signInWithOAuth({
-            provider,
-            options: {
-              redirectTo: window.location.origin + "/app.html#inicio",
-            },
-          });
-
-          if (error) {
-            setStatus({
-              type: "error",
-              message: error.message || "No se ha podido abrir el acceso social.",
-            });
-          }
-        }
-
-        const profileCards = (
-          <div className="mt-6 grid gap-3 sm:mt-7 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => chooseAccountType("user")}
-              className={`max-w-full rounded-[24px] border p-4 text-left transition hover:translate-y-[-2px] sm:rounded-[26px] sm:p-5 ${
-                isUser
-                  ? "border-mint/60 bg-mint/10 shadow-glow"
-                  : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
-              }`}
-            >
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-2xl sm:h-14 sm:w-14 sm:text-3xl">👤</div>
-              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un usuario</p>
-              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Chollos, planes culturales y compraventa entre jóvenes.</p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => chooseAccountType("business")}
-              className={`max-w-full rounded-[24px] border p-4 text-left transition hover:translate-y-[-2px] sm:rounded-[26px] sm:p-5 ${
-                isBusiness
-                  ? "border-mint/60 bg-mint/10 shadow-glow"
-                  : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"
-              }`}
-            >
-              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl sm:h-14 sm:w-14 sm:text-3xl">🏢</div>
-              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un comercio / Empresa</p>
-              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donoss.</p>
-            </button>
+    <main>
+      <section class="relative min-h-screen overflow-hidden px-4 pb-16 pt-28 sm:pt-32">
+        <div class="hero-scene" aria-hidden="true"></div>
+        <div class="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_.98fr]">
+          <div class="max-w-3xl">
+            <div class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200 backdrop-blur-xl">
+              <span class="h-2.5 w-2.5 rounded-full bg-mint shadow-[0_0_24px_rgba(66,242,179,.95)]"></span>
+              Nueva forma de salir por Donostia
+            </div>
+            <h1 class="mt-7 max-w-4xl text-[46px] font-black leading-[0.98] tracking-normal text-white sm:text-7xl lg:text-8xl">
+              Tus planes cuestan menos cuando tu ciudad se mueve contigo.
+            </h1>
+            <p class="mt-6 max-w-2xl text-lg font-semibold leading-8 text-slate-300 sm:text-xl">
+              Donoss une chollos culturales, entradas con descuento, puntos y grupos para ir con gente real. Descubre qué hacer, compra mejor y queda sin empezar de cero.
+            </p>
+            <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+              <a href="signup.html" class="grid h-14 place-items-center rounded-2xl bg-mint px-6 text-base font-black text-ink shadow-glow transition hover:translate-y-[-1px] hover:bg-[#66ffd0]">Empezar gratis</a>
+              <a href="#como-funciona" class="grid h-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] px-6 text-base font-black text-white backdrop-blur transition hover:bg-white/[0.10]">Ver cómo funciona</a>
+            </div>
+            <div class="mt-8 grid max-w-xl grid-cols-3 gap-3">
+              <div class="glass rounded-3xl p-4">
+                <p class="text-2xl font-black text-white">10 pts</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">por cada euro de valor</p>
+              </div>
+              <div class="glass rounded-3xl p-4">
+                <p class="text-2xl font-black text-white">QR</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">validación rápida</p>
+              </div>
+              <div class="glass rounded-3xl p-4">
+                <p class="text-2xl font-black text-white">+ gente</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-400">planes compartidos</p>
+              </div>
+            </div>
           </div>
-        );
 
-        return (
-          <React.Fragment>
-          <main className="mesh min-h-screen overflow-hidden">
-            <section className="mx-auto grid min-h-screen w-full max-w-6xl items-center gap-8 px-3 py-4 sm:px-6 lg:grid-cols-[1fr_0.92fr] lg:px-8 lg:py-10">
-              <aside className="hidden lg:block">
-                <div className="max-w-xl">
-                  <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-slate-200">
-                    <span className="h-2.5 w-2.5 rounded-full bg-mint shadow-[0_0_22px_rgba(66,242,179,0.9)]"></span>
-                    Donostia en modo puntos
+          <div class="relative mx-auto w-full max-w-[420px] lg:mr-0">
+            <div class="float-card glass absolute -left-6 top-16 z-20 hidden w-44 rounded-[28px] p-4 shadow-soft sm:block" style="--rotate:-7deg">
+              <p class="text-xs font-black uppercase tracking-[0.14em] text-sun">Hoy</p>
+              <p class="mt-2 text-lg font-black">Cine con descuento</p>
+              <p class="mt-1 text-sm font-bold text-slate-400">100 puntos para desbloquear</p>
+            </div>
+            <div class="float-card glass absolute -right-5 top-64 z-20 hidden w-44 rounded-[28px] p-4 shadow-soft sm:block" style="--rotate:6deg">
+              <p class="text-xs font-black uppercase tracking-[0.14em] text-mint">Quedar</p>
+              <p class="mt-2 text-lg font-black">3 personas se apuntaron</p>
+              <p class="mt-1 text-sm font-bold text-slate-400">Chat del grupo activo</p>
+            </div>
+            <div class="phone relative z-10 overflow-hidden rounded-[46px] p-4">
+              <div class="rounded-[34px] border border-white/10 bg-[#070A12] p-4">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p class="text-sm font-black text-white">Donoss</p>
+                    <p class="text-xs font-bold text-slate-500">Inicio</p>
                   </div>
-
-                  <h1 className="text-5xl font-extrabold leading-[1.02] tracking-normal text-white">
-                    Chollos, planes y comercio local en una sola app.
-                  </h1>
-                  <p className="mt-5 max-w-lg text-lg leading-8 text-slate-300">
-                    Donoss conecta jóvenes, tiendas y cultura local con puntos, descuentos y experiencias cerca de tu barrio.
-                  </p>
-
-                  <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
-                    {perks.map((perk) => (
-                      <div key={perk.label} className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
-                        <p className="text-2xl font-black text-white">{perk.value}</p>
-                        <p className="mt-1 text-sm text-slate-400">{perk.label}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-8 w-full max-w-lg rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-glow">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-300">Esta semana cerca de ti</p>
-                        <p className="mt-1 text-xl font-bold text-white">Cine + chaqueta vintage</p>
-                      </div>
-                      <span className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">+95 ptos.</span>
-                    </div>
-                    <div className="mt-4 grid grid-cols-[1.1fr_0.9fr] gap-3">
-                      <div className="min-h-36 rounded-3xl bg-[linear-gradient(135deg,#42F2B3,#151A2A_58%,#FF6B6B)] p-4">
-                        <p className="text-sm font-bold text-ink">Entradas Antiguo Berri</p>
-                        <p className="mt-16 text-3xl font-black text-white">4,90€</p>
-                      </div>
-                      <div className="min-h-36 rounded-3xl bg-[linear-gradient(145deg,#FFD166,#2C1D45_58%,#0D111D)] p-4">
-                        <p className="text-sm font-bold text-ink">Drop local</p>
-                        <p className="mt-16 text-3xl font-black text-white">18€</p>
-                      </div>
-                    </div>
+                  <span class="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
+                </div>
+                <div class="mt-5 rounded-[30px] border border-mint/25 bg-mint/10 p-5">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-mint">Saldo</p>
+                  <p class="mt-2 text-5xl font-black">650</p>
+                  <p class="text-sm font-bold text-slate-300">puntos</p>
+                  <div class="mt-5 rounded-3xl border border-mint/20 bg-black/20 p-4">
+                    <p class="text-xs font-black text-mint">ID Donoss</p>
+                    <p class="mt-1 text-lg font-black">BNP7-5Y22-5253</p>
                   </div>
                 </div>
-              </aside>
-
-              <section className="mx-auto w-full max-w-md lg:max-w-[520px]">
-                <div className="mb-5 flex items-center justify-between gap-3 lg:hidden">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink sm:h-11 sm:w-11">D</div>
-                    <div className="min-w-0">
-                      <p className="text-lg font-black">Donoss</p>
-                      <p className="text-xs font-medium text-slate-400">Chollos locales</p>
-                    </div>
+                <div class="mt-5">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Cerca de ti</p>
+                  <div class="mt-3 flex gap-3 overflow-hidden">
+                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-mint text-4xl">📚</div>
+                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-coral text-4xl">🎬</div>
+                    <div class="grid h-24 w-24 shrink-0 place-items-center rounded-[28px] bg-sun text-4xl">🎪</div>
                   </div>
-                  <span className="shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-300">Beta</span>
                 </div>
-
-                <div className="glass max-w-full rounded-[26px] border border-white/10 p-4 shadow-2xl shadow-black/30 sm:rounded-[30px] sm:p-7">
-                  <div className="hidden items-center gap-3 lg:flex">
-                    <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-xl font-black text-ink">D</div>
-                    <div>
-                      <p className="text-xl font-black">Donoss</p>
-                      <p className="text-sm font-medium text-slate-400">Tu barrio, tus puntos</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-1 lg:mt-8">
-                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Crear cuenta</p>
-                    <h2 className="mt-2 break-words text-[32px] font-black leading-tight tracking-normal text-white sm:text-4xl">
-                      {accountType ? (isBusiness ? "Registro Empresa" : "Registro Usuario") : "Elige tu perfil"}
-                    </h2>
-                    <p className="mt-3 text-sm leading-6 text-slate-400">
-                      {accountType
-                        ? "Completa solo lo necesario para entrar en Donoss."
-                        : "Selecciona cómo vas a usar Donoss para adaptar el registro."}
-                    </p>
-                  </div>
-
-                  {profileCards}
-
-                  {accountType && (
-                    <form ref={formRef} className="mt-6 scroll-mt-4 space-y-4 rounded-[26px] border border-mint/15 bg-black/10 p-3 sm:p-4" onSubmit={handleSubmit}>
-                      <div className="flex items-center justify-between gap-3 rounded-2xl bg-mint/10 px-4 py-3">
-                        <div>
-                          <p className="text-sm font-black text-white">{isBusiness ? "Formulario empresa" : "Formulario usuario"}</p>
-                          <p className="mt-1 text-xs font-bold text-slate-400">Rellena estos datos para crear tu cuenta Donoss.</p>
-                        </div>
-                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
-                      </div>
-                      {isUser && (
-                        <>
-                          <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                            <button
-                              type="button"
-                              onClick={() => handleSocialLogin("google")}
-                              className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-2 text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
-                            >
-                              <GoogleIcon />
-                              Google
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleSocialLogin("apple")}
-                              className="flex h-12 min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.07] px-2 text-sm font-bold text-white transition hover:bg-white/[0.11] focus:outline-none focus:ring-4 focus:ring-white/10"
-                            >
-                              <AppleIcon />
-                              Apple
-                            </button>
-                          </div>
-
-                          <div className="my-6 flex items-center gap-3">
-                            <div className="h-px flex-1 bg-white/10"></div>
-                            <span className="text-xs font-semibold text-slate-500">o con correo</span>
-                            <div className="h-px flex-1 bg-white/10"></div>
-                          </div>
-                        </>
-                      )}
-
-                      <Field label={isBusiness ? "Nombre del comercio / Empresa" : "Nombre o apodo"}>
-                        <input
-                          className={inputClass}
-                          type="text"
-                          placeholder={isBusiness ? "Ej. Donoss Vintage" : "Ej. Ane, Markel..."}
-                          autoComplete={isBusiness ? "organization" : "nickname"}
-                          value={displayName}
-                          onChange={(event) => setDisplayName(event.target.value)}
-                        />
-                      </Field>
-
-                      {isBusiness && (
-                        <>
-                          <div>
-                            <p className="mb-2 text-sm font-medium text-slate-300">Categorías</p>
-                            <div className="grid gap-2 min-[390px]:grid-cols-2">
-                              {businessCategories.map((item) => {
-                                const isSelected = businessCategoriesSelected.includes(item);
-                                return (
-                                  <button
-                                    key={item}
-                                    type="button"
-                                    onClick={() => toggleBusinessCategory(item)}
-                                    className={`min-h-11 rounded-2xl border px-3 text-left text-sm font-bold transition ${
-                                      isSelected
-                                        ? "border-mint/60 bg-mint/15 text-mint"
-                                        : "border-line bg-white/[0.055] text-slate-300 hover:bg-white/[0.08]"
-                                    }`}
-                                  >
-                                    {item}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          <Field label="CIF / NIF">
-                            <input
-                              className={inputClass}
-                              type="text"
-                              placeholder="Ej. B12345678"
-                              value={taxId}
-                              onChange={(event) => setTaxId(event.target.value)}
-                            />
-                          </Field>
-                        </>
-                      )}
-
-                      <Field label={isBusiness ? "Correo electrónico profesional" : "Correo electrónico"}>
-                        <input
-                          className={inputClass}
-                          type="email"
-                          placeholder={isBusiness ? "hola@tuempresa.com" : "tu@email.com"}
-                          autoComplete="email"
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
-                        />
-                      </Field>
-
-                      <Field label={isBusiness ? "Repetir correo profesional" : "Repetir correo electrónico"}>
-                        <input
-                          className={inputClass}
-                          type="email"
-                          placeholder="Vuelve a escribir tu correo"
-                          autoComplete="email"
-                          value={emailConfirm}
-                          onChange={(event) => setEmailConfirm(event.target.value)}
-                        />
-                        {emailConfirm.trim() && !emailsMatch && (
-                          <p className="mt-2 text-xs font-bold text-coral">Los correos no coinciden.</p>
-                        )}
-                      </Field>
-
-                      <Field label={isBusiness ? "Teléfono de contacto" : "Teléfono móvil"}>
-                        <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
-                          <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
-                            <span>🇪🇸</span>
-                            <span>+34</span>
-                          </button>
-                          <input
-                            className={inputClass}
-                            type="tel"
-                            inputMode="tel"
-                            placeholder={isBusiness ? "943 000 000" : "600 000 000"}
-                            autoComplete="tel"
-                            value={phone}
-                            onChange={(event) => setPhone(event.target.value)}
-                          />
-                        </div>
-                      </Field>
-
-                      {isBusiness && (
-                        <>
-                          <Field label="Dirección">
-                            <input
-                              className={inputClass}
-                              type="text"
-                              placeholder="Calle, número..."
-                              autoComplete="street-address"
-                              value={businessAddress}
-                              onChange={(event) => setBusinessAddress(event.target.value)}
-                            />
-                          </Field>
-                        </>
-                      )}
-
-                      <Field label={isBusiness ? "Barrio / Zona" : "Barrio"}>
-                        <select
-                          className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
-                          value={neighborhood}
-                          onChange={(event) => setNeighborhood(event.target.value)}
-                        >
-                          <option value="" className="bg-panel">Elige tu zona</option>
-                          {neighborhoods.map((item) => (
-                            <option
-                              key={item}
-                              className="bg-panel"
-                              value={item === "Añadir otro barrio" ? customNeighborhoodValue : item}
-                            >
-                              {item}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-
-                      {isCustomNeighborhood && (
-                        <Field label="Escribe tu barrio">
-                          <input
-                            className={inputClass}
-                            type="text"
-                            placeholder="Ej. Bidebieta, Añorga..."
-                            value={customNeighborhood}
-                            onChange={(event) => setCustomNeighborhood(event.target.value)}
-                            autoComplete="address-level3"
-                          />
-                        </Field>
-                      )}
-
-                      <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Contraseña">
-                          <input
-                            className={inputClass}
-                            type="password"
-                            placeholder="Mín. 8 caracteres"
-                            autoComplete="new-password"
-                            value={password}
-                            onChange={(event) => setPassword(event.target.value)}
-                          />
-                        </Field>
-
-                        <Field label="Repetir contraseña">
-                          <input
-                            className={inputClass}
-                            type="password"
-                            placeholder="Repite la clave"
-                            autoComplete="new-password"
-                            value={passwordConfirm}
-                            onChange={(event) => setPasswordConfirm(event.target.value)}
-                          />
-                          {passwordConfirm && password !== passwordConfirm && (
-                            <p className="mt-2 text-xs font-bold text-coral">Las contraseñas no coinciden.</p>
-                          )}
-                        </Field>
-                      </div>
-
-                      <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
-                          checked={acceptedTerms}
-                          onChange={(event) => setAcceptedTerms(event.target.checked)}
-                        />
-                        <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
-                          Acepto las{" "}
-                          <button
-                            type="button"
-                            className="font-black text-white underline decoration-mint/70 underline-offset-4"
-                            onClick={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              setIsTermsOpen(true);
-                            }}
-                          >
-                            condiciones de Donoss
-                          </button>{" "}
-                          y recibir avisos importantes de mi cuenta.
-                        </span>
-                      </label>
-
-                      {status.message && (
-                        <div
-                          className={`rounded-2xl border p-3 text-sm font-semibold ${
-                            status.type === "success"
-                              ? "border-mint/25 bg-mint/10 text-mint"
-                              : status.type === "info"
-                                ? "border-white/10 bg-white/[0.055] text-slate-300"
-                              : "border-coral/30 bg-coral/10 text-coral"
-                          }`}
-                        >
-                          {status.message}
-                        </div>
-                      )}
-
-                      <button
-                        className={`mt-2 flex h-14 w-full items-center justify-center rounded-2xl px-5 text-base font-black transition focus:outline-none focus:ring-4 ${
-                          canSubmit
-                            ? "bg-mint text-ink shadow-glow hover:translate-y-[-1px] hover:bg-[#66ffd0] focus:ring-mint/25"
-                            : "cursor-not-allowed bg-slate-700 text-slate-400 shadow-none focus:ring-slate-600/25"
-                        }`}
-                        disabled={!canSubmit || isSubmitting}
-                      >
-                        {isSubmitting ? "Creando cuenta..." : "Crear cuenta gratis"}
-                      </button>
-                    </form>
-                  )}
-
-                  <p className="mt-5 text-center text-sm text-slate-400">
-                    ¿Ya tienes cuenta? <a className="font-bold text-white underline decoration-mint/70 underline-offset-4" href="login.html">Inicia sesión</a>
-                  </p>
-                </div>
-
-                <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto pb-1 lg:hidden">
-                  {perks.map((perk) => (
-                    <div key={perk.label} className="min-w-[132px] rounded-2xl border border-white/10 bg-white/[0.055] p-3">
-                      <p className="text-lg font-black">{perk.value}</p>
-                      <p className="text-xs text-slate-400">{perk.label}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            </section>
-          </main>
-          {isTermsOpen && (
-            <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-3 py-5 backdrop-blur-xl">
-              <div className="max-h-[88vh] w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0f1a] shadow-2xl shadow-black/60">
-                <div className="border-b border-white/10 p-5 sm:p-6">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Condiciones</p>
-                  <h3 className="mt-2 text-2xl font-black leading-tight text-white">Condiciones de uso y privacidad de Donoss</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">
-                    Lee esto antes de crear tu cuenta. Está escrito para que se entienda, no para esconder nada.
-                  </p>
-                </div>
-                <div className="max-h-[55vh] space-y-4 overflow-y-auto p-5 sm:p-6">
-                  {termsSections.map((section) => (
-                    <section key={section.title} className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
-                      <h4 className="text-sm font-black text-white">{section.title}</h4>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">{section.text}</p>
-                    </section>
-                  ))}
-                </div>
-                <div className="grid gap-3 border-t border-white/10 p-5 sm:grid-cols-2 sm:p-6">
-                  <button
-                    type="button"
-                    className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white"
-                    onClick={() => setIsTermsOpen(false)}
-                  >
-                    Cerrar
-                  </button>
-                  <button
-                    type="button"
-                    className="h-12 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow"
-                    onClick={() => {
-                      setAcceptedTerms(true);
-                      setIsTermsOpen(false);
-                    }}
-                  >
-                    Aceptar condiciones
-                  </button>
+                <div class="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.14em] text-mint">Plan abierto</p>
+                  <p class="mt-2 text-xl font-black">Concierto en Gros</p>
+                  <p class="mt-1 text-sm font-bold text-slate-400">2 chicas · 2 chicos · chat protegido</p>
                 </div>
               </div>
             </div>
-          )}
-          </React.Fragment>
-        );
-      }
+          </div>
+        </div>
+      </section>
 
-      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-    </script>
+      <section id="como-funciona" class="px-4 py-16 sm:py-24">
+        <div class="mx-auto max-w-6xl">
+          <div class="max-w-2xl">
+            <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">La idea</p>
+            <h2 class="mt-3 text-4xl font-black leading-tight sm:text-6xl">Salir más, gastar menos, quedar mejor.</h2>
+          </div>
+          <div class="mt-8 grid gap-4 md:grid-cols-3">
+            <article class="glass rounded-[34px] p-6">
+              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-mint text-3xl">🎟️</span>
+              <h3 class="mt-5 text-2xl font-black">Compra con puntos</h3>
+              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Recarga puntos, desbloquea precios reducidos y enseña tu QR cuando llegue el momento.</p>
+            </article>
+            <article class="glass rounded-[34px] p-6">
+              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-sun text-3xl">🧭</span>
+              <h3 class="mt-5 text-2xl font-black">Descubre planes locales</h3>
+              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Cine, libros, conciertos, museos, gaming y eventos cerca de tu barrio.</p>
+            </article>
+            <article class="glass rounded-[34px] p-6">
+              <span class="grid h-14 w-14 place-items-center rounded-2xl bg-coral text-3xl">👥</span>
+              <h3 class="mt-5 text-2xl font-black">Ve con gente real</h3>
+              <p class="mt-3 text-sm font-semibold leading-6 text-slate-400">Publica un plan, acepta participantes, chatea y organiza el grupo sin enseñar códigos privados.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="px-4 py-16 sm:py-24">
+        <div class="mx-auto grid max-w-6xl gap-5 lg:grid-cols-2">
+          <article class="overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] p-6 shadow-soft">
+            <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Para jóvenes</p>
+            <h2 class="mt-3 text-4xl font-black leading-tight">El plan ya no empieza en el chat de siempre.</h2>
+            <p class="mt-4 text-base font-semibold leading-7 text-slate-400">Entra, mira qué hay cerca, compra si te interesa y únete a gente que quiere ir al mismo sitio.</p>
+            <div class="mt-6 grid gap-3">
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ahorra con puntos y descuentos reales.</div>
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Participa en planes con fotos privadas y chat de grupo.</div>
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ten tu historial, QR y compras en un solo lugar.</div>
+            </div>
+          </article>
+          <article class="overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] p-6 shadow-soft">
+            <p class="text-sm font-black uppercase tracking-[0.18em] text-sun">Para comercios</p>
+            <h2 class="mt-3 text-4xl font-black leading-tight">Convierte huecos libres en movimiento local.</h2>
+            <p class="mt-4 text-base font-semibold leading-7 text-slate-400">Publica ofertas, controla stock, valida entradas y recibe puntos por cada compra confirmada.</p>
+            <div class="mt-6 grid gap-3">
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Ofertas editables con precio, fechas, horarios y categorías.</div>
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Validación por QR o códigos de seguridad.</div>
+              <div class="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-300">Historial de ingresos, publicaciones y billetes escaneados.</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="px-4 pb-20 pt-10 sm:pb-28">
+        <div class="mx-auto max-w-6xl overflow-hidden rounded-[42px] border border-mint/20 bg-mint/10 p-6 shadow-glow sm:p-10">
+          <div class="grid items-center gap-6 lg:grid-cols-[1fr_auto]">
+            <div>
+              <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Lanzamiento Donostia</p>
+              <h2 class="mt-3 text-4xl font-black leading-tight sm:text-6xl">Sé de los primeros en moverte con Donoss.</h2>
+              <p class="mt-4 max-w-2xl text-base font-semibold leading-7 text-slate-300">Crea tu cuenta y empieza con una app pensada para planes reales, barrios reales y gente real.</p>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <a href="signup.html" class="grid h-14 place-items-center rounded-2xl bg-mint px-8 text-base font-black text-ink shadow-glow transition hover:bg-[#66ffd0]">Crear cuenta</a>
+              <a href="login.html" class="grid h-14 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] px-8 text-base font-black text-white">Ya tengo cuenta</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </body>
 </html>
