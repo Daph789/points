@@ -121,7 +121,7 @@
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadDebts}>
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donoss</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Deudas bancarias</h1>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Frais que tu banco te coupe cuando pagas empresas fuera de Donoss.</p>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Comisiones que tu banco te cobra cuando pagas empresas fuera de Donoss.</p>
                 <input
                   className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-coral/70 focus:ring-4 focus:ring-coral/10"
                   type="password"
@@ -157,7 +157,7 @@
               <div className="rounded-3xl border border-coral/25 bg-coral/10 p-5">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-coral">
                   <span>Deuda bancaria total</span>
-                  <InfoTip title="Deuda bancaria total" text="Suma de todos los frais que tu banco cobró al pagar empresas fuera de Donoss." example="0,45 € + 0,20 € = 0,65 €." />
+                  <InfoTip title="Deuda bancaria total" text="Suma de todas las comisiones que tu banco cobró al pagar empresas fuera de Donoss." example="0,45 € + 0,20 € = 0,65 €." />
                 </p>
                 <p className="mt-2 text-3xl font-black text-white">{money(summary.total_debt_cents)}</p>
               </div>
@@ -170,8 +170,8 @@
               </div>
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-5">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
-                  <span>Movimientos con frais</span>
-                  <InfoTip title="Movimientos con frais" text="Número de virements donde escribiste un frais bancario mayor que 0." example="Si 2 pagos tuvieron frais, aquí verás 2." />
+                  <span>Movimientos con comisión</span>
+                  <InfoTip title="Movimientos con comisión" text="Número de transferencias donde escribiste una comisión bancaria mayor que 0." example="Si 2 pagos tuvieron comisión, aquí verás 2." />
                 </p>
                 <p className="mt-2 text-3xl font-black text-white">{summary.total_items || 0}</p>
               </div>
@@ -196,7 +196,7 @@
                 <span>Empresa</span>
                 <span>Pagado</span>
                 <span>Puntos retirados</span>
-                <span>Frais banco</span>
+                <span>Comisión banco</span>
                 <span>Fecha</span>
               </div>
               <div className="divide-y divide-white/10">
@@ -220,7 +220,7 @@
               </div>
               {filteredDebts.length === 0 && (
                 <div className="p-6 text-sm font-bold text-slate-300">
-                  {debts.length === 0 ? "No hay deudas bancarias. Si no registras frais, se queda en 0." : "No hay resultados."}
+                  {debts.length === 0 ? "No hay deudas bancarias. Si no registras comisión, se queda en 0." : "No hay resultados."}
                 </div>
               )}
             </section>

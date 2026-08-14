@@ -131,6 +131,166 @@ function transferPublicProfile(profile) {
   };
 }
 
+function addDays(date, days) {
+  const value = new Date(date);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString();
+}
+
+function premiumPointsForAccountType(accountType) {
+  return accountType === "business" ? 30 : 20;
+}
+
+function premiumPublicStatus(subscription, profile) {
+  const points = premiumPointsForAccountType(profile?.account_type);
+  const status = subscription?.status || profile?.premium_status || "inactive";
+  return {
+    status,
+    points,
+    is_active: status === "active",
+    started_at: subscription?.started_at || profile?.premium_started_at || null,
+    next_charge_at: subscription?.next_charge_at || profile?.premium_next_charge_at || null,
+    failed_at: subscription?.failed_at || profile?.premium_failed_at || null,
+  };
+}
+
+async function syncBusinessVerification(profile) {
+  if (!supabaseAdmin || profile?.account_type !== "business") return;
+  const { error } = await supabaseAdmin
+    .from("business_offers")
+    .update({
+      business_display_name: profile.display_name,
+      business_is_verified: Boolean(profile.is_verified),
+    })
+    .eq("business_id", profile.id);
+
+  if (error && error.code !== "42P01") console.error("Business verification sync error:", error);
+}
+
+async function loadPremiumSubscription(profileId) {
+  const { data, error } = await supabaseAdmin
+    .from("premium_subscriptions")
+    .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+    .eq("profile_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+async function syncPremiumForProfile(profile) {
+  if (!supabaseAdmin || !profile?.id) return { profile, subscription: null, charges: [] };
+
+  let subscription = null;
+  try {
+    subscription = await loadPremiumSubscription(profile.id);
+  } catch (error) {
+    if (error.code === "42P01" || error.code === "42703") {
+      return { profile, subscription: null, charges: [], missingSql: true };
+    }
+    throw error;
+  }
+
+  if (subscription?.status === "active" && subscription.next_charge_at && new Date(subscription.next_charge_at).getTime() <= Date.now()) {
+    const points = premiumPointsForAccountType(profile.account_type);
+    const currentPoints = Number(profile.points || 0);
+    const now = new Date().toISOString();
+
+    if (currentPoints >= points) {
+      const nextChargeAt = addDays(now, 31);
+      const updatedPoints = currentPoints - points;
+      const [{ data: updatedProfile, error: profileError }, { data: updatedSubscription, error: subscriptionError }, { error: chargeError }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("profiles")
+            .update({
+              points: updatedPoints,
+              is_verified: true,
+              premium_status: "active",
+              premium_next_charge_at: nextChargeAt,
+              premium_failed_at: null,
+            })
+            .eq("id", profile.id)
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .maybeSingle(),
+          supabaseAdmin
+            .from("premium_subscriptions")
+            .update({
+              points,
+              status: "active",
+              last_charge_at: now,
+              next_charge_at: nextChargeAt,
+              failed_at: null,
+              updated_at: now,
+            })
+            .eq("id", subscription.id)
+            .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+            .maybeSingle(),
+          supabaseAdmin.from("premium_subscription_charges").insert({
+            subscription_id: subscription.id,
+            profile_id: profile.id,
+            points,
+            status: "paid",
+            reason: "renewal",
+          }),
+        ]);
+
+      if (profileError || subscriptionError || chargeError) throw profileError || subscriptionError || chargeError;
+      profile = updatedProfile || { ...profile, points: updatedPoints, is_verified: true, premium_status: "active", premium_next_charge_at: nextChargeAt };
+      subscription = updatedSubscription || { ...subscription, points, status: "active", next_charge_at: nextChargeAt, last_charge_at: now, failed_at: null };
+      await syncBusinessVerification(profile);
+    } else {
+      const [{ data: updatedProfile, error: profileError }, { data: updatedSubscription, error: subscriptionError }, { error: chargeError }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("profiles")
+            .update({
+              is_verified: false,
+              premium_status: "failed",
+              premium_failed_at: now,
+            })
+            .eq("id", profile.id)
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .maybeSingle(),
+          supabaseAdmin
+            .from("premium_subscriptions")
+            .update({
+              status: "failed",
+              failed_at: now,
+              updated_at: now,
+            })
+            .eq("id", subscription.id)
+            .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+            .maybeSingle(),
+          supabaseAdmin.from("premium_subscription_charges").insert({
+            subscription_id: subscription.id,
+            profile_id: profile.id,
+            points,
+            status: "failed",
+            reason: "insufficient_points",
+          }),
+        ]);
+
+      if (profileError || subscriptionError || chargeError) throw profileError || subscriptionError || chargeError;
+      profile = updatedProfile || { ...profile, is_verified: false, premium_status: "failed", premium_failed_at: now };
+      subscription = updatedSubscription || { ...subscription, status: "failed", failed_at: now };
+      await syncBusinessVerification(profile);
+    }
+  }
+
+  const { data: charges, error: chargesError } = await supabaseAdmin
+    .from("premium_subscription_charges")
+    .select("id, points, status, reason, created_at")
+    .eq("profile_id", profile.id)
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (chargesError && chargesError.code !== "42P01") throw chargesError;
+  return { profile, subscription, charges: charges || [], missingSql: false };
+}
+
 function parsePlanProfilePhotos(value) {
   const raw = String(value || "");
   if (!raw) return [];
@@ -232,7 +392,8 @@ async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
-  const profileColumns = `${baseProfileColumns}, plan_gender_preference, plan_photo_data_url`;
+  const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at`;
+  const profileColumns = `${premiumProfileColumns}, plan_gender_preference, plan_photo_data_url`;
   let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -585,6 +746,8 @@ app.post("/api/admin/accounts", async (request, response) => {
     { data: accounts, error: accountsError },
     { data: recharges, error: rechargesError },
     { data: payoutFees, error: payoutFeesError },
+    { data: premiumSubscriptions, error: premiumSubscriptionsError },
+    { data: premiumCharges, error: premiumChargesError },
   ] = await Promise.all([
     supabaseAdmin
       .from("profiles")
@@ -596,6 +759,12 @@ app.post("/api/admin/accounts", async (request, response) => {
     supabaseAdmin
       .from("business_payouts")
       .select("amount_cents, bank_fee_cents"),
+    supabaseAdmin
+      .from("premium_subscriptions")
+      .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at"),
+    supabaseAdmin
+      .from("premium_subscription_charges")
+      .select("id, profile_id, subscription_id, points, status, reason, created_at"),
   ]);
 
   if (accountsError) {
@@ -609,12 +778,69 @@ app.post("/api/admin/accounts", async (request, response) => {
   if (payoutFeesError && payoutFeesError.code !== "42P01" && payoutFeesError.code !== "42703") {
     console.error("Admin accounts payout fees error:", payoutFeesError);
   }
+  if (premiumSubscriptionsError && premiumSubscriptionsError.code !== "42P01" && premiumSubscriptionsError.code !== "42703") {
+    console.error("Admin premium subscriptions error:", premiumSubscriptionsError);
+  }
+  if (premiumChargesError && premiumChargesError.code !== "42P01" && premiumChargesError.code !== "42703") {
+    console.error("Admin premium charges error:", premiumChargesError);
+  }
 
-  const enrichedAccounts = (accounts || []).map((account) => {
+  const syncedAccounts = [];
+  for (const account of accounts || []) {
+    try {
+      const premium = await syncPremiumForProfile(account);
+      syncedAccounts.push(premium.profile || account);
+    } catch (error) {
+      if (error.code !== "42P01" && error.code !== "42703") console.error("Admin premium sync error:", error);
+      syncedAccounts.push(account);
+    }
+  }
+
+  let latestPremiumSubscriptions = premiumSubscriptions || [];
+  let latestPremiumCharges = premiumCharges || [];
+  if (!premiumSubscriptionsError && !premiumChargesError) {
+    const [{ data: refreshedSubscriptions, error: refreshedSubscriptionsError }, { data: refreshedCharges, error: refreshedChargesError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("premium_subscriptions")
+          .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at"),
+        supabaseAdmin
+          .from("premium_subscription_charges")
+          .select("id, profile_id, subscription_id, points, status, reason, created_at"),
+      ]);
+    if (!refreshedSubscriptionsError) latestPremiumSubscriptions = refreshedSubscriptions || [];
+    if (!refreshedChargesError) latestPremiumCharges = refreshedCharges || [];
+  }
+
+  const subscriptionsByProfile = {};
+  for (const subscription of latestPremiumSubscriptions) {
+    const current = subscriptionsByProfile[subscription.profile_id];
+    if (!current || new Date(subscription.created_at || 0).getTime() > new Date(current.created_at || 0).getTime()) {
+      subscriptionsByProfile[subscription.profile_id] = subscription;
+    }
+  }
+
+  const premiumChargesByProfile = {};
+  for (const charge of latestPremiumCharges) {
+    if (!premiumChargesByProfile[charge.profile_id]) premiumChargesByProfile[charge.profile_id] = [];
+    premiumChargesByProfile[charge.profile_id].push(charge);
+  }
+
+  const enrichedAccounts = syncedAccounts.map((account) => {
     const points = Number(account.points || 0);
+    const subscription = subscriptionsByProfile[account.id] || null;
+    const charges = premiumChargesByProfile[account.id] || [];
+    const paidCharges = charges.filter((charge) => charge.status === "paid");
+    const premiumPaidPoints = paidCharges.reduce((sum, charge) => sum + Number(charge.points || 0), 0);
     return {
       ...account,
       point_value_cents: points * 10,
+      premium: {
+        ...premiumPublicStatus(subscription, account),
+        paid_points: premiumPaidPoints,
+        paid_value_cents: premiumPaidPoints * 10,
+        charges_count: charges.length,
+      },
     };
   });
 
@@ -623,7 +849,11 @@ app.post("/api/admin/accounts", async (request, response) => {
   const totalPaid = enrichedRecharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
   const totalFees = enrichedRecharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
   const totalNet = enrichedRecharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
-  const donosCompanyMoney = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
+  const premiumRevenue = latestPremiumCharges
+    .filter((charge) => charge.status === "paid")
+    .reduce((sum, charge) => sum + Number(charge.points || 0) * 10, 0);
+  const donosTransactionMoney = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
+  const donosCompanyMoney = donosTransactionMoney + premiumRevenue;
   const donosDebt = enrichedRecharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
   const bankFeeDebt = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.bank_fee_cents || 0), 0);
   const businessPayoutsPaid = payoutFeesError ? 0 : (payoutFees || []).reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
@@ -649,6 +879,9 @@ app.post("/api/admin/accounts", async (request, response) => {
       estimated_cash_cents: estimatedCash,
       reserve_margin_cents: estimatedCash - totalLiability,
       donos_company_money_cents: donosCompanyMoney,
+      donos_transaction_money_cents: donosTransactionMoney,
+      premium_revenue_cents: premiumRevenue,
+      premium_subscribers: enrichedAccounts.filter((account) => account.premium?.status === "active").length,
       donos_debt_cents: donosDebt,
       bank_fee_debt_cents: bankFeeDebt,
       total_operational_debt_cents: totalOperationalDebt,
@@ -1160,16 +1393,125 @@ app.get("/api/me/profile", async (request, response) => {
   }
 
   try {
-    const profile = await ensureProfileForUser(userData.user);
+    let profile = await ensureProfileForUser(userData.user);
+    const premium = await syncPremiumForProfile(profile);
+    profile = premium.profile || profile;
     response.json({
       profile: profile ? {
         ...profile,
         plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
       } : null,
+      premium: premiumPublicStatus(premium.subscription, profile),
+      premium_charges: premium.charges || [],
+      premium_sql_missing: Boolean(premium.missingSql),
     });
   } catch (error) {
     console.error("Me profile error:", error);
     return response.status(500).json({ error: "Could not load profile" });
+  }
+});
+
+app.post("/api/me/premium/subscribe", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    let profile = await ensureProfileForUser(auth.user);
+    const current = await syncPremiumForProfile(profile);
+    if (current.missingSql) {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+
+    profile = current.profile || profile;
+    const points = premiumPointsForAccountType(profile.account_type);
+    const currentPoints = Number(profile.points || 0);
+    if (currentPoints < points) {
+      return response.status(400).json({ error: "insufficient_points", required_points: points, current_points: currentPoints });
+    }
+
+    const now = new Date().toISOString();
+    const nextChargeAt = addDays(now, 31);
+    const subscription = current.subscription;
+    let savedSubscription = null;
+
+    if (subscription?.id) {
+      const { data, error } = await supabaseAdmin
+        .from("premium_subscriptions")
+        .update({
+          account_type: profile.account_type,
+          points,
+          status: "active",
+          started_at: subscription.started_at || now,
+          next_charge_at: nextChargeAt,
+          last_charge_at: now,
+          failed_at: null,
+          updated_at: now,
+        })
+        .eq("id", subscription.id)
+        .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      savedSubscription = data;
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("premium_subscriptions")
+        .insert({
+          profile_id: profile.id,
+          account_type: profile.account_type,
+          points,
+          status: "active",
+          started_at: now,
+          next_charge_at: nextChargeAt,
+          last_charge_at: now,
+        })
+        .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      savedSubscription = data;
+    }
+
+    const { data: updatedProfile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        points: currentPoints - points,
+        is_verified: true,
+        premium_status: "active",
+        premium_started_at: profile.premium_started_at || now,
+        premium_next_charge_at: nextChargeAt,
+        premium_failed_at: null,
+      })
+      .eq("id", profile.id)
+      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+
+    const { error: chargeError } = await supabaseAdmin.from("premium_subscription_charges").insert({
+      subscription_id: savedSubscription.id,
+      profile_id: profile.id,
+      points,
+      status: "paid",
+      reason: "manual_activation",
+    });
+    if (chargeError) throw chargeError;
+
+    await syncBusinessVerification(updatedProfile);
+
+    response.json({
+      profile: updatedProfile,
+      premium: premiumPublicStatus(savedSubscription, updatedProfile),
+      message: "Premium activado correctamente.",
+    });
+  } catch (error) {
+    console.error("Premium subscribe error:", error);
+    if (error.code === "42P01" || error.code === "42703") {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+    response.status(500).json({ error: "premium_subscribe_failed" });
   }
 });
 

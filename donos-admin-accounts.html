@@ -119,7 +119,9 @@
         const [status, setStatus] = React.useState("");
         const [isLoading, setIsLoading] = React.useState(false);
         const [savingId, setSavingId] = React.useState("");
+        const [showDonossMoneyDetails, setShowDonossMoneyDetails] = React.useState(false);
         const filteredAccounts = accounts.filter((account) => matchesAccount(account, search));
+        const premiumAccounts = accounts.filter((account) => account.premium?.status === "active");
 
         React.useEffect(() => {
           if (isUnlocked) loadAccounts();
@@ -217,7 +219,7 @@
 
             <section className="mt-6 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Valor € puntos existentes" value={money(summary.total_point_value_cents)} tone="mint" info={{ title: "Valor € puntos existentes", text: "En gros, c'est la valeur en € des points total existant todavía en las cuentas. No es beneficio: es una obligación potencial.", example: "1400 ptos. existentes = 140 € que Donoss debe poder cubrir." }} />
-              <StatCard label="Caja estimada" value={money(summary.estimated_cash_cents)} info={{ title: "Caja estimada", text: "Neto recibido por Stripe menos lo que ya pagaste a empresas y menos frais bancarios.", example: "238,60 € - 100 € - 0,65 € = 137,95 €." }} />
+              <StatCard label="Caja estimada" value={money(summary.estimated_cash_cents)} info={{ title: "Caja estimada", text: "Neto recibido por Stripe menos lo que ya pagaste a empresas y menos comisiones bancarias.", example: "238,60 € - 100 € - 0,65 € = 137,95 €." }} />
               <StatCard label="Cobertura de reserva" value={money(summary.reserve_margin_cents)} tone={Number(summary.reserve_margin_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Cobertura de reserva", text: "No es tu beneficio. Es un test de seguridad: caja estimada menos valor de puntos existentes. Si sale negativo, tu caja no cubre todos los puntos vivos.", example: "Caja 137,95 € - puntos vivos 140 € = -2,05 € de cobertura." }} />
               <StatCard label="Cuentas" value={`${summary.total_accounts || 0}`} info={{ title: "Cuentas", text: "Total de perfiles registrados en Donoss, usuarios y empresas juntos.", example: "1 usuario + 1 empresa = 2 cuentas." }} />
             </section>
@@ -227,11 +229,14 @@
               <StatCard label="Pagado a empresas" value={money(summary.business_payouts_paid_cents)} info={{ title: "Pagado a empresas", text: "Total que registraste como enviado fuera de Donoss a empresas.", example: "Retiras 250 ptos. = 25 € pagados." }} />
               <StatCard label="Usuarios" value={summary.total_users || 0} info={{ title: "Usuarios", text: "Cuentas normales de clientes.", example: "Daphnel se registra como usuario = +1." }} />
               <StatCard label="Empresas" value={summary.total_businesses || 0} info={{ title: "Empresas", text: "Cuentas registradas como comercio/empresa.", example: "Karcharelle se registra como empresa = +1." }} />
-              <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" info={{ title: "Certificadas", text: "Cuentas que marcaste como verificadas para mostrar badge de confianza.", example: "Certificas una empresa y aparece el check azul." }} />
+              <StatCard label="Certificadas" value={summary.total_verified || 0} tone="mint" info={{ title: "Certificadas", text: "Cuentas que marcaste como verificadas o cuentas con Premium al día para mostrar badge de confianza.", example: "Premium activo = check azul automático." }} />
             </section>
 
             <section className="mt-3 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
-              <StatCard label="Dinero empresa Donoss" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donoss", text: "Parte de los gastos Donoss que queda para la empresa Donoss tras estimar cortes Stripe.", example: "Cobras 1,20 € extra y Stripe corta 0,61 €: quedan 0,59 €." }} />
+              <button className="text-left" type="button" onClick={() => setShowDonossMoneyDetails(true)}>
+                <StatCard label="Dinero empresa Donoss" value={money(summary.donos_company_money_cents)} tone="mint" info={{ title: "Dinero empresa Donoss", text: "Dinero propio estimado de Donoss: incluye margen de recargas y puntos pagados por Premium.", example: "0,59 € de una recarga + 2 € de Premium usuario = 2,59 €." }} />
+                <p className="mt-1 pl-1 text-xs font-black text-mint">Ver más</p>
+              </button>
               <StatCard label="Beneficio Donoss disponible" value={money(summary.donos_available_profit_cents)} tone={Number(summary.donos_available_profit_cents || 0) >= 0 ? "mint" : "coral"} info={{ title: "Beneficio Donoss disponible", text: "Este es el contador que debes mirar para saber si el dinero propio de Donoss puede cubrir sus deudas operativas.", example: "Dinero Donoss 15 € - deudas 2,45 € = 12,55 € disponibles." }} />
               <StatCard label="Falta para estar en verde" value={money(summary.missing_to_green_cents)} tone={Number(summary.missing_to_green_cents || 0) > 0 ? "coral" : "mint"} info={{ title: "Falta para estar en verde", text: "Cantidad que Donoss necesita ganar o añadir para que el beneficio disponible vuelva a 0 € o positivo.", example: "Dinero Donoss 1,44 €, deudas 3,49 €: faltan 2,05 €." }} />
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-stripe-debts.html">
@@ -245,11 +250,41 @@
               <a className="block rounded-3xl border border-coral/25 bg-coral/10 p-4 text-coral sm:p-5" href="donos-admin-bank-fee-debts.html">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] opacity-80">
                   <span>Deudas bancarias</span>
-                  <InfoTip title="Deudas bancarias" text="Frais que tu banco te cobró cuando enviaste dinero real a una empresa." example="Pagas 15 € a la empresa y el banco cobra 0,45 €: deuda bancaria 0,45 €." />
+                  <InfoTip title="Deudas bancarias" text="Comisiones que tu banco te cobró cuando enviaste dinero real a una empresa." example="Pagas 15 € a la empresa y el banco cobra 0,45 €: deuda bancaria 0,45 €." />
                 </p>
                 <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{money(summary.bank_fee_debt_cents)}</p>
                 <p className="mt-2 text-xs font-black text-coral/80">Transferencias a empresas</p>
               </a>
+            </section>
+
+            <section className="mt-5 rounded-[30px] border border-mint/20 bg-mint/10 p-5 sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Premium</p>
+                  <h2 className="mt-2 text-2xl font-black text-white">Abonados Premium</h2>
+                  <p className="mt-1 text-sm font-bold text-slate-300">Cuentas con pago al día y certificación automática.</p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+                  <p className="text-2xl font-black text-mint">{summary.premium_subscribers || 0}</p>
+                  <p className="text-xs font-black text-slate-400">{money(summary.premium_revenue_cents)} total</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {premiumAccounts.slice(0, 6).map((account) => (
+                  <div key={`premium-${account.id}`} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <p className="flex items-center gap-2 font-black text-white">
+                      <span className="truncate">{account.display_name || "Cuenta Donoss"}</span>
+                      <VerifiedBadge />
+                      <span className="rounded-full bg-mint px-2 py-1 text-[10px] font-black text-ink">Premium al día</span>
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-slate-400">{account.email || "Sin email"}</p>
+                    <p className="mt-2 text-xs font-black text-mint">{account.premium?.points || 0} ptos. / 31 días · próximo cobro {account.premium?.next_charge_at ? new Date(account.premium.next_charge_at).toLocaleDateString("es-ES") : "sin fecha"}</p>
+                  </div>
+                ))}
+                {premiumAccounts.length === 0 && (
+                  <p className="rounded-3xl border border-white/10 bg-black/20 p-4 text-sm font-bold text-slate-300">Todavía no hay abonados Premium.</p>
+                )}
+              </div>
             </section>
 
             <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
@@ -317,6 +352,8 @@
                       <p className="flex items-center gap-2 font-black text-white">
                         <span className="truncate">{account.display_name || "Cuenta Donoss"}</span>
                         {account.is_verified && <VerifiedBadge />}
+                        {account.premium?.status === "active" && <span className="rounded-full bg-mint px-2 py-1 text-[10px] font-black text-ink">Premium</span>}
+                        {account.premium?.status === "failed" && <span className="rounded-full bg-coral/15 px-2 py-1 text-[10px] font-black text-coral ring-1 ring-coral/20">Premium fallido</span>}
                       </p>
                       <p className="mt-1 truncate text-sm font-bold text-slate-400">{account.email || "Sin email"}</p>
                       <p className="mt-1 truncate text-xs font-bold text-slate-500">{account.phone || account.neighborhood || "Sin contacto"}</p>
@@ -344,6 +381,30 @@
                 <div className="p-6 text-sm font-bold text-slate-300">No hay resultados.</div>
               )}
             </section>
+
+            {showDonossMoneyDetails && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <div className="w-full max-w-lg rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Detalle Donoss</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Dinero empresa Donoss</h2>
+                  <div className="mt-5 space-y-3">
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Desde recargas</p>
+                      <p className="mt-2 text-2xl font-black text-white">{money(summary.donos_transaction_money_cents)}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-400">Lo que queda del extra Donoss después de estimar el corte Stripe.</p>
+                    </div>
+                    <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Desde Premium</p>
+                      <p className="mt-2 text-2xl font-black text-mint">{money(summary.premium_revenue_cents)}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-300">Usuarios: 20 ptos. / Empresas: 30 ptos. Cada pago Premium se cuenta como dinero propio de Donoss.</p>
+                    </div>
+                  </div>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => setShowDonossMoneyDetails(false)}>
+                    Entendido
+                  </button>
+                </div>
+              </div>
+            )}
           </main>
         );
       }

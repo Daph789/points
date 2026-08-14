@@ -308,7 +308,7 @@
                     <p className="mt-1 text-xs font-bold text-slate-400">Cuando pagues a la empresa por Stripe o transferencia, retira aquí los puntos equivalentes. Si tu banco te cobra comisión, apúntala como gasto Donoss.</p>
                     <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_2fr_auto]">
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="number" min="1" value={pointsToRemove} onChange={(event) => setPointsToRemove(event.target.value)} placeholder="Puntos" />
-                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" inputMode="decimal" value={bankFeeEuros} onChange={(event) => setBankFeeEuros(event.target.value)} placeholder="Frais banco € (0)" />
+                      <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" inputMode="decimal" value={bankFeeEuros} onChange={(event) => setBankFeeEuros(event.target.value)} placeholder="Comisión banco € (0)" />
                       <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Nota: transferencia, Stripe, llamada..." />
                       <button className="h-12 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isPaying} onClick={payBusiness}>{isPaying ? "Guardando..." : "Quitar puntos"}</button>
                     </div>
@@ -324,13 +324,13 @@
                       <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-3">
                         <label className="flex items-center gap-3">
                           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint/10 text-mint">⌕</span>
-                          <input className="h-10 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500" value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Buscar comprador, producto, virement..." />
+                          <input className="h-10 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500" value={detailSearch} onChange={(event) => setDetailSearch(event.target.value)} placeholder="Buscar comprador, producto, transferencia..." />
                         </label>
                       </div>
                       <div className="rounded-[24px] border border-mint/20 bg-mint/10 p-3">
-                        <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">Último virement</p>
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">Última transferencia</p>
                         <p className="mt-1 truncate text-sm font-black text-white">
-                          {detail?.payouts?.[0] ? `${money(detail.payouts[0].amount_cents)} · ${dateTime(detail.payouts[0].created_at)}` : "Todavía sin virement"}
+                          {detail?.payouts?.[0] ? `${money(detail.payouts[0].amount_cents)} · ${dateTime(detail.payouts[0].created_at)}` : "Todavía sin transferencia"}
                         </p>
                       </div>
                     </div>
@@ -353,20 +353,20 @@
                       </div>
 
                       <div className="max-h-[42vh] overflow-y-auto rounded-[26px] border border-white/10 bg-black/20">
-                        <p className="border-b border-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Historial de virements enviados</p>
+                        <p className="border-b border-white/10 px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-slate-500">Historial de transferencias enviadas</p>
                         {(detail ? filteredPayouts : []).map((payout) => (
                           <article key={payout.id} className="grid gap-2 border-b border-white/10 px-4 py-3 sm:grid-cols-[1fr_auto]">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-black text-white">{money(payout.amount_cents)} enviados</p>
-                              <p className="mt-1 truncate text-xs font-bold text-slate-400">{payout.points || 0} ptos. retirados · frais banco {money(payout.bank_fee_cents)}</p>
+                              <p className="mt-1 truncate text-xs font-bold text-slate-400">{payout.points || 0} ptos. retirados · comisión banco {money(payout.bank_fee_cents)}</p>
                               <p className="mt-1 text-xs font-bold text-slate-600">{dateTime(payout.created_at)}</p>
                               {payout.note && <p className="mt-2 truncate rounded-2xl bg-white/[0.04] px-3 py-2 text-xs font-bold text-slate-300">{payout.note}</p>}
                             </div>
                             <p className="text-sm font-black text-mint">OK</p>
                           </article>
                         ))}
-                        {detail && filteredPayouts.length === 0 && <p className="p-5 text-sm font-bold text-slate-400">No hay virements registrados.</p>}
-                        {!detail && <p className="p-5 text-sm font-bold text-slate-400">Cargando virements...</p>}
+                        {detail && filteredPayouts.length === 0 && <p className="p-5 text-sm font-bold text-slate-400">No hay transferencias registradas.</p>}
+                        {!detail && <p className="p-5 text-sm font-bold text-slate-400">Cargando transferencias...</p>}
                       </div>
                     </div>
                   </section>
@@ -385,7 +385,7 @@
                   </p>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">
-                      <p className="text-xs font-bold text-slate-500">Frais banco</p>
+                      <p className="text-xs font-bold text-slate-500">Comisión banco</p>
                       <p className="mt-1 text-lg font-black text-coral">{money(successOverlay.bankFeeCents)}</p>
                     </div>
                     <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-3">

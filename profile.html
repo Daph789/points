@@ -115,6 +115,17 @@
         return Number(value || 0).toLocaleString("es-ES");
       }
 
+      function formatDateTime(value) {
+        if (!value) return "No programado";
+        return new Intl.DateTimeFormat("es-ES", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }).format(new Date(value));
+      }
+
       function redirectToLogin() {
         const next = window.location.pathname + window.location.search;
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
@@ -160,6 +171,10 @@
         const [planPhotos, setPlanPhotos] = React.useState([]);
         const [isSavingPhotos, setIsSavingPhotos] = React.useState(false);
         const [isSavingPlanGender, setIsSavingPlanGender] = React.useState(false);
+        const [premium, setPremium] = React.useState(null);
+        const [premiumSqlMissing, setPremiumSqlMissing] = React.useState(false);
+        const [isPremiumOpen, setIsPremiumOpen] = React.useState(false);
+        const [isActivatingPremium, setIsActivatingPremium] = React.useState(false);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -183,7 +198,11 @@
                 headers: { Authorization: `Bearer ${accessToken}` },
               });
               const serverData = await response.json().catch(() => ({}));
-              if (response.ok) data = serverData.profile;
+              if (response.ok) {
+                data = serverData.profile;
+                setPremium(serverData.premium || null);
+                setPremiumSqlMissing(Boolean(serverData.premium_sql_missing));
+              }
             }
 
             if (!data) {
@@ -331,6 +350,37 @@
           window.location.href = "login.html";
         }
 
+        async function activatePremium() {
+          if (!accessToken) return redirectToLogin();
+          setIsActivatingPremium(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/premium/subscribe", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "premium_failed");
+            setPremium(data.premium || null);
+            setProfile((current) => current ? { ...current, ...(data.profile || {}) } : current);
+            setIsPremiumOpen(false);
+            setStatus("Premium activado correctamente. Tu certificación ya está activa.");
+          } catch (error) {
+            if (error.message === "premium_sql_missing") {
+              setStatus("Falta ejecutar el SQL de Premium en Supabase.");
+            } else if (error.message === "insufficient_points") {
+              setStatus("No tienes puntos suficientes para activar Premium.");
+            } else {
+              setStatus("No se ha podido activar Premium.");
+            }
+          } finally {
+            setIsActivatingPremium(false);
+          }
+        }
+
         if (status === "Cargando perfil...") {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -341,6 +391,9 @@
 
         const isBusiness = profile.account_type === "business";
         const displayedDonosId = formatDonosId(profile.transaction_id);
+        const premiumPoints = isBusiness ? 30 : 20;
+        const premiumActive = premium?.status === "active";
+        const premiumFailed = premium?.status === "failed";
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-28 pt-4 sm:px-6">
@@ -398,6 +451,55 @@
               <InfoCard label="Dirección" value={profile.address} />
               {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
               {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}
+            </section>
+
+            <section className={`mt-5 rounded-[32px] border p-5 shadow-2xl shadow-black/20 ${
+              premiumActive
+                ? "border-mint/25 bg-mint/10"
+                : premiumFailed
+                  ? "border-coral/25 bg-coral/10"
+                  : "border-white/10 bg-white/[0.055]"
+            }`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Plan Premium</p>
+                  <h2 className="mt-2 text-2xl font-black text-white">Certificación Donoss</h2>
+                  <p className="mt-2 max-w-2xl text-sm font-bold leading-6 text-slate-400">
+                    {isBusiness
+                      ? "Gana confianza y muestra tus ofertas oficiales con más autoridad dentro de Donoss."
+                      : "Demuestra que eres una persona real y consigue una atención más rápida cuando necesites ayuda."}
+                  </p>
+                </div>
+                <div className="rounded-3xl border border-white/10 bg-black/25 px-4 py-3 text-right">
+                  <p className="text-2xl font-black text-white">{premiumPoints} puntos</p>
+                  <p className="text-xs font-black text-slate-400">cada 31 días</p>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <InfoCard label="Estado" value={premiumActive ? "Pago al día" : premiumFailed ? "Pago fallido" : "Sin activar"} />
+                <InfoCard label="Próximo cobro" value={premiumActive ? formatDateTime(premium?.next_charge_at) : "Al activar Premium"} />
+                <InfoCard label="Certificación" value={profile.is_verified ? "Activa" : "No activa"} />
+              </div>
+
+              {premiumFailed && (
+                <p className="mt-4 rounded-2xl border border-coral/25 bg-black/20 p-3 text-sm font-black leading-6 text-coral">
+                  El último cobro no se pudo hacer. Recarga puntos y vuelve a activar Premium para recuperar la certificación.
+                </p>
+              )}
+              {premiumSqlMissing && (
+                <p className="mt-4 rounded-2xl border border-sun/25 bg-sun/10 p-3 text-sm font-black leading-6 text-sun">
+                  Falta activar Premium en Supabase. Ejecuta el SQL de Premium para usar esta sección.
+                </p>
+              )}
+
+              <button
+                className="mt-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0] disabled:opacity-60"
+                onClick={() => setIsPremiumOpen(true)}
+                disabled={isActivatingPremium}
+              >
+                {premiumActive ? "Ver detalles Premium" : "Activar Premium"}
+              </button>
             </section>
 
             {!isBusiness && (
@@ -506,6 +608,40 @@
                 })}
               </div>
             </nav>
+
+            {isPremiumOpen && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <div className="w-full max-w-lg rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Premium Donoss</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">{isBusiness ? "Plan para empresas" : "Plan para usuarios"}</h2>
+                  <div className="mt-5 space-y-3">
+                    {(isBusiness
+                      ? ["Certificación para ganar confianza.", "Tus ofertas oficiales se muestran con más autoridad."]
+                      : ["Certificación para demostrar que eres una persona real.", "Servicio de ayuda más rápido cuando lo necesites."]
+                    ).map((item) => (
+                      <div key={item} className="flex gap-3 rounded-2xl border border-white/10 bg-white/[0.055] p-3">
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mint text-sm font-black text-ink">✓</span>
+                        <p className="text-sm font-black leading-6 text-white">{item}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                    <p className="text-sm font-black text-mint">{premiumPoints} puntos cada 31 días</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
+                      Se cobra ahora y después cada 31 días cuando entres en Donoss. Si no hay puntos suficientes, Premium se pausa y desaparece la certificación hasta que lo actives otra vez.
+                    </p>
+                  </div>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" onClick={() => setIsPremiumOpen(false)}>
+                      Cerrar
+                    </button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" onClick={activatePremium} disabled={isActivatingPremium || premiumSqlMissing}>
+                      {isActivatingPremium ? "Activando..." : premiumActive ? "Renovar ahora" : "Activar"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </main>
         );
       }
