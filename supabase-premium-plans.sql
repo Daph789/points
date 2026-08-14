@@ -1,4 +1,5 @@
 alter table public.profiles
+  add column if not exists admin_verified boolean not null default false,
   add column if not exists premium_status text default 'inactive',
   add column if not exists premium_started_at timestamptz,
   add column if not exists premium_next_charge_at timestamptz,

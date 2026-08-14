@@ -180,6 +180,19 @@ async function loadPremiumSubscription(profileId) {
   return data || null;
 }
 
+async function loadAdminVerifiedForProfile(profile) {
+  if (typeof profile?.admin_verified === "boolean") return profile.admin_verified;
+  if (!supabaseAdmin || !profile?.id) return false;
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("admin_verified")
+    .eq("id", profile.id)
+    .maybeSingle();
+  if (error?.code === "42703") return false;
+  if (error) throw error;
+  return Boolean(data?.admin_verified);
+}
+
 async function syncPremiumForProfile(profile) {
   if (!supabaseAdmin || !profile?.id) return { profile, subscription: null, charges: [] };
 
@@ -213,7 +226,7 @@ async function syncPremiumForProfile(profile) {
               premium_failed_at: null,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -242,17 +255,18 @@ async function syncPremiumForProfile(profile) {
       subscription = updatedSubscription || { ...subscription, points, status: "active", next_charge_at: nextChargeAt, last_charge_at: now, failed_at: null };
       await syncBusinessVerification(profile);
     } else {
+      const keepAdminVerification = await loadAdminVerifiedForProfile(profile);
       const [{ data: updatedProfile, error: profileError }, { data: updatedSubscription, error: subscriptionError }, { error: chargeError }] =
         await Promise.all([
           supabaseAdmin
             .from("profiles")
             .update({
-              is_verified: false,
+              is_verified: keepAdminVerification,
               premium_status: "failed",
               premium_failed_at: now,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -274,7 +288,7 @@ async function syncPremiumForProfile(profile) {
         ]);
 
       if (profileError || subscriptionError || chargeError) throw profileError || subscriptionError || chargeError;
-      profile = updatedProfile || { ...profile, is_verified: false, premium_status: "failed", premium_failed_at: now };
+      profile = updatedProfile || { ...profile, is_verified: keepAdminVerification, premium_status: "failed", premium_failed_at: now };
       subscription = updatedSubscription || { ...subscription, status: "failed", failed_at: now };
       await syncBusinessVerification(profile);
     }
@@ -751,7 +765,7 @@ app.post("/api/admin/accounts", async (request, response) => {
   ] = await Promise.all([
     supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, created_at")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, created_at")
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("stripe_point_recharges")
@@ -907,12 +921,45 @@ app.post("/api/admin/accounts/verify", async (request, response) => {
     return response.status(400).json({ error: "Falta la cuenta" });
   }
 
-  const { data: profile, error } = await supabaseAdmin
+  let { data: currentProfile, error: currentError } = await supabaseAdmin
     .from("profiles")
-    .update({ is_verified: isVerified })
+    .select("id, premium_status")
     .eq("id", profileId)
-    .select("id, display_name, account_type, is_verified")
     .maybeSingle();
+
+  if (currentError?.code === "42703") {
+    const fallback = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id", profileId)
+      .maybeSingle();
+    currentProfile = fallback.data ? { ...fallback.data, premium_status: "inactive" } : null;
+    currentError = fallback.error;
+  }
+
+  if (currentError || !currentProfile) {
+    console.error("Admin verify load account error:", currentError);
+    return response.status(500).json({ error: "No se ha podido cargar la cuenta" });
+  }
+
+  const finalVerified = isVerified || currentProfile.premium_status === "active";
+  let { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .update({ admin_verified: isVerified, is_verified: finalVerified })
+    .eq("id", profileId)
+    .select("id, display_name, account_type, is_verified, admin_verified, premium_status")
+    .maybeSingle();
+
+  if (error?.code === "42703") {
+    const fallback = await supabaseAdmin
+      .from("profiles")
+      .update({ is_verified: finalVerified })
+      .eq("id", profileId)
+      .select("id, display_name, account_type, is_verified, premium_status")
+      .maybeSingle();
+    profile = fallback.data ? { ...fallback.data, admin_verified: isVerified } : null;
+    error = fallback.error;
+  }
 
   if (error || !profile) {
     console.error("Admin verify account error:", error);
@@ -1485,7 +1532,7 @@ app.post("/api/me/premium/subscribe", async (request, response) => {
         premium_failed_at: null,
       })
       .eq("id", profile.id)
-      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
       .maybeSingle();
 
     if (profileError) throw profileError;
