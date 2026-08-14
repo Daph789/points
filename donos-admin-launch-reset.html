@@ -62,6 +62,8 @@
         ["analytics", "Borrar actividad analytics", "Opcional: elimina sesiones y visitas registradas para estadísticas."],
       ];
 
+      const onlyPointsOptions = Object.fromEntries(Object.keys(defaultOptions).map((key) => [key, key === "points"]));
+
       function Stat({ label, value }) {
         return (
           <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
@@ -115,7 +117,12 @@
             return;
           }
 
-          const sure = window.confirm("Última confirmación: vas a borrar datos de test y resetear saldos. ¿Continuar?");
+          const onlyPoints = options.points && Object.entries(options).every(([key, value]) => key === "points" || !value);
+          const sure = window.confirm(
+            onlyPoints
+              ? "Última confirmación: vas a poner todos los puntos a 0. Las cuentas, compras, publicaciones y chats se mantienen. ¿Continuar?"
+              : "Última confirmación: vas a borrar datos de test y resetear saldos. ¿Continuar?"
+          );
           if (!sure) return;
 
           setLoading(true);
@@ -128,7 +135,7 @@
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Reset fallido");
             setResult(data.deleted || {});
-            setStatus("Reset de lanzamiento completado correctamente.");
+            setStatus(onlyPoints ? "Puntos reseteados correctamente." : "Reset de lanzamiento completado correctamente.");
             setConfirmation("");
             await loadPreview();
           } catch (error) {
@@ -185,7 +192,20 @@
             </section>
 
             <section className="mt-5 rounded-[34px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
-              <h2 className="text-2xl font-black text-white">Qué limpiar</h2>
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-black text-white">Qué limpiar</h2>
+                  <p className="mt-1 text-sm font-bold text-slate-400">Puedes resetear todo para el lanzamiento o solo poner los saldos a cero.</p>
+                </div>
+                <div className="grid w-full grid-cols-2 gap-2 sm:w-auto">
+                  <button className="rounded-2xl border border-mint/25 bg-mint/10 px-4 py-3 text-sm font-black text-mint" type="button" onClick={() => setOptions(onlyPointsOptions)}>
+                    Solo puntos
+                  </button>
+                  <button className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-black text-white" type="button" onClick={() => setOptions(defaultOptions)}>
+                    Todo test
+                  </button>
+                </div>
+              </div>
               <div className="mt-4 grid gap-3 lg:grid-cols-2">
                 {groups.map(([key, title, description]) => (
                   <label key={key} className={`flex cursor-pointer gap-3 rounded-3xl border p-4 transition ${options[key] ? "border-mint/25 bg-mint/10" : "border-white/10 bg-black/20"}`}>
