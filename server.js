@@ -181,6 +181,27 @@ function pushNotification(events, event) {
   });
 }
 
+function normalizeAnalyticsPage(value) {
+  const clean = String(value || "unknown")
+    .toLowerCase()
+    .replace(/[^a-z0-9_/#?=.-]/g, "")
+    .slice(0, 120);
+  return clean || "unknown";
+}
+
+function analyticsDateRange(body = {}) {
+  const endInput = String(body.endDate || "").slice(0, 10);
+  const startInput = String(body.startDate || "").slice(0, 10);
+  const endDate = /^\d{4}-\d{2}-\d{2}$/.test(endInput) ? new Date(`${endInput}T23:59:59.999Z`) : new Date();
+  const startDate = /^\d{4}-\d{2}-\d{2}$/.test(startInput)
+    ? new Date(`${startInput}T00:00:00.000Z`)
+    : new Date(endDate.getTime() - 6 * 24 * 60 * 60 * 1000);
+  return {
+    startIso: startDate.toISOString(),
+    endIso: endDate.toISOString(),
+  };
+}
+
 function generateTicketValidationCode() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   return Array.from({ length: 7 }, () => alphabet[randomInt(alphabet.length)]).join("");
@@ -680,6 +701,206 @@ app.post("/api/admin/accounts/verify", async (request, response) => {
   }
 
   response.json({ profile });
+});
+
+app.post("/api/analytics/track", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(204).end();
+  }
+
+  const now = new Date().toISOString();
+  const page = normalizeAnalyticsPage(request.body?.page);
+  const sessionKey = String(request.body?.sessionKey || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  const source = String(request.body?.source || page || "app").slice(0, 40);
+  const metadata = typeof request.body?.metadata === "object" && request.body?.metadata !== null ? request.body.metadata : {};
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  let userId = null;
+
+  if (token) {
+    const { data: userData } = await supabaseAdmin.auth.getUser(token);
+    userId = userData?.user?.id || null;
+    if (userId) {
+      await ensureProfileForUser(userData.user).catch((error) => console.error("Analytics ensure profile error:", error));
+    }
+  }
+
+  if (!sessionKey && !userId) {
+    return response.status(204).end();
+  }
+
+  const { error } = await supabaseAdmin
+    .from("app_activity_events")
+    .insert({
+      user_id: userId,
+      session_key: sessionKey || null,
+      page,
+      source,
+      metadata,
+      user_agent: String(request.headers["user-agent"] || "").slice(0, 500),
+      last_seen_at: now,
+    });
+
+  if (error) {
+    if (error.code !== "42P01") console.error("Analytics track error:", error);
+    return response.status(204).end();
+  }
+
+  response.status(204).end();
+});
+
+app.post("/api/admin/activity", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const { startIso, endIso } = analyticsDateRange(request.body || {});
+
+  const { data: events, error } = await supabaseAdmin
+    .from("app_activity_events")
+    .select("id, user_id, session_key, page, source, metadata, created_at, last_seen_at")
+    .gte("created_at", startIso)
+    .lte("created_at", endIso)
+    .order("created_at", { ascending: false })
+    .limit(5000);
+
+  if (error) {
+    console.error("Admin activity error:", error);
+    return response.status(500).json({
+      error: error.code === "42P01" ? "Falta ejecutar supabase-activity-analytics.sql." : "No se ha podido cargar la actividad.",
+    });
+  }
+
+  const rows = events || [];
+  const userIds = [...new Set(rows.map((event) => event.user_id).filter(Boolean))];
+  let profilesById = {};
+
+  if (userIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, account_type, transaction_id, is_verified")
+      .in("id", userIds);
+    if (profilesError) console.error("Admin activity profiles error:", profilesError);
+    profilesById = Object.fromEntries((profiles || []).map((profile) => [profile.id, transferPublicProfile(profile)]));
+  }
+
+  const dayMap = new Map();
+  const sessionMap = new Map();
+  const pageMap = new Map();
+  const accountMap = new Map();
+
+  for (const event of rows) {
+    const created = new Date(event.created_at);
+    const day = event.created_at.slice(0, 10);
+    const key = event.user_id || event.session_key || event.id;
+    const profile = profilesById[event.user_id] || null;
+    const pageKey = event.page || "unknown";
+    const dayItem = dayMap.get(day) || {
+      date: day,
+      events: 0,
+      sessions: new Set(),
+      users: new Set(),
+      anonymous_sessions: new Set(),
+      landing_events: 0,
+      app_events: 0,
+      duration_ms: 0,
+    };
+    dayItem.events += 1;
+    dayItem.sessions.add(key);
+    if (event.user_id) dayItem.users.add(event.user_id);
+    else dayItem.anonymous_sessions.add(key);
+    if (pageKey === "landing") dayItem.landing_events += 1;
+    else dayItem.app_events += 1;
+    dayMap.set(day, dayItem);
+
+    pageMap.set(pageKey, (pageMap.get(pageKey) || 0) + 1);
+
+    const session = sessionMap.get(key) || {
+      key,
+      user_id: event.user_id || null,
+      profile,
+      session_key: event.session_key || null,
+      first_seen_at: event.created_at,
+      last_seen_at: event.created_at,
+      events: 0,
+      pages: new Set(),
+      source: event.source || "",
+    };
+    session.events += 1;
+    session.pages.add(pageKey);
+    if (new Date(event.created_at) < new Date(session.first_seen_at)) session.first_seen_at = event.created_at;
+    if (new Date(event.created_at) > new Date(session.last_seen_at)) session.last_seen_at = event.created_at;
+    session.profile = session.profile || profile;
+    sessionMap.set(key, session);
+
+    if (event.user_id) {
+      const account = accountMap.get(event.user_id) || {
+        user_id: event.user_id,
+        profile,
+        events: 0,
+        sessions: new Set(),
+        pages: new Set(),
+        first_seen_at: event.created_at,
+        last_seen_at: event.created_at,
+      };
+      account.events += 1;
+      account.sessions.add(key);
+      account.pages.add(pageKey);
+      if (created < new Date(account.first_seen_at)) account.first_seen_at = event.created_at;
+      if (created > new Date(account.last_seen_at)) account.last_seen_at = event.created_at;
+      accountMap.set(event.user_id, account);
+    }
+  }
+
+  const sessions = Array.from(sessionMap.values()).map((session) => {
+    const durationMs = Math.max(new Date(session.last_seen_at).getTime() - new Date(session.first_seen_at).getTime(), session.events > 1 ? 30_000 : 0);
+    return {
+      ...session,
+      pages: Array.from(session.pages),
+      duration_seconds: Math.round(durationMs / 1000),
+    };
+  });
+
+  const summaryDurationSeconds = sessions.reduce((sum, session) => sum + Number(session.duration_seconds || 0), 0);
+  const landingVisitors = new Set(rows.filter((event) => event.page === "landing").map((event) => event.user_id || event.session_key || event.id)).size;
+  const connectedUsers = new Set(rows.map((event) => event.user_id).filter(Boolean)).size;
+
+  response.json({
+    range: { start: startIso, end: endIso },
+    summary: {
+      total_events: rows.length,
+      total_sessions: sessions.length,
+      connected_users: connectedUsers,
+      anonymous_visitors: new Set(rows.filter((event) => !event.user_id).map((event) => event.session_key || event.id)).size,
+      landing_visitors: landingVisitors,
+      app_sessions: sessions.filter((session) => session.user_id).length,
+      avg_session_seconds: sessions.length ? Math.round(summaryDurationSeconds / sessions.length) : 0,
+      total_duration_seconds: summaryDurationSeconds,
+    },
+    days: Array.from(dayMap.values())
+      .map((day) => ({
+        ...day,
+        sessions: day.sessions.size,
+        users: day.users.size,
+        anonymous_sessions: day.anonymous_sessions.size,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date)),
+    pages: Array.from(pageMap.entries())
+      .map(([page, count]) => ({ page, count }))
+      .sort((a, b) => b.count - a.count),
+    sessions: sessions.sort((a, b) => new Date(b.last_seen_at) - new Date(a.last_seen_at)).slice(0, 300),
+    accounts: Array.from(accountMap.values())
+      .map((account) => ({
+        ...account,
+        sessions: account.sessions.size,
+        pages: Array.from(account.pages),
+        duration_seconds: Math.max(0, Math.round((new Date(account.last_seen_at).getTime() - new Date(account.first_seen_at).getTime()) / 1000)),
+      }))
+      .sort((a, b) => new Date(b.last_seen_at) - new Date(a.last_seen_at)),
+  });
 });
 
 async function enrichBusinessesForSettlement(businesses) {

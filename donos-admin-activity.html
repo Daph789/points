@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Admin actividad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166", violet: "#A78BFA" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 16% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(167, 139, 250, 0.13), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      * { box-sizing: border-box; min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const today = new Date();
+      const isoDay = (date) => date.toISOString().slice(0, 10);
+      const sevenDaysAgo = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+      function formatDate(value) {
+        if (!value) return "-";
+        return new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+      }
+
+      function formatDuration(seconds) {
+        const total = Number(seconds || 0);
+        if (total < 60) return `${total}s`;
+        const minutes = Math.floor(total / 60);
+        const rest = total % 60;
+        if (minutes < 60) return `${minutes}m ${rest}s`;
+        const hours = Math.floor(minutes / 60);
+        return `${hours}h ${minutes % 60}m`;
+      }
+
+      function accountLabel(profile) {
+        if (!profile) return "Visitante sin cuenta";
+        return profile.display_name || profile.email || "Cuenta sin nombre";
+      }
+
+      function StatCard({ label, value, hint, tone = "white" }) {
+        const color = tone === "mint" ? "border-mint/25 bg-mint/10 text-mint" : tone === "coral" ? "border-coral/25 bg-coral/10 text-coral" : "border-white/10 bg-white/[0.055] text-white";
+        return (
+          <div className={`rounded-3xl border p-4 sm:p-5 ${color}`}>
+            <p className="text-xs font-black uppercase tracking-[0.14em] opacity-75">{label}</p>
+            <p className="mt-2 break-words text-3xl font-black sm:text-4xl">{value}</p>
+            {hint && <p className="mt-2 text-xs font-bold leading-5 text-slate-400">{hint}</p>}
+          </div>
+        );
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
+        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const [startDate, setStartDate] = React.useState(isoDay(sevenDaysAgo));
+        const [endDate, setEndDate] = React.useState(isoDay(today));
+        const [data, setData] = React.useState({ summary: {}, days: [], pages: [], sessions: [], accounts: [] });
+        const [search, setSearch] = React.useState("");
+        const [status, setStatus] = React.useState("");
+        const [isLoading, setIsLoading] = React.useState(false);
+        const [detail, setDetail] = React.useState(null);
+        const [selectedDate, setSelectedDate] = React.useState("");
+
+        React.useEffect(() => {
+          if (isUnlocked) loadActivity();
+        }, [isUnlocked]);
+
+        async function loadActivity(event) {
+          event?.preventDefault();
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const response = await fetch("/api/admin/activity", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, startDate, endDate }),
+            });
+            const json = await response.json();
+            if (!response.ok) throw new Error(json.error || "No se ha podido cargar la actividad.");
+            sessionStorage.setItem("donosAdminPassword", password);
+            setIsUnlocked(true);
+            setData(json);
+          } catch (error) {
+            setStatus(error.message || "No se ha podido cargar la actividad.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        const selectedDaySessions = selectedDate
+          ? data.sessions.filter((session) => String(session.last_seen_at || "").startsWith(selectedDate) || String(session.first_seen_at || "").startsWith(selectedDate))
+          : data.sessions;
+
+        const visibleSessions = selectedDaySessions.filter((session) => {
+          const profile = session.profile || {};
+          const text = [
+            session.key,
+            session.page,
+            session.pages?.join(" "),
+            profile.display_name,
+            profile.email,
+            profile.phone,
+            profile.account_type,
+            profile.transaction_id,
+          ].filter(Boolean).join(" ").toLowerCase();
+          return text.includes(search.trim().toLowerCase());
+        });
+
+        if (!isUnlocked) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadActivity}>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <h1 className="mt-2 text-3xl font-black text-white">Actividad</h1>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Zona privada para ver visitas, conexiones y tiempo aproximado de uso.</p>
+                <input
+                  className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Contraseña"
+                />
+                {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
+                <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-base font-black text-ink shadow-glow" disabled={isLoading}>
+                  {isLoading ? "Entrando..." : "Entrar"}
+                </button>
+              </form>
+            </main>
+          );
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <h1 className="mt-1 break-words text-3xl font-black text-white sm:text-4xl">Actividad y conexiones</h1>
+              </div>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
+                <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadActivity}>
+                  {isLoading ? "Cargando..." : "Actualizar"}
+                </button>
+              </div>
+            </header>
+
+            <form className="mt-6 grid gap-3 rounded-[30px] border border-white/10 bg-white/[0.055] p-4 sm:grid-cols-[1fr_1fr_auto_auto]" onSubmit={loadActivity}>
+              <label className="grid gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Desde
+                <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-base font-black text-white outline-none focus:border-mint/70" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              </label>
+              <label className="grid gap-2 text-xs font-black uppercase tracking-[0.14em] text-slate-500">
+                Hasta
+                <input className="h-12 rounded-2xl border border-line bg-black/20 px-4 text-base font-black text-white outline-none focus:border-mint/70" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+              </label>
+              <button className="h-12 self-end rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-sm font-black text-white" type="button" onClick={() => { setStartDate(isoDay(today)); setEndDate(isoDay(today)); }}>
+                Hoy
+              </button>
+              <button className="h-12 self-end rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow" disabled={isLoading}>
+                Aplicar
+              </button>
+            </form>
+
+            {status && <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-black text-coral">{status}</p>}
+
+            <section className="mt-6 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-5">
+              <StatCard label="Conectados" value={data.summary.connected_users || 0} tone="mint" hint="Cuentas registradas que entraron en la app." />
+              <StatCard label="Visitas landing" value={data.summary.landing_visitors || 0} hint="Personas/navegadores que vieron la página de presentación." />
+              <StatCard label="Sesiones app" value={data.summary.app_sessions || 0} hint="Entradas estimadas de usuarios conectados." />
+              <StatCard label="Tiempo medio" value={formatDuration(data.summary.avg_session_seconds)} hint="Aproximado por navegación y heartbeat." />
+              <StatCard label="Eventos" value={data.summary.total_events || 0} hint="Páginas vistas y señales de actividad." />
+            </section>
+
+            <section className="mt-6 grid gap-4 lg:grid-cols-[.95fr_1.05fr]">
+              <article className="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Agenda</p>
+                    <h2 className="mt-1 text-2xl font-black">Actividad por fecha</h2>
+                  </div>
+                  {selectedDate && <button className="rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white" onClick={() => setSelectedDate("")}>Ver todo</button>}
+                </div>
+                <div className="mt-4 grid gap-2">
+                  {data.days.length === 0 && <p className="rounded-2xl bg-black/20 p-4 text-sm font-bold text-slate-400">Sin datos en este periodo.</p>}
+                  {data.days.map((day) => (
+                    <button key={day.date} className={`rounded-3xl border p-4 text-left transition ${selectedDate === day.date ? "border-mint/40 bg-mint/10" : "border-white/10 bg-black/20 hover:bg-white/[0.06]"}`} onClick={() => setSelectedDate(day.date)}>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-lg font-black">{day.date}</p>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{day.users} cuentas</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-xs font-bold text-slate-400">
+                        <span>{day.sessions} sesiones</span>
+                        <span>{day.landing_events} landing</span>
+                        <span>{day.app_events} app</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </article>
+
+              <article className="rounded-[30px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-sun">Páginas</p>
+                <h2 className="mt-1 text-2xl font-black">Dónde se mueve la gente</h2>
+                <div className="mt-4 grid gap-2">
+                  {data.pages.slice(0, 10).map((page) => (
+                    <div key={page.page} className="rounded-2xl bg-black/20 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-sm font-black text-white">{page.page}</p>
+                        <p className="text-sm font-black text-mint">{page.count}</p>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-white/10">
+                        <div className="h-full rounded-full bg-mint" style={{ width: `${Math.min(100, (page.count / Math.max(data.summary.total_events || 1, 1)) * 100)}%` }}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </section>
+
+            <section className="mt-6 rounded-[30px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Detalle</p>
+                  <h2 className="mt-1 text-2xl font-black">Quién se conectó</h2>
+                </div>
+                <input
+                  className="h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70 sm:w-96"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar nombre, email, ID, página..."
+                />
+              </div>
+              <div className="mt-4 grid gap-3">
+                {visibleSessions.length === 0 && <p className="rounded-2xl bg-black/20 p-4 text-sm font-bold text-slate-400">No hay conexiones para este filtro.</p>}
+                {visibleSessions.map((session) => (
+                  <button key={session.key} className="rounded-3xl border border-white/10 bg-black/20 p-4 text-left transition hover:bg-white/[0.06]" onClick={() => setDetail(session)}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-black text-white">{accountLabel(session.profile)}</p>
+                        <p className="mt-1 break-words text-sm font-bold text-slate-500">{session.profile?.email || session.session_key || "Visitante landing"}</p>
+                      </div>
+                      <span className="rounded-full bg-mint/15 px-3 py-1 text-xs font-black text-mint">{formatDuration(session.duration_seconds)}</span>
+                    </div>
+                    <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400 sm:grid-cols-3">
+                      <span>Última: {formatDate(session.last_seen_at)}</span>
+                      <span>{session.events} eventos</span>
+                      <span>{session.pages?.slice(0, 3).join(", ")}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {detail && (
+              <div className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-3 backdrop-blur-sm sm:place-items-center" onClick={() => setDetail(null)}>
+                <div className="max-h-[88vh] w-full max-w-2xl overflow-auto rounded-[34px] border border-white/10 bg-[#0B0F1A] p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Detalle sesión</p>
+                      <h3 className="mt-2 text-3xl font-black">{accountLabel(detail.profile)}</h3>
+                      <p className="mt-1 text-sm font-bold text-slate-500">{detail.profile?.email || detail.session_key || "Visitante sin cuenta"}</p>
+                    </div>
+                    <button className="grid h-10 w-10 place-items-center rounded-full bg-white/10 text-xl font-black" onClick={() => setDetail(null)}>×</button>
+                  </div>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                    <Info label="Tipo" value={detail.profile?.account_type === "business" ? "Empresa" : detail.profile ? "Usuario" : "Landing"} />
+                    <Info label="ID Donoss" value={detail.profile?.transaction_id || "Sin ID"} />
+                    <Info label="Primera señal" value={formatDate(detail.first_seen_at)} />
+                    <Info label="Última señal" value={formatDate(detail.last_seen_at)} />
+                    <Info label="Duración aprox." value={formatDuration(detail.duration_seconds)} />
+                    <Info label="Eventos" value={detail.events} />
+                  </div>
+                  <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Páginas vistas</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(detail.pages || []).map((page) => <span key={page} className="rounded-full bg-white/10 px-3 py-2 text-xs font-black text-slate-200">{page}</span>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </main>
+        );
+      }
+
+      function Info({ label, value }) {
+        return (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
+            <p className="mt-2 break-words text-lg font-black text-white">{value || "-"}</p>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
