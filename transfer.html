@@ -186,6 +186,17 @@
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
         const centsToEuros = (value) => Number(value || 0) / 100;
 
+        function VerifiedBadge() {
+          return (
+            <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+              <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+              <svg viewBox="0 0 24 24" className="relative h-3.5 w-3.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+                <path d="m5 12 4 4L19 7" />
+              </svg>
+            </span>
+          );
+        }
+
         function scrollToPanel(ref) {
           window.setTimeout(() => {
             ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -715,7 +726,10 @@
                           {targetProfile ? (
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div>
-                                <p className="text-lg font-black text-white">{targetProfile.display_name || "Cuenta Donoss"}</p>
+                                <p className="flex items-center gap-2 text-lg font-black text-white">
+                                  <span>{targetProfile.display_name || "Cuenta Donoss"}</span>
+                                  {targetProfile.is_verified && <VerifiedBadge />}
+                                </p>
                                 <p className="mt-1 text-sm font-bold text-slate-300">{targetProfile.email || "Email no visible"}</p>
                                 <p className="mt-1 text-xs font-black text-mint">{accountTypeLabel(targetProfile.account_type)}</p>
                               </div>

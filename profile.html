@@ -140,6 +140,17 @@
         );
       }
 
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
       async function compressImageToDataUrl(file, maxSide = 900, quality = 0.76) {
         const image = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -422,8 +433,17 @@
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Cuenta Donoss</p>
               <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
                 <div>
-                  <h1 className="break-words text-3xl font-black leading-tight text-white sm:text-4xl">{profile.display_name || "Tu cuenta"}</h1>
+                  <h1 className="flex flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">
+                    <span>{profile.display_name || "Tu cuenta"}</span>
+                    {profile.is_verified && <VerifiedBadge />}
+                  </h1>
                   <p className="mt-2 text-sm font-bold text-slate-400">{profile.email || "Correo no indicado"}</p>
+                  {profile.is_verified && (
+                    <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-black text-sky-300 ring-1 ring-sky-400/20">
+                      <VerifiedBadge />
+                      Cuenta certificada
+                    </p>
+                  )}
                 </div>
                 <div className="rounded-3xl border border-mint/20 bg-mint/10 px-5 py-4">
                   <p className="text-xs font-semibold text-mint">Puntos</p>
