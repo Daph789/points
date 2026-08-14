@@ -31,6 +31,7 @@ create table if not exists public.business_offers (
   stock_quantity integer,
   sold_count integer not null default 0,
   out_of_stock_since timestamptz,
+  is_hidden boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -130,6 +131,9 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists out_of_stock_since timestamptz;
+
+alter table public.business_offers
+  add column if not exists is_hidden boolean not null default false;
 
 update public.business_offers
 set sold_count = 0

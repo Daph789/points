@@ -638,11 +638,56 @@
           }
         }
 
+        async function handleHide() {
+          if (!editId || isDeleting) return;
+          setStatus({ type: "", message: "" });
+
+          const confirmed = window.confirm(`¿Ocultar "${title || "esta publicación"}"? Dejará de aparecer para los jóvenes y no podrán comprarla.`);
+          if (!confirmed) return;
+
+          setIsDeleting(true);
+
+          try {
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const userId = userData.user?.id;
+
+            if (!userId) {
+              redirectToLogin();
+              return;
+            }
+
+            const { error } = await supabaseClient
+              .from("business_offers")
+              .update({ is_hidden: true, updated_at: new Date().toISOString() })
+              .eq("id", editId)
+              .eq("business_id", userId);
+
+            if (error) throw error;
+
+            setStatus({ type: "success", message: "Oferta ocultada correctamente." });
+            setTimeout(() => {
+              window.location.href = "my-offers.html";
+            }, 650);
+          } catch (error) {
+            setStatus({
+              type: "error",
+              message:
+                error.message?.includes("row-level security")
+                  ? "Supabase está bloqueando la actualización. Revisa el SQL de ofertas."
+                  : error.code === "42703"
+                    ? "Falta ejecutar el SQL de ofertas para activar publicaciones ocultas."
+                    : error.message || "No se ha podido ocultar. Inténtalo de nuevo.",
+            });
+          } finally {
+            setIsDeleting(false);
+          }
+        }
+
         async function handleDelete() {
           if (!editId || isDeleting) return;
           setStatus({ type: "", message: "" });
 
-          const confirmed = window.confirm(`¿Eliminar definitivamente "${title || "esta publicación"}"?`);
+          const confirmed = window.confirm(`¿Eliminar definitivamente "${title || "esta publicación"}"? Esta acción no se puede deshacer.`);
           if (!confirmed) return;
 
           setIsDeleting(true);
@@ -664,7 +709,7 @@
 
             if (error) throw error;
 
-            setStatus({ type: "success", message: "Oferta eliminada correctamente." });
+            setStatus({ type: "success", message: "Oferta eliminada definitivamente." });
             setTimeout(() => {
               window.location.href = "my-offers.html";
             }, 650);
@@ -1012,14 +1057,24 @@
                     {isSaving ? "Guardando..." : editId ? "Guardar cambios" : "Guardar"}
                   </button>
                   {editId && (
-                    <button
-                      type="button"
-                      className="flex h-14 items-center justify-center rounded-2xl border border-coral/30 bg-coral/10 px-5 text-base font-black text-coral transition hover:bg-coral/15 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isSaving || isOfferLoading || isDeleting}
-                      onClick={handleDelete}
-                    >
-                      {isDeleting ? "Eliminando..." : "Eliminar"}
-                    </button>
+                    <div className="grid gap-3 min-[430px]:grid-cols-2">
+                      <button
+                        type="button"
+                        className="flex h-14 items-center justify-center rounded-2xl border border-sun/30 bg-sun/10 px-5 text-base font-black text-sun transition hover:bg-sun/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isSaving || isOfferLoading || isDeleting}
+                        onClick={handleHide}
+                      >
+                        {isDeleting ? "Ocultando..." : "Ocultar publicación"}
+                      </button>
+                      <button
+                        type="button"
+                        className="flex h-14 items-center justify-center rounded-2xl border border-coral/30 bg-coral/10 px-5 text-base font-black text-coral transition hover:bg-coral/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isSaving || isOfferLoading || isDeleting}
+                        onClick={handleDelete}
+                      >
+                        {isDeleting ? "Procesando..." : "Eliminar"}
+                      </button>
+                    </div>
                   )}
                 </div>
               </form>

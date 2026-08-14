@@ -111,10 +111,15 @@
               return;
             }
 
+            const { data: userData } = await supabaseClient.auth.getUser();
+            const isOwner = Boolean(userData.user?.id && userData.user.id === data.business_id);
+            setCanEdit(isOwner);
+            if (data.is_hidden && !isOwner) {
+              setStatus("Esta oferta ya no está disponible.");
+              return;
+            }
             setOffer(data);
             setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "");
-            const { data: userData } = await supabaseClient.auth.getUser();
-            setCanEdit(Boolean(userData.user?.id && userData.user.id === data.business_id));
             setStatus("");
           }
 

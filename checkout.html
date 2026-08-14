@@ -128,6 +128,11 @@
               return;
             }
 
+            if (offerData.is_hidden) {
+              setStatus("Esta oferta ya no está disponible.");
+              return;
+            }
+
             setOffer(offerData);
             setProfile(profileData);
             setDeliveryAddress(profileData?.address || "");

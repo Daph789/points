@@ -24,6 +24,7 @@ create table if not exists public.business_offers (
   delivery_home_price numeric,
   delivery_home_points integer,
   delivery_pickup_enabled boolean not null default true,
+  is_hidden boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -99,6 +100,9 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists delivery_pickup_enabled boolean not null default true;
+
+alter table public.business_offers
+  add column if not exists is_hidden boolean not null default false;
 
 drop policy if exists "Businesses can read their own offers" on public.business_offers;
 drop policy if exists "Businesses can insert their own offers" on public.business_offers;

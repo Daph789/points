@@ -2236,6 +2236,20 @@ function nextPlanMemberStatus(plan, members, gender) {
   return "waiting";
 }
 
+function isSocialPlanExpired(plan) {
+  const validUntil = plan?.purchase?.qr_valid_until || plan?.purchase?.offer?.qr_valid_until || plan?.purchase?.offer?.end_date || null;
+  if (!validUntil) return false;
+  const today = todayDateString();
+  return String(validUntil).slice(0, 10) < today;
+}
+
+function filterPublicSocialPlans(plans, viewerId) {
+  return (plans || []).filter((plan) => {
+    if (!isSocialPlanExpired(plan)) return true;
+    return plan.is_owner || Boolean(plan.viewer_member);
+  });
+}
+
 function parseSocialPlanPhotos(value) {
   const raw = String(value || "");
   if (!raw) return [];
@@ -2345,13 +2359,18 @@ async function enrichSocialPlans(plans, viewerId = "") {
         ? privatePlanProfile(member.user)
         : publicPlanProfile(member.user),
     }));
+    const purchase = purchasesById[plan.purchase_id] || null;
+    const enrichedPlan = {
+      ...plan,
+      purchase,
+    };
     return {
       ...plan,
       photo_data_urls: parseSocialPlanPhotos(plan.photo_data_url),
       creator: canViewParticipantPhotos || plan.creator_id === viewerId
         ? privatePlanProfile(creatorsById[plan.creator_id])
         : publicPlanProfile(creatorsById[plan.creator_id]),
-      purchase: purchasesById[plan.purchase_id] || null,
+      purchase,
       members: publicMembers,
       counts: countPlanMembers(publicMembers),
       viewer_member: viewerMember ? {
@@ -2359,6 +2378,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
         user: privatePlanProfile(viewerMember.user),
       } : null,
       is_owner: plan.creator_id === viewerId,
+      is_expired: isSocialPlanExpired(enrichedPlan),
     };
   });
 }
@@ -2689,7 +2709,8 @@ app.get("/api/social-plans", async (request, response) => {
       return response.status(500).json({ error: error.code === "42P01" ? "social_plans_table_missing" : "social_plans_failed" });
     }
 
-    response.json({ plans: await enrichSocialPlans(plans || [], viewer.id) });
+    const enriched = await enrichSocialPlans(plans || [], viewer.id);
+    response.json({ plans: filterPublicSocialPlans(enriched, viewer.id) });
   } catch (error) {
     console.error("Social plans list fatal error:", error);
     response.status(500).json({ error: "social_plans_failed" });
@@ -3963,6 +3984,10 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     if (offerError || !offer) {
       return response.status(404).json({ error: "offer_not_found" });
+    }
+
+    if (offer.is_hidden) {
+      return response.status(400).json({ error: "offer_hidden" });
     }
 
     if (deliveryMethod === "pickup" && offer.delivery_pickup_enabled === false) {
