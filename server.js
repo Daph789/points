@@ -983,6 +983,220 @@ app.post("/api/admin/accounts/verify", async (request, response) => {
   response.json({ profile });
 });
 
+app.post("/api/admin/accounts/email", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const profileId = String(request.body?.profileId || "").trim();
+  const email = String(request.body?.email || "").trim().toLowerCase();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!profileId) {
+    return response.status(400).json({ error: "Falta la cuenta" });
+  }
+
+  if (!emailPattern.test(email)) {
+    return response.status(400).json({ error: "Correo no válido" });
+  }
+
+  const { data: currentProfile, error: currentError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, display_name, email")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  if (currentError || !currentProfile) {
+    console.error("Admin email load account error:", currentError);
+    return response.status(404).json({ error: "No se ha encontrado la cuenta" });
+  }
+
+  if (String(currentProfile.email || "").toLowerCase() === email) {
+    return response.json({ profile: { ...currentProfile, email } });
+  }
+
+  const authUpdate = await supabaseAdmin.auth.admin.updateUserById(profileId, {
+    email,
+    email_confirm: true,
+  });
+
+  if (authUpdate.error) {
+    console.error("Admin auth email update error:", authUpdate.error);
+    const message = String(authUpdate.error.message || "").toLowerCase();
+    if (message.includes("already") || message.includes("exists") || message.includes("duplicate")) {
+      return response.status(409).json({ error: "Ya existe una cuenta con ese correo" });
+    }
+    return response.status(500).json({ error: "No se ha podido actualizar el correo de inicio de sesión" });
+  }
+
+  const { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .update({ email })
+    .eq("id", profileId)
+    .select("id, display_name, email")
+    .maybeSingle();
+
+  if (error || !profile) {
+    console.error("Admin profile email update error:", error);
+    return response.status(500).json({ error: "El login cambió, pero no se pudo actualizar la ficha del perfil" });
+  }
+
+  response.json({ profile });
+});
+
+async function countAdminTable(table) {
+  if (!supabaseAdmin) return 0;
+  const { count, error } = await supabaseAdmin
+    .from(table)
+    .select("*", { count: "exact", head: true });
+  if (error) {
+    if (["42P01", "42703"].includes(error.code)) return 0;
+    throw error;
+  }
+  return count || 0;
+}
+
+async function deleteAdminTable(table, column = "id") {
+  if (!supabaseAdmin) return 0;
+  const before = await countAdminTable(table);
+  if (before === 0) return 0;
+  const { error } = await supabaseAdmin
+    .from(table)
+    .delete()
+    .not(column, "is", null);
+  if (error) {
+    if (["42P01", "42703"].includes(error.code)) return 0;
+    throw error;
+  }
+  return before;
+}
+
+async function resetLaunchProfiles(resetPremium) {
+  const basePayload = { points: 0 };
+  const premiumPayload = resetPremium
+    ? {
+        premium_status: "inactive",
+        premium_started_at: null,
+        premium_next_charge_at: null,
+        premium_failed_at: null,
+      }
+    : {};
+
+  let { count, error } = await supabaseAdmin
+    .from("profiles")
+    .update({ ...basePayload, ...premiumPayload })
+    .not("id", "is", null)
+    .select("id", { count: "exact", head: true });
+
+  if (error?.code === "42703") {
+    const fallback = await supabaseAdmin
+      .from("profiles")
+      .update(basePayload)
+      .not("id", "is", null)
+      .select("id", { count: "exact", head: true });
+    count = fallback.count;
+    error = fallback.error;
+  }
+
+  if (error) throw error;
+  return count || 0;
+}
+
+app.post("/api/admin/launch-reset/preview", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  try {
+    const tables = [
+      "profiles",
+      "business_offers",
+      "purchases",
+      "ticket_verifications",
+      "point_transfers",
+      "stripe_point_recharges",
+      "premium_subscriptions",
+      "premium_subscription_charges",
+      "business_payouts",
+      "social_plans",
+      "social_plan_members",
+      "social_plan_messages",
+      "social_plan_message_reads",
+      "social_plan_side_group_messages",
+      "social_plan_side_group_message_reads",
+      "social_plan_side_group_merges",
+      "notification_reads",
+      "app_activity_events",
+    ];
+    const counts = {};
+    for (const table of tables) counts[table] = await countAdminTable(table);
+    response.json({ counts });
+  } catch (error) {
+    console.error("Launch reset preview error:", error);
+    response.status(500).json({ error: "No se ha podido preparar el resumen" });
+  }
+});
+
+app.post("/api/admin/launch-reset", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const confirmation = String(request.body?.confirmation || "").trim().toUpperCase();
+  if (confirmation !== "LANZAMIENTO") {
+    return response.status(400).json({ error: "Escribe LANZAMIENTO para confirmar" });
+  }
+
+  const options = request.body?.options || {};
+  const deleted = {};
+
+  try {
+    if (options.social !== false) {
+      deleted.social_plan_side_group_message_reads = await deleteAdminTable("social_plan_side_group_message_reads", "message_id");
+      deleted.social_plan_side_group_messages = await deleteAdminTable("social_plan_side_group_messages");
+      deleted.social_plan_side_group_merges = await deleteAdminTable("social_plan_side_group_merges");
+      deleted.social_plan_message_reads = await deleteAdminTable("social_plan_message_reads", "message_id");
+      deleted.social_plan_messages = await deleteAdminTable("social_plan_messages");
+      deleted.social_plan_members = await deleteAdminTable("social_plan_members");
+      deleted.social_plans = await deleteAdminTable("social_plans");
+    }
+
+    if (options.purchases !== false) {
+      deleted.ticket_verifications = await deleteAdminTable("ticket_verifications");
+      deleted.purchases = await deleteAdminTable("purchases");
+    }
+
+    if (options.offers !== false) deleted.business_offers = await deleteAdminTable("business_offers");
+    if (options.transfers !== false) deleted.point_transfers = await deleteAdminTable("point_transfers");
+    if (options.stripe !== false) deleted.stripe_point_recharges = await deleteAdminTable("stripe_point_recharges");
+
+    if (options.premium !== false) {
+      deleted.premium_subscription_charges = await deleteAdminTable("premium_subscription_charges");
+      deleted.premium_subscriptions = await deleteAdminTable("premium_subscriptions");
+    }
+
+    if (options.payouts !== false) deleted.business_payouts = await deleteAdminTable("business_payouts");
+    if (options.notifications !== false) deleted.notification_reads = await deleteAdminTable("notification_reads", "profile_id");
+    if (options.analytics === true) deleted.app_activity_events = await deleteAdminTable("app_activity_events");
+    if (options.points !== false) deleted.profiles_reset = await resetLaunchProfiles(options.premium !== false);
+
+    response.json({ ok: true, deleted });
+  } catch (error) {
+    console.error("Launch reset error:", error);
+    response.status(500).json({
+      error: ["42P01", "42703"].includes(error.code)
+        ? "Falta ejecutar algún SQL antes de poder resetear todo."
+        : "No se ha podido completar el reset de lanzamiento",
+    });
+  }
+});
+
 app.post("/api/analytics/track", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(204).end();

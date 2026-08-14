@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Reset lanzamiento</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 16% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 86% 8%, rgba(255, 107, 107, 0.16), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 52%, #050711 100%);
+      }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const defaultOptions = {
+        points: true,
+        purchases: true,
+        transfers: true,
+        stripe: true,
+        premium: true,
+        payouts: true,
+        offers: true,
+        social: true,
+        notifications: true,
+        analytics: false,
+      };
+
+      const groups = [
+        ["points", "Resetear puntos", "Pone todos los saldos a 0. Mantiene cuentas, emails, ID Donoss y certificaciones admin."],
+        ["purchases", "Borrar compras y QR", "Elimina compras, tickets, códigos QR y validaciones."],
+        ["transfers", "Borrar transferencias", "Elimina envíos y solicitudes de puntos entre cuentas."],
+        ["stripe", "Borrar recargas Stripe", "Limpia el historial de recargas de prueba en Donoss. No toca Stripe real."],
+        ["premium", "Borrar Premium", "Elimina suscripciones Premium de prueba y deja Premium inactivo."],
+        ["payouts", "Borrar pagos a empresas", "Limpia liquidaciones y comisiones bancarias de test."],
+        ["offers", "Borrar publicaciones empresa", "Elimina ofertas, entradas y productos publicados por comercios."],
+        ["social", "Borrar Quedar", "Elimina planes sociales, participantes, chats y grupos alternativos."],
+        ["notifications", "Borrar notificaciones leídas", "Reinicia el estado de lectura de notificaciones."],
+        ["analytics", "Borrar actividad analytics", "Opcional: elimina sesiones y visitas registradas para estadísticas."],
+      ];
+
+      function Stat({ label, value }) {
+        return (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
+            <p className="mt-2 text-2xl font-black text-white">{Number(value || 0).toLocaleString("es-ES")}</p>
+          </div>
+        );
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
+        const [unlocked, setUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const [counts, setCounts] = React.useState({});
+        const [options, setOptions] = React.useState(defaultOptions);
+        const [confirmation, setConfirmation] = React.useState("");
+        const [status, setStatus] = React.useState("");
+        const [result, setResult] = React.useState(null);
+        const [loading, setLoading] = React.useState(false);
+
+        React.useEffect(() => {
+          if (unlocked) loadPreview();
+        }, [unlocked]);
+
+        async function loadPreview(event) {
+          event?.preventDefault();
+          setStatus("");
+          setLoading(true);
+          try {
+            const response = await fetch("/api/admin/launch-reset/preview", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "No autorizado");
+            sessionStorage.setItem("donosAdminPassword", password);
+            setUnlocked(true);
+            setCounts(data.counts || {});
+          } catch (error) {
+            setStatus(error.message || "No se ha podido cargar el resumen.");
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        async function runReset() {
+          setStatus("");
+          setResult(null);
+          if (confirmation.trim().toUpperCase() !== "LANZAMIENTO") {
+            setStatus("Escribe LANZAMIENTO para confirmar.");
+            return;
+          }
+
+          const sure = window.confirm("Última confirmación: vas a borrar datos de test y resetear saldos. ¿Continuar?");
+          if (!sure) return;
+
+          setLoading(true);
+          try {
+            const response = await fetch("/api/admin/launch-reset", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, confirmation, options }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "Reset fallido");
+            setResult(data.deleted || {});
+            setStatus("Reset de lanzamiento completado correctamente.");
+            setConfirmation("");
+            await loadPreview();
+          } catch (error) {
+            setStatus(error.message || "No se ha podido completar el reset.");
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        if (!unlocked) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadPreview}>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Admin Donoss</p>
+                <h1 className="mt-2 text-3xl font-black text-white">Reset lanzamiento</h1>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Zona peligrosa para dejar la app limpia antes del lanzamiento.</p>
+                <input className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contraseña admin" />
+                {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
+                <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-base font-black text-ink shadow-glow" disabled={loading}>{loading ? "Entrando..." : "Entrar"}</button>
+              </form>
+            </main>
+          );
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-3 py-4 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-coral">Zona peligrosa</p>
+                <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Preparar lanzamiento</h1>
+              </div>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
+                <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadPreview} disabled={loading}>Actualizar</button>
+              </div>
+            </header>
+
+            <section className="mt-6 rounded-[34px] border border-coral/25 bg-coral/10 p-5 text-coral sm:p-6">
+              <h2 className="text-2xl font-black">Antes de tocar esto</h2>
+              <p className="mt-2 max-w-3xl text-sm font-bold leading-6">
+                Esto deja Donoss limpio para el lanzamiento, pero mantiene las cuentas registradas, emails, teléfonos, ID Donoss y certificaciones manuales. No borra usuarios de Supabase Auth.
+              </p>
+            </section>
+
+            <section className="mt-5 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Cuentas" value={counts.profiles} />
+              <Stat label="Ofertas empresa" value={counts.business_offers} />
+              <Stat label="Compras" value={counts.purchases} />
+              <Stat label="Planes Quedar" value={counts.social_plans} />
+              <Stat label="Transferencias" value={counts.point_transfers} />
+              <Stat label="Recargas Stripe" value={counts.stripe_point_recharges} />
+              <Stat label="Premium" value={counts.premium_subscriptions} />
+              <Stat label="Analytics" value={counts.app_activity_events} />
+            </section>
+
+            <section className="mt-5 rounded-[34px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
+              <h2 className="text-2xl font-black text-white">Qué limpiar</h2>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {groups.map(([key, title, description]) => (
+                  <label key={key} className={`flex cursor-pointer gap-3 rounded-3xl border p-4 transition ${options[key] ? "border-mint/25 bg-mint/10" : "border-white/10 bg-black/20"}`}>
+                    <input className="mt-1 h-5 w-5 accent-[#42F2B3]" type="checkbox" checked={Boolean(options[key])} onChange={(event) => setOptions((current) => ({ ...current, [key]: event.target.checked }))} />
+                    <span>
+                      <span className="block text-sm font-black text-white">{title}</span>
+                      <span className="mt-1 block text-xs font-bold leading-5 text-slate-400">{description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            <section className="mt-5 rounded-[34px] border border-coral/25 bg-[#160B12] p-5 sm:p-6">
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-coral">Confirmación obligatoria</p>
+              <h2 className="mt-2 text-2xl font-black text-white">Escribe LANZAMIENTO</h2>
+              <input className="mt-4 h-14 w-full rounded-2xl border border-coral/25 bg-black/25 px-4 font-black uppercase text-white outline-none placeholder:text-slate-600 focus:border-coral" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="LANZAMIENTO" />
+              {status && <p className={`mt-4 rounded-2xl border p-4 text-sm font-black ${status.includes("correctamente") ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/25 bg-coral/10 text-coral"}`}>{status}</p>}
+              <button className="mt-4 h-14 w-full rounded-2xl bg-coral text-base font-black text-white shadow-2xl shadow-coral/20 disabled:opacity-50" onClick={runReset} disabled={loading || confirmation.trim().toUpperCase() !== "LANZAMIENTO"}>
+                {loading ? "Procesando..." : "Resetear datos de test"}
+              </button>
+            </section>
+
+            {result && (
+              <section className="mt-5 rounded-[34px] border border-mint/25 bg-mint/10 p-5 sm:p-6">
+                <h2 className="text-2xl font-black text-white">Resultado</h2>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {Object.entries(result).map(([key, value]) => (
+                    <div key={key} className="rounded-2xl bg-black/20 p-3 text-sm font-bold text-slate-300">
+                      <span className="text-mint">{key}</span>: {Number(value || 0).toLocaleString("es-ES")}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

@@ -121,6 +121,9 @@
         const [savingId, setSavingId] = React.useState("");
         const [showDonossMoneyDetails, setShowDonossMoneyDetails] = React.useState(false);
         const [pendingVerifyAccount, setPendingVerifyAccount] = React.useState(null);
+        const [emailAccount, setEmailAccount] = React.useState(null);
+        const [emailValue, setEmailValue] = React.useState("");
+        const [isSavingEmail, setIsSavingEmail] = React.useState(false);
         const filteredAccounts = accounts.filter((account) => matchesAccount(account, search));
         const premiumAccounts = accounts.filter((account) => account.premium?.status === "active");
 
@@ -150,6 +153,40 @@
             setStatus(error.message || "No se han podido cargar las cuentas.");
           } finally {
             setIsLoading(false);
+          }
+        }
+
+        function openEmailEditor(account) {
+          setStatus("");
+          setEmailAccount(account);
+          setEmailValue(account.email || "");
+        }
+
+        async function saveEmail(event) {
+          event?.preventDefault();
+          if (!emailAccount) return;
+          setStatus("");
+          setIsSavingEmail(true);
+
+          try {
+            const response = await fetch("/api/admin/accounts/email", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, profileId: emailAccount.id, email: emailValue }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "No se ha podido modificar el correo.");
+
+            setAccounts((current) =>
+              current.map((item) => (item.id === emailAccount.id ? { ...item, email: data.profile.email } : item))
+            );
+            setEmailAccount(null);
+            setEmailValue("");
+            setStatus("Correo actualizado correctamente.");
+          } catch (error) {
+            setStatus(error.message || "No se ha podido modificar el correo.");
+          } finally {
+            setIsSavingEmail(false);
           }
         }
 
@@ -221,6 +258,7 @@
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-business-settlements.html">Empresas</a>
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-activity.html">Actividad</a>
+                <a className="flex-1 rounded-full border border-coral/25 bg-coral/10 px-4 py-2 text-center text-sm font-black text-coral sm:flex-none" href="donos-admin-launch-reset.html">Lanzamiento</a>
                 <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadAccounts}>
                   Actualizar
                 </button>
@@ -373,17 +411,26 @@
                     <p className="break-all font-mono text-xs font-black text-slate-300">{formatDonosId(account.transaction_id)}</p>
                     <p className="text-sm font-black text-mint">{account.points || 0} ptos.</p>
                     <p className="text-sm font-black text-white">{money(account.point_value_cents)}</p>
-                    <button
-                      className={`h-10 rounded-2xl px-4 text-sm font-black transition disabled:opacity-50 ${
-                        account.is_verified
-                          ? "border border-coral/25 bg-coral/10 text-coral hover:bg-coral/15"
-                          : "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]"
-                      }`}
-                      disabled={savingId === account.id}
-                      onClick={() => askToggleVerified(account)}
-                    >
-                      {savingId === account.id ? "..." : account.is_verified ? "Quitar" : "Certificar"}
-                    </button>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <button
+                        className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-slate-100 transition hover:bg-white/[0.1]"
+                        type="button"
+                        onClick={() => openEmailEditor(account)}
+                      >
+                        Correo
+                      </button>
+                      <button
+                        className={`h-10 rounded-2xl px-4 text-sm font-black transition disabled:opacity-50 ${
+                          account.is_verified
+                            ? "border border-coral/25 bg-coral/10 text-coral hover:bg-coral/15"
+                            : "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]"
+                        }`}
+                        disabled={savingId === account.id}
+                        onClick={() => askToggleVerified(account)}
+                      >
+                        {savingId === account.id ? "..." : account.is_verified ? "Quitar" : "Certificar"}
+                      </button>
+                    </div>
                   </article>
                 ))}
               </div>
@@ -427,6 +474,44 @@
                     </button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {emailAccount && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <form className="w-full max-w-lg rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50" onSubmit={saveEmail}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Cuenta Donoss</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Modificar correo</h2>
+                  <p className="mt-3 text-sm font-bold leading-6 text-slate-300">
+                    Cambiarás el correo de <span className="text-white">{emailAccount.display_name || "esta cuenta"}</span>. También será el nuevo email para iniciar sesión.
+                  </p>
+                  <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Correo actual</p>
+                    <p className="mt-1 break-all text-sm font-black text-slate-200">{emailAccount.email || "Sin correo"}</p>
+                  </div>
+                  <label className="mt-4 block">
+                    <span className="text-sm font-black text-white">Nuevo correo</span>
+                    <input
+                      className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                      type="email"
+                      value={emailValue}
+                      onChange={(event) => setEmailValue(event.target.value)}
+                      placeholder="nuevo@email.com"
+                      required
+                    />
+                  </label>
+                  <p className="mt-3 rounded-2xl border border-sun/20 bg-sun/10 p-3 text-xs font-bold leading-5 text-sun">
+                    Revisa bien el correo antes de guardar. Si ya existe otra cuenta con ese email, Supabase lo rechazará.
+                  </p>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" type="button" onClick={() => setEmailAccount(null)}>
+                      Cancelar
+                    </button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingEmail}>
+                      {isSavingEmail ? "Guardando..." : "Guardar correo"}
+                    </button>
+                  </div>
+                </form>
               </div>
             )}
 
