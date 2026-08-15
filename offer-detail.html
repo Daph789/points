@@ -95,6 +95,8 @@
         const [canEdit, setCanEdit] = React.useState(false);
         const [activeImageIndex, setActiveImageIndex] = React.useState(null);
         const [deliveryChoice, setDeliveryChoice] = React.useState("");
+        const [isLiked, setIsLiked] = React.useState(false);
+        const [likeToast, setLikeToast] = React.useState("");
         const [touchStartX, setTouchStartX] = React.useState(null);
         const [dragDelta, setDragDelta] = React.useState(0);
 
@@ -124,7 +126,55 @@
           }
 
           loadOffer();
+          loadLikedState();
         }, [id]);
+
+        async function loadLikedState() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) return;
+          try {
+            const response = await fetch("/api/me/liked-offers", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setIsLiked((data.offer_ids || []).includes(id));
+          } catch (error) {
+            setIsLiked(false);
+          }
+        }
+
+        async function toggleLike() {
+          if (!offer?.id) return;
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent(`offer-detail.html?id=${offer.id}`)}`;
+            return;
+          }
+
+          const nextLiked = !isLiked;
+          setIsLiked(nextLiked);
+          setLikeToast(nextLiked ? "Guardado en Me gusta" : "Quitado de Me gusta");
+          window.setTimeout(() => setLikeToast(""), 1500);
+
+          const response = await fetch("/api/me/liked-offers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ offerId: offer.id, liked: nextLiked }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setIsLiked(!nextLiked);
+            setLikeToast(data.error === "liked_offers_table_missing" ? "Ejecuta el SQL de Me gusta" : "No se ha podido guardar");
+            window.setTimeout(() => setLikeToast(""), 2200);
+          } else if (isEmbeddedDetail && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:likes-changed" }, window.location.origin);
+          }
+        }
 
         if (status) {
           return (
@@ -214,6 +264,16 @@
                   Volver
                 </button>
                 <div className="flex items-center gap-2">
+                  <button
+                    className={`grid h-10 w-10 place-items-center rounded-full text-xl shadow-2xl ring-1 backdrop-blur transition active:scale-90 ${
+                      isLiked ? "bg-coral text-white ring-coral/30" : "bg-black/30 text-white ring-white/15"
+                    }`}
+                    type="button"
+                    aria-label={isLiked ? "Quitar de me gusta" : "Guardar en me gusta"}
+                    onClick={toggleLike}
+                  >
+                    {isLiked ? "♥" : "♡"}
+                  </button>
                   {canEdit && (
                     <a
                       className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-white/15"
@@ -496,6 +556,13 @@
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {likeToast && (
+              <div className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-mint/25 bg-[#101522]/95 px-6 py-5 text-center shadow-2xl shadow-mint/10 backdrop-blur-2xl">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-mint text-2xl text-ink shadow-glow">♥</div>
+                <p className="mt-3 whitespace-nowrap text-base font-black text-white">{likeToast}</p>
               </div>
             )}
           </main>

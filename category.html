@@ -94,6 +94,12 @@
         );
       }
 
+      function notifyLikesChanged() {
+        if (isEmbeddedCategory && window.parent !== window) {
+          window.parent.postMessage({ type: "donos:likes-changed" }, window.location.origin);
+        }
+      }
+
       function matchesSearch(offer, query) {
         const cleanQuery = query.trim().toLowerCase();
         if (!cleanQuery) return true;
@@ -113,14 +119,14 @@
           .includes(cleanQuery);
       }
 
-      function OfferCard({ offer }) {
+      function OfferCard({ offer, isLiked, onLike }) {
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const outOfStock = isOutOfStock(offer);
         const detailUrl = `offer-detail.html?id=${offer.id}`;
         return (
           <article className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
-            <button className="block w-full text-left" onClick={() => {
+            <div className="block w-full cursor-pointer text-left" role="button" tabIndex="0" onClick={() => {
               if (isEmbeddedCategory && window.parent !== window) window.parent.postMessage({ type: "donos:offer-detail", id: offer.id }, window.location.origin);
               else window.location.href = detailUrl;
             }}>
@@ -131,6 +137,20 @@
                   <div className="absolute bottom-4 right-5 text-7xl">📚</div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent"></div>
+                <button
+                  className={`absolute left-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full text-xl shadow-2xl ring-1 backdrop-blur transition active:scale-90 ${
+                    isLiked ? "bg-coral text-white ring-coral/30" : "bg-black/35 text-white ring-white/15"
+                  }`}
+                  type="button"
+                  aria-label={isLiked ? "Quitar de me gusta" : "Guardar en me gusta"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onLike?.(offer);
+                  }}
+                >
+                  {isLiked ? "♥" : "♡"}
+                </button>
                 <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
@@ -167,7 +187,7 @@
                     {outOfStock ? "Ver agotado" : "Ver detalles"}
                   </div>
               </div>
-            </button>
+            </div>
           </article>
         );
       }
@@ -177,6 +197,8 @@
         const category = params.get("category") || "Libros";
         const backUrl = isEmbeddedCategory ? "#" : "app.html#inicio";
         const [offers, setOffers] = React.useState([]);
+        const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
+        const [likeToast, setLikeToast] = React.useState("");
         const [search, setSearch] = React.useState("");
         const [status, setStatus] = React.useState("Cargando ofertas...");
         const filteredOffers = offers.filter((offer) => matchesSearch(offer, search));
@@ -201,7 +223,64 @@
 
         React.useEffect(() => {
           loadOffers();
+          loadLikedOffers();
         }, [loadOffers]);
+
+        async function loadLikedOffers() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) return;
+          try {
+            const response = await fetch("/api/me/liked-offers", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setLikedOfferIds(new Set(data.offer_ids || []));
+          } catch (error) {
+            setLikedOfferIds(new Set());
+          }
+        }
+
+        async function toggleLike(offer) {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent(`category.html?category=${category}`)}`;
+            return;
+          }
+
+          const nextLiked = !likedOfferIds.has(offer.id);
+          setLikedOfferIds((current) => {
+            const next = new Set(current);
+            if (nextLiked) next.add(offer.id);
+            else next.delete(offer.id);
+            return next;
+          });
+          setLikeToast(nextLiked ? "Guardado en Me gusta" : "Quitado de Me gusta");
+          window.setTimeout(() => setLikeToast(""), 1500);
+
+          const response = await fetch("/api/me/liked-offers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ offerId: offer.id, liked: nextLiked }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setLikedOfferIds((current) => {
+              const next = new Set(current);
+              if (nextLiked) next.delete(offer.id);
+              else next.add(offer.id);
+              return next;
+            });
+            setLikeToast(data.error === "liked_offers_table_missing" ? "Ejecuta el SQL de Me gusta" : "No se ha podido guardar");
+            window.setTimeout(() => setLikeToast(""), 2200);
+          } else {
+            notifyLikesChanged();
+          }
+        }
 
         React.useEffect(() => {
           function handleMessage(event) {
@@ -253,10 +332,24 @@
                 </div>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {filteredOffers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                  {filteredOffers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      isLiked={likedOfferIds.has(offer.id)}
+                      onLike={toggleLike}
+                    />
+                  ))}
                 </div>
               )}
             </section>
+
+            {likeToast && (
+              <div className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-mint/25 bg-[#101522]/95 px-6 py-5 text-center shadow-2xl shadow-mint/10 backdrop-blur-2xl">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-mint text-2xl text-ink shadow-glow">♥</div>
+                <p className="mt-3 whitespace-nowrap text-base font-black text-white">{likeToast}</p>
+              </div>
+            )}
           </main>
         );
       }

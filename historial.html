@@ -491,6 +491,17 @@
           loadPurchases();
         }, []);
 
+        React.useEffect(() => {
+          function handleMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type !== "donos:refresh-historial") return;
+            loadPurchases();
+          }
+
+          window.addEventListener("message", handleMessage);
+          return () => window.removeEventListener("message", handleMessage);
+        }, []);
+
         async function loadPurchases() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
           const token = sessionData.session?.access_token;

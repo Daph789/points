@@ -259,6 +259,12 @@
             else link.removeAttribute("aria-current");
           });
           window.setTimeout(hydrateNotificationBadges, 500);
+          if (route === "historial") {
+            const historyFrame = baseFrames.find((frame) => frame.dataset.route === "historial");
+            window.setTimeout(() => {
+              historyFrame?.contentWindow?.postMessage({ type: "donos:refresh-historial" }, window.location.origin);
+            }, 80);
+          }
 
           allFrames().forEach((frame) => {
             const isActive =
@@ -483,6 +489,11 @@
           }
           if (event.data?.type === "donos:offer-detail") {
             openOfferDetail(event.data.id);
+            return;
+          }
+          if (event.data?.type === "donos:likes-changed") {
+            const historyFrame = baseFrames.find((frame) => frame.dataset.route === "historial");
+            historyFrame?.contentWindow?.postMessage({ type: "donos:refresh-historial" }, window.location.origin);
             return;
           }
           if (event.data?.type === "donos:plan-chat") {

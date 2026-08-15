@@ -704,6 +704,8 @@
             });
             setLikeToast(data.error === "liked_offers_table_missing" ? "Ejecuta el SQL de Me gusta" : "No se ha podido guardar");
             window.setTimeout(() => setLikeToast(""), 2200);
+          } else if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:likes-changed" }, window.location.origin);
           }
         }
 
@@ -874,7 +876,7 @@
                         <OfferCard
                           key={offer.id}
                           offer={offer}
-                          onOpen={setSelectedOffer}
+                          onOpen={(offer) => openFullPage(`offer-detail.html?id=${encodeURIComponent(offer.id)}`)}
                           onLike={toggleLike}
                           isLiked={likedOfferIds.has(offer.id)}
                         />
