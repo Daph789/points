@@ -186,6 +186,9 @@
         const [premiumSqlMissing, setPremiumSqlMissing] = React.useState(false);
         const [isPremiumOpen, setIsPremiumOpen] = React.useState(false);
         const [isActivatingPremium, setIsActivatingPremium] = React.useState(false);
+        const [isEditingName, setIsEditingName] = React.useState(false);
+        const [displayNameDraft, setDisplayNameDraft] = React.useState("");
+        const [isSavingName, setIsSavingName] = React.useState(false);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -353,12 +356,61 @@
           }
         }
 
+        async function saveDisplayName(event) {
+          event?.preventDefault();
+          if (!accessToken) return redirectToLogin();
+          const cleanName = displayNameDraft.trim().replace(/\s+/g, " ");
+          if (cleanName.length < 2 || cleanName.length > 60) {
+            setStatus("El nombre debe tener entre 2 y 60 caracteres.");
+            return;
+          }
+
+          setIsSavingName(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ display_name: cleanName }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "profile_update_failed");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), display_name: cleanName } : current);
+            localStorage.setItem("donosDisplayName", cleanName);
+            setIsEditingName(false);
+            setStatus("Nombre actualizado correctamente.");
+          } catch (_error) {
+            setStatus("No se ha podido actualizar tu nombre.");
+          } finally {
+            setIsSavingName(false);
+          }
+        }
+
         async function signOut() {
           await supabaseClient.auth.signOut();
           localStorage.removeItem("donosAccountType");
           localStorage.removeItem("donosDisplayName");
           localStorage.removeItem("donosTransactionId");
           window.location.href = "login.html";
+        }
+
+        function refreshLatestVersion() {
+          if (new URLSearchParams(window.location.search).get("embedded") === "1" && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:hard-refresh" }, window.location.origin);
+            return;
+          }
+
+          const loader = document.querySelector(".donos-page-loader");
+          if (loader) {
+            loader.classList.remove("is-skipped");
+            loader.style.display = "grid";
+            loader.style.opacity = "1";
+            loader.style.visibility = "visible";
+          }
+          window.setTimeout(() => window.location.reload(), 420);
         }
 
         async function activatePremium() {
@@ -432,11 +484,53 @@
             <section className="mt-6 rounded-[30px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:mt-7 sm:rounded-[38px] sm:p-8">
               <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Cuenta Donoss</p>
               <div className="mt-4 flex flex-wrap items-end justify-between gap-5">
-                <div>
-                  <h1 className="flex flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">
-                    <span>{profile.display_name || "Tu cuenta"}</span>
-                    {profile.is_verified && <VerifiedBadge />}
-                  </h1>
+                <div className="min-w-0">
+                  {isEditingName ? (
+                    <form className="max-w-full" onSubmit={saveDisplayName}>
+                      <label className="block">
+                        <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Nombre / Apodo</span>
+                        <input
+                          className="mt-2 h-12 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 text-base font-black text-white outline-none ring-4 ring-mint/10 placeholder:text-slate-600"
+                          value={displayNameDraft}
+                          maxLength="60"
+                          onChange={(event) => setDisplayNameDraft(event.target.value)}
+                          placeholder="Tu nombre o apodo"
+                        />
+                      </label>
+                      <div className="mt-3 flex gap-2">
+                        <button className="h-10 rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingName}>
+                          {isSavingName ? "Guardando..." : "Guardar"}
+                        </button>
+                        <button
+                          className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-white"
+                          type="button"
+                          onClick={() => {
+                            setIsEditingName(false);
+                            setDisplayNameDraft(profile.display_name || "");
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="flex flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">
+                        <span>{profile.display_name || "Tu cuenta"}</span>
+                        {profile.is_verified && <VerifiedBadge />}
+                      </h1>
+                      <button
+                        className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200 transition hover:bg-white/[0.10]"
+                        type="button"
+                        onClick={() => {
+                          setDisplayNameDraft(profile.display_name || "");
+                          setIsEditingName(true);
+                        }}
+                      >
+                        Modificar
+                      </button>
+                    </div>
+                  )}
                   <p className="mt-2 text-sm font-bold text-slate-400">{profile.email || "Correo no indicado"}</p>
                   {profile.is_verified && (
                     <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-sky-500/10 px-3 py-1 text-xs font-black text-sky-300 ring-1 ring-sky-400/20">
@@ -471,6 +565,24 @@
               <InfoCard label="Dirección" value={profile.address} />
               {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
               {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}
+            </section>
+
+            <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-black text-white">Última versión</p>
+                  <p className="mt-1 text-xs font-bold leading-5 text-slate-400">
+                    Si algo no aparece después de una actualización, recarga Donoss sin cerrar sesión.
+                  </p>
+                </div>
+                <button
+                  className="h-11 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]"
+                  type="button"
+                  onClick={refreshLatestVersion}
+                >
+                  Actualizar app
+                </button>
+              </div>
             </section>
 
             <section className={`mt-5 rounded-[32px] border p-5 shadow-2xl shadow-black/20 ${

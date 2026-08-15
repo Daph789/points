@@ -153,71 +153,6 @@
         pointer-events: none;
       }
 
-      .donos-update-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 120;
-        display: none;
-        place-items: center;
-        padding: 22px;
-        background: rgba(3, 5, 11, 0.76);
-        -webkit-backdrop-filter: blur(20px);
-        backdrop-filter: blur(20px);
-      }
-
-      .donos-update-overlay.is-visible {
-        display: grid;
-      }
-
-      .donos-update-card {
-        width: min(100%, 390px);
-        border: 1px solid rgba(66, 242, 179, 0.24);
-        border-radius: 34px;
-        background: rgba(13, 17, 29, 0.92);
-        padding: 22px;
-        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.46);
-      }
-
-      .donos-update-icon {
-        display: grid;
-        width: 58px;
-        height: 58px;
-        place-items: center;
-        border-radius: 22px;
-        background: #42f2b3;
-        color: #060914;
-        font-size: 26px;
-        font-weight: 900;
-        box-shadow: 0 18px 48px rgba(66, 242, 179, 0.24);
-      }
-
-      .donos-update-card h2 {
-        margin: 16px 0 0;
-        font-size: 28px;
-        line-height: 1.05;
-        font-weight: 900;
-      }
-
-      .donos-update-card p {
-        margin: 10px 0 0;
-        color: #94a3b8;
-        font-size: 14px;
-        font-weight: 700;
-        line-height: 1.55;
-      }
-
-      .donos-update-card button {
-        width: 100%;
-        height: 52px;
-        margin-top: 18px;
-        border: 0;
-        border-radius: 18px;
-        background: #42f2b3;
-        color: #060914;
-        font: inherit;
-        font-weight: 900;
-        box-shadow: 0 18px 48px rgba(66, 242, 179, 0.18);
-      }
     </style>
   </head>
   <body>
@@ -233,17 +168,8 @@
       <section class="spa-boot-card">
         <div class="spa-logo">D</div>
         <h1 class="spa-boot-title">Donoss</h1>
-        <p class="spa-boot-text">Preparando tu app para que las secciones cambien sin recargar.</p>
+        <p class="spa-boot-text">Preparando tu app.</p>
         <div class="spa-progress"></div>
-      </section>
-    </div>
-
-    <div id="donos-update-overlay" class="donos-update-overlay" aria-live="polite" aria-hidden="true">
-      <section class="donos-update-card">
-        <div class="donos-update-icon">D</div>
-        <h2 id="donos-update-title">Nueva actualización Donoss</h2>
-        <p id="donos-update-message">Hay una novedad en la app. Lánzala para actualizar sin cerrar sesión.</p>
-        <button id="donos-update-button" type="button">Lánzala</button>
       </section>
     </div>
 
@@ -273,37 +199,13 @@
         const pendingChatPrefetches = new Set();
         const pendingSidePrefetches = new Set();
         const boot = document.getElementById("spa-boot");
-        const updateOverlay = document.getElementById("donos-update-overlay");
-        const updateTitle = document.getElementById("donos-update-title");
-        const updateMessage = document.getElementById("donos-update-message");
-        const updateButton = document.getElementById("donos-update-button");
-        const seenUpdateKey = "donossSeenAppUpdateId";
         let activeIndex = 0;
         let activeRoute = "inicio";
         let activeCategoryKey = "";
 
         function launchDonossRefresh() {
           boot.classList.remove("is-hidden");
-          updateOverlay.classList.remove("is-visible");
-          updateOverlay.setAttribute("aria-hidden", "true");
           window.setTimeout(() => window.location.reload(), 420);
-        }
-
-        updateButton.addEventListener("click", launchDonossRefresh);
-
-        async function checkAppUpdate() {
-          try {
-            const response = await fetch(`/api/app-update/latest?t=${Date.now()}`, { cache: "no-store" });
-            if (!response.ok) return;
-            const data = await response.json();
-            const update = data.update;
-            if (!update?.id || localStorage.getItem(seenUpdateKey) === update.id) return;
-            updateTitle.textContent = update.title || "Nueva actualización Donoss";
-            updateMessage.textContent = update.message || "Hay una novedad en la app. Lánzala para actualizar sin cerrar sesión.";
-            localStorage.setItem(seenUpdateKey, update.id);
-            updateOverlay.classList.add("is-visible");
-            updateOverlay.setAttribute("aria-hidden", "false");
-          } catch (_error) {}
         }
 
         async function hydrateNotificationBadges() {
@@ -623,6 +525,10 @@
           if (event.data?.type === "donos:navigate") {
             if (!routeNames.includes(event.data.route)) return;
             setRoute(event.data.route);
+            return;
+          }
+          if (event.data?.type === "donos:hard-refresh") {
+            launchDonossRefresh();
           }
         });
 
@@ -638,8 +544,6 @@
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);
-          window.setTimeout(checkAppUpdate, 1800);
-          window.setInterval(checkAppUpdate, 15000);
           const hash = window.location.hash.replace("#", "");
           if (hash.startsWith("categoria=")) {
             openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });

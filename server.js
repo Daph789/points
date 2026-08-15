@@ -1674,6 +1674,38 @@ app.get("/api/me/profile", async (request, response) => {
   }
 });
 
+app.put("/api/me/profile", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
+  if (displayName.length < 2 || displayName.length > 60) {
+    return response.status(400).json({ error: "invalid_display_name" });
+  }
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .update({ display_name: displayName })
+      .eq("id", profile.id)
+      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+      .maybeSingle();
+
+    if (error) throw error;
+    await syncBusinessVerification(data);
+
+    response.json({ profile: data });
+  } catch (error) {
+    console.error("Me profile update error:", error);
+    response.status(500).json({ error: "profile_update_failed" });
+  }
+});
+
 app.post("/api/me/premium/subscribe", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -4933,71 +4965,6 @@ async function getStripeAmounts(session) {
     return fallback;
   }
 }
-
-app.get("/api/app-update/latest", async (_request, response) => {
-  if (!supabaseAdmin) {
-    return response.status(204).end();
-  }
-
-  try {
-    const { data, error } = await supabaseAdmin
-      .from("app_update_broadcasts")
-      .select("id, title, message, update_size, created_at, expires_at")
-      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      if (error.code === "42P01") return response.json({ update: null, missing_sql: true });
-      console.error("App update latest error:", error);
-      return response.status(500).json({ error: "app_update_latest_failed" });
-    }
-
-    response.json({ update: data || null });
-  } catch (error) {
-    console.error("App update latest fatal error:", error);
-    response.status(500).json({ error: "app_update_latest_failed" });
-  }
-});
-
-app.post("/api/admin/app-update", async (request, response) => {
-  if (!supabaseAdmin) {
-    return response.status(500).json({ error: "Supabase admin is not configured" });
-  }
-
-  if (!adminPassword || request.body?.password !== adminPassword) {
-    return response.status(401).json({ error: "Mot de passe incorrect" });
-  }
-
-  const updateSize = request.body?.updateSize === "large" ? "large" : "small";
-  const title = updateSize === "large" ? "Gran actualización Donoss" : "Nueva actualización Donoss";
-  const message = updateSize === "large"
-    ? "Hay una actualización importante en la app. Lánzala para cargar la nueva versión sin cerrar sesión."
-    : "Hay una novedad en la app. Lánzala para actualizar sin cerrar sesión.";
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-
-  const { data, error } = await supabaseAdmin
-    .from("app_update_broadcasts")
-    .insert({
-      title,
-      message,
-      update_size: updateSize,
-      created_by: "admin",
-      expires_at: expiresAt,
-    })
-    .select("id, title, message, update_size, created_at, expires_at")
-    .maybeSingle();
-
-  if (error) {
-    console.error("Admin app update broadcast error:", error);
-    return response.status(500).json({
-      error: error.code === "42P01" ? "Falta ejecutar el SQL de actualizaciones." : "No se ha podido lanzar la actualización",
-    });
-  }
-
-  response.json({ update: data });
-});
 
 app.use(express.static(__dirname));
 
