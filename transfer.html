@@ -186,10 +186,10 @@
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
         const centsToEuros = (value) => Number(value || 0) / 100;
         const rechargeValueText = {
-          50: "Con 5€ convertidos en puntos, podrás comprar planes que suelen valer hasta 10€.",
-          100: "Con 10€ convertidos en puntos, podrás comprar cosas que suelen valer entre 15€ y 20€.",
-          250: "Con 25€ convertidos en puntos, tendrás margen para planes que normalmente valen entre 35€ y 50€.",
-          500: "Con 50€ convertidos en puntos, puedes cubrir varios planes y ofertas que suelen sumar entre 70€ y 100€.",
+          50: "Desbloquea planes que suelen valer hasta 10€.",
+          100: "Accede a ofertas que suelen valer entre 15€ y 20€.",
+          250: "Ideal para planes que normalmente valen entre 35€ y 50€.",
+          500: "Para varios planes y ofertas que suelen sumar entre 70€ y 100€.",
         };
 
         function VerifiedBadge() {
@@ -608,7 +608,7 @@
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-black text-white">Elige una recarga</p>
-                      <p className="mt-1 text-xs font-bold text-slate-400">Pago seguro con Stripe Checkout.</p>
+                      <p className="mt-1 text-xs font-bold text-slate-400">Pago seguro. Puntos al instante. Sin suscripción.</p>
                     </div>
                     <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">1 punto = 0,10 €</span>
                   </div>
@@ -625,20 +625,20 @@
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-2xl font-black text-white">{pack.points} ptos.</p>
-                            <p className="mt-1 text-sm font-bold text-slate-400">{formatMoney(centsToEuros(pack.baseAmount))} de puntos</p>
-                            <p className="mt-2 max-w-[230px] text-xs font-bold leading-5 text-mint">
+                            <p className="mt-1 max-w-[230px] text-sm font-black leading-5 text-mint">
                               {rechargeValueText[pack.points] || "Convierte tu recarga en puntos para desbloquear mejores precios en Donoss."}
                             </p>
+                            <p className="mt-2 text-xs font-bold text-slate-500">{formatMoney(centsToEuros(pack.baseAmount))} convertidos en puntos</p>
                           </div>
-                          <span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${pack.is_disabled ? "bg-coral/10 text-coral ring-coral/20" : "bg-mint/10 text-mint ring-mint/20"}`}>
-                            {pack.is_disabled ? "Suspendido" : formatMoney(centsToEuros(pack.amount))}
+                          <span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${pack.is_disabled ? "bg-coral/10 text-coral ring-coral/20" : "bg-mint text-ink ring-mint/20"}`}>
+                            {pack.is_disabled ? "Suspendido" : `${formatMoney(centsToEuros(pack.amount))} total`}
                           </span>
                         </div>
 
-                        <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-                          <div className="flex items-center justify-between text-xs font-bold text-slate-400">
-                            <span>Gastos Donoss</span>
-                            <span>+{formatMoney(centsToEuros(pack.feeAmount))}</span>
+                        <div className="mt-4 rounded-2xl border border-mint/15 bg-mint/10 p-3">
+                          <div className="flex items-center justify-between gap-3 text-xs font-bold text-slate-300">
+                            <span>Protección y gestión incluidas</span>
+                            <span className="text-mint">+{formatMoney(centsToEuros(pack.feeAmount))}</span>
                           </div>
                           {expandedPack === pack.points && (
                             <div className="mt-3 space-y-2 border-t border-white/10 pt-3 text-xs font-bold text-slate-300">
@@ -652,10 +652,10 @@
                         <div className="mt-3 grid grid-cols-[auto_1fr] gap-2">
                           <button
                             type="button"
-                            className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-slate-200 transition hover:bg-white/[0.1]"
+                            className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-xs font-black text-slate-300 transition hover:bg-white/[0.1] hover:text-white"
                             onClick={() => setExpandedPack((current) => current === pack.points ? null : pack.points)}
                           >
-                            Detalle
+                            {expandedPack === pack.points ? "Ocultar" : "Ver detalle"}
                           </button>
                           <button
                             type="button"
