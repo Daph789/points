@@ -46,6 +46,8 @@
         transform: translateY(4px);
         transition: opacity 120ms ease, transform 120ms ease;
       }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
     <link rel="stylesheet" href="app-shell.css" />
     <script defer src="app-shell.js"></script>
@@ -183,6 +185,40 @@
               {isUnread && <UnreadPill />}
               <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{purchase.total_points || 0} ptos.</p>
               <p className="text-xs font-black text-slate-500 min-[430px]:mt-3">Ver detalle</p>
+            </div>
+          </a>
+        );
+      }
+
+      function LikedOfferCard({ like }) {
+        const offer = like.offer || {};
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        const businessName = offer.business_display_name || offer.author || "Donoss";
+        const discount = offer.base_price && offer.reduced_price && Number(offer.reduced_price) < Number(offer.base_price)
+          ? Math.round(((Number(offer.base_price) - Number(offer.reduced_price)) / Number(offer.base_price)) * 100)
+          : null;
+        return (
+          <a
+            href={offer.id ? `offer-detail.html?id=${offer.id}` : "home.html"}
+            className="group grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[92px_1fr_auto]"
+          >
+            <div className="relative h-24 overflow-hidden rounded-3xl bg-gradient-to-br from-coral/60 via-[#17213C] to-mint/50 min-[430px]:h-full">
+              {image ? <img className="h-full w-full object-cover" src={image} alt="" /> : <span className="grid h-full w-full place-items-center text-4xl">♥</span>}
+              <span className="absolute left-2 top-2 rounded-full bg-coral px-2.5 py-1 text-[10px] font-black text-white shadow-lg">Me gusta</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="truncate text-xs font-black uppercase tracking-[0.12em] text-mint">{businessName}</p>
+                {offer.business_is_verified && <VerifiedBadge />}
+              </div>
+              <h2 className="mt-1 break-words text-lg font-black leading-tight text-white">{offer.title || "Oferta guardada"}</h2>
+              <p className="mt-2 truncate text-sm font-bold text-slate-400">{offer.address || offer.categories?.join(", ") || "Donostia"}</p>
+              <p className="mt-1 text-xs font-bold text-slate-500">Guardado el {formatDate(like.created_at)} · {formatTime(like.created_at)}</p>
+            </div>
+            <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
+              <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{offer.required_points || 0} ptos.</p>
+              {discount !== null && <p className="mt-2 text-xs font-black text-coral">-{discount}%</p>}
+              <p className="mt-1 text-xs font-black text-slate-500">Ver detalle</p>
             </div>
           </a>
         );
@@ -413,8 +449,9 @@
 
       function App() {
         const initialTab = new URLSearchParams(window.location.search).get("tab") || "purchases";
-        const [mode, setMode] = React.useState(["purchases", "incoming", "scanned", "stock", "payouts", "points", "debts"].includes(initialTab) ? initialTab : "purchases");
+        const [mode, setMode] = React.useState(["purchases", "likes", "incoming", "scanned", "stock", "payouts", "points", "debts"].includes(initialTab) ? initialTab : "purchases");
         const [purchases, setPurchases] = React.useState([]);
+        const [likedOffers, setLikedOffers] = React.useState([]);
         const [incomingPurchases, setIncomingPurchases] = React.useState([]);
         const [scannedTickets, setScannedTickets] = React.useState([]);
         const [businessOffers, setBusinessOffers] = React.useState([]);
@@ -489,6 +526,16 @@
 
             setPurchases(data.purchases || []);
             setStatus("");
+
+            const likesResponse = await fetch("/api/me/liked-offers", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const likesData = await likesResponse.json().catch(() => ({}));
+            if (likesResponse.ok) {
+              setLikedOffers(likesData.likes || []);
+            } else if (likesData.error === "liked_offers_table_missing") {
+              setLikedOffers([]);
+            }
 
             setMovementStatus("Cargando movimientos...");
             const movementsResponse = await fetch("/api/me/point-movements", {
@@ -580,6 +627,20 @@
             purchase.total_points,
             purchase.delivery_method,
             purchase.id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        const filteredLikedOffers = likedOffers.filter((like) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          const offer = like.offer || {};
+          return [
+            offer.title,
+            offer.business_display_name,
+            offer.author,
+            offer.address,
+            offer.categories?.join(" "),
+            offer.required_points,
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
         });
 
@@ -821,6 +882,14 @@
                   <p className="mt-2 text-base font-black text-white">Historial de compras</p>
                   <p className="mt-1 text-xs font-bold text-slate-400">{purchases.length} pedidos</p>
                 </button>
+                <button
+                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "likes" ? "border-coral/50 bg-coral/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  onClick={() => selectHistoryMode("likes")}
+                >
+                  <p className="text-2xl">♥</p>
+                  <p className="mt-2 text-base font-black text-white">Me gusta</p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">{likedOffers.length} guardados</p>
+                </button>
 	                {accountType === "business" && (
                   <>
                     <button
@@ -913,6 +982,30 @@
                   ) : (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       {purchases.length === 0 ? "Todavía no tienes compras." : "No hay resultados para esta búsqueda."}
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : mode === "likes" ? (
+              <section className="mt-5">
+                <div className="rounded-[26px] border border-white/10 bg-white/[0.055] p-3 shadow-2xl shadow-black/20">
+                  <label className="flex items-center gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-coral/10 text-lg text-coral ring-1 ring-coral/20">⌕</span>
+                    <input
+                      className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500 sm:text-base"
+                      value={search}
+                      onChange={(event) => setSearch(event.target.value)}
+                      placeholder="Buscar guardados, marca, barrio..."
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {filteredLikedOffers.length > 0 ? (
+                    filteredLikedOffers.map((like) => <LikedOfferCard key={like.id} like={like} />)
+                  ) : (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      {likedOffers.length === 0 ? "Todavía no has guardado ningún chollo." : "No hay resultados para esta búsqueda."}
                     </div>
                   )}
                 </div>
@@ -1127,22 +1220,25 @@
                     {movementStatus}
                   </div>
                 )}
-                <div className="mt-4 flex snap-x gap-2 overflow-x-auto pb-1">
+                <div className="no-scrollbar -mx-3 mt-4 flex snap-x gap-2 overflow-x-auto px-3 pb-2">
                   {[
-                    ["all", "Todo", pointMovements.length],
-                    ["sent", "Enviados", pointMovements.filter((item) => item.transfer_type === "send" && item.from_profile_id === profileId).length],
+                    ["all", "Todos", pointMovements.length],
+                    ["sent", "Envíos", pointMovements.filter((item) => item.transfer_type === "send" && item.from_profile_id === profileId).length],
                     ["received", "Recibidos", pointMovements.filter((item) => item.transfer_type === "send" && item.to_profile_id === profileId).length],
                     ["requests_in", "Me piden", pointMovements.filter((item) => item.transfer_type === "request" && item.from_profile_id === profileId).length],
                     ["requests_out", "Pedí", pointMovements.filter((item) => item.transfer_type === "request" && item.to_profile_id === profileId).length],
                   ].map(([value, label, count]) => (
                     <button
                       key={value}
-                      className={`snap-start whitespace-nowrap rounded-2xl px-4 py-3 text-xs font-black transition ${
+                      className={`inline-flex min-w-max snap-start items-center gap-2 rounded-2xl px-4 py-3 text-xs font-black transition ${
                         pointFilter === value ? "bg-mint text-ink shadow-glow" : "bg-white/[0.065] text-slate-300 ring-1 ring-white/10"
                       }`}
                       onClick={() => setPointFilter(value)}
                     >
-                      {label} · {count}
+                      <span>{label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${pointFilter === value ? "bg-ink/10 text-ink" : "bg-white/10 text-slate-200"}`}>
+                        {count}
+                      </span>
                     </button>
                   ))}
                 </div>

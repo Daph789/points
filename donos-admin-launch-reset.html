@@ -40,6 +40,7 @@
         points: true,
         purchases: true,
         transfers: true,
+        likes: true,
         stripe: true,
         premium: true,
         payouts: true,
@@ -53,6 +54,7 @@
         ["points", "Resetear puntos", "Pone todos los saldos a 0. Mantiene cuentas, emails, ID Donoss y certificaciones admin."],
         ["purchases", "Borrar compras y QR", "Elimina compras, tickets, códigos QR y validaciones."],
         ["transfers", "Borrar transferencias", "Elimina envíos y solicitudes de puntos entre cuentas."],
+        ["likes", "Borrar Me gusta", "Elimina chollos guardados por los usuarios durante las pruebas."],
         ["stripe", "Borrar recargas Stripe", "Limpia el historial de recargas de prueba en Donoss. No toca Stripe real."],
         ["premium", "Borrar Premium", "Elimina suscripciones Premium de prueba y deja Premium inactivo."],
         ["payouts", "Borrar pagos a empresas", "Limpia liquidaciones y comisiones bancarias de test."],
@@ -186,6 +188,7 @@
               <Stat label="Compras" value={counts.purchases} />
               <Stat label="Planes Quedar" value={counts.social_plans} />
               <Stat label="Transferencias" value={counts.point_transfers} />
+              <Stat label="Me gusta" value={counts.liked_offers} />
               <Stat label="Recargas Stripe" value={counts.stripe_point_recharges} />
               <Stat label="Premium" value={counts.premium_subscriptions} />
               <Stat label="Analytics" value={counts.app_activity_events} />

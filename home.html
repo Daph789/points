@@ -325,22 +325,26 @@
         );
       }
 
-      function OfferCard({ offer, onOpen }) {
-        const firstCategory = offer.categories?.[0] || "Oferta";
+      function OfferCard({ offer, onOpen, onLike, isLiked }) {
+        const firstCategory = offer.featured_category || offer.categories?.[0] || "Oferta";
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const outOfStock = isOutOfStock(offer);
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        const categoryIcon = categories.find((category) => category.label === firstCategory)?.icon || "✨";
         return (
           <article
             className="cursor-pointer overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20 transition hover:translate-y-[-2px]"
             onClick={() => onOpen(offer)}
           >
-            <div className="relative min-h-[150px] bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B] p-4">
+            <div className="relative min-h-[150px] overflow-hidden bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B] p-4">
+              {image && <img className="absolute inset-0 h-full w-full object-cover opacity-80" src={image} alt="" />}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/12 to-black/20"></div>
               <div className="flex items-center justify-between gap-3">
-                <span className="rounded-full bg-black/24 px-3 py-1 text-xs font-black text-white backdrop-blur">
+                <span className="relative rounded-full bg-black/35 px-3 py-1 text-xs font-black text-white backdrop-blur">
                   {firstCategory}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="relative flex items-center gap-2">
                   {outOfStock && (
                     <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Agotado</span>
                   )}
@@ -352,8 +356,21 @@
                   </span>
                 </div>
               </div>
+              <button
+                className={`absolute bottom-3 left-4 grid h-11 w-11 place-items-center rounded-full text-xl shadow-2xl ring-1 backdrop-blur transition active:scale-90 ${
+                  isLiked ? "bg-coral text-white ring-coral/30" : "bg-black/35 text-white ring-white/15"
+                }`}
+                type="button"
+                aria-label={isLiked ? "Quitar de me gusta" : "Guardar en me gusta"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onLike?.(offer);
+                }}
+              >
+                {isLiked ? "♥" : "♡"}
+              </button>
               <div className="absolute bottom-3 right-4 text-6xl drop-shadow-2xl" aria-hidden="true">
-                📚
+                {image ? "" : categoryIcon}
               </div>
             </div>
 
@@ -487,39 +504,6 @@
         );
       }
 
-      function DealCard({ deal }) {
-        return (
-          <article className="overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
-            <div className={`relative min-h-[142px] bg-gradient-to-br ${deal.gradient} p-4`}>
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-black/24 px-3 py-1 text-xs font-black text-white backdrop-blur">
-                  {deal.tag}
-                </span>
-                <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">
-                  {deal.points}
-                </span>
-              </div>
-              <div className="absolute bottom-3 right-4 text-6xl drop-shadow-2xl" aria-hidden="true">
-                {deal.visual}
-              </div>
-            </div>
-
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black text-white">{deal.title}</h3>
-                  <p className="mt-1 text-sm font-medium text-slate-400">{deal.subtitle}</p>
-                </div>
-                <p className="text-xl font-black text-white">{deal.price}</p>
-              </div>
-              <button className="mt-4 h-11 w-full rounded-2xl bg-white/[0.08] text-sm font-black text-white ring-1 ring-white/10 transition hover:bg-white/[0.12]">
-                Ver chollo
-              </button>
-            </div>
-          </article>
-        );
-      }
-
       function App() {
         const [accountType, setAccountType] = React.useState("");
         const [accountName, setAccountName] = React.useState(localStorage.getItem("donosDisplayName") || "");
@@ -530,6 +514,9 @@
         const [copyStatus, setCopyStatus] = React.useState("");
         const [selectedCategory, setSelectedCategory] = React.useState("");
         const [categoryOffers, setCategoryOffers] = React.useState([]);
+        const [featuredOffers, setFeaturedOffers] = React.useState([]);
+        const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
+        const [likeToast, setLikeToast] = React.useState("");
         const [selectedOffer, setSelectedOffer] = React.useState(null);
         const [isLoadingOffers, setIsLoadingOffers] = React.useState(false);
         const [offersStatus, setOffersStatus] = React.useState("");
@@ -544,6 +531,29 @@
           });
           const data = await response.json().catch(() => ({}));
           if (response.ok) setNavBadges(data.counts?.sections || {});
+        }
+
+        async function loadFeaturedOffers() {
+          try {
+            const response = await fetch("/api/offers/featured");
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setFeaturedOffers(data.offers || []);
+          } catch (error) {
+            setFeaturedOffers([]);
+          }
+        }
+
+        async function loadLikedOffers(token) {
+          if (!token) return;
+          try {
+            const response = await fetch("/api/me/liked-offers", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setLikedOfferIds(new Set(data.offer_ids || []));
+          } catch (error) {
+            setLikedOfferIds(new Set());
+          }
         }
 
         const loadAccount = React.useCallback(async () => {
@@ -598,11 +608,15 @@
             setAccountPoints(points);
             localStorage.setItem("donosAccountType", type);
             if (name) localStorage.setItem("donosDisplayName", name);
-            if (accessToken) loadNotificationBadges();
+            if (accessToken) {
+              loadNotificationBadges();
+              loadLikedOffers(accessToken);
+            }
         }, []);
 
         React.useEffect(() => {
           loadAccount();
+          loadFeaturedOffers();
         }, [loadAccount]);
 
         React.useEffect(() => {
@@ -652,6 +666,45 @@
           }
 
           setIsLoadingOffers(false);
+        }
+
+        async function toggleLike(offer) {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent("home.html")}`;
+            return;
+          }
+
+          const nextLiked = !likedOfferIds.has(offer.id);
+          setLikedOfferIds((current) => {
+            const next = new Set(current);
+            if (nextLiked) next.add(offer.id);
+            else next.delete(offer.id);
+            return next;
+          });
+          setLikeToast(nextLiked ? "Guardado en Me gusta" : "Quitado de Me gusta");
+          window.setTimeout(() => setLikeToast(""), 1500);
+
+          const response = await fetch("/api/me/liked-offers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ offerId: offer.id, liked: nextLiked }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setLikedOfferIds((current) => {
+              const next = new Set(current);
+              if (nextLiked) next.delete(offer.id);
+              else next.add(offer.id);
+              return next;
+            });
+            setLikeToast(data.error === "liked_offers_table_missing" ? "Ejecuta el SQL de Me gusta" : "No se ha podido guardar");
+            window.setTimeout(() => setLikeToast(""), 2200);
+          }
         }
 
         return (
@@ -816,13 +869,32 @@
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {deals.map((deal) => (
-                      <DealCard key={deal.title} deal={deal} />
-                    ))}
+                    {featuredOffers.length > 0 ? (
+                      featuredOffers.map((offer) => (
+                        <OfferCard
+                          key={offer.id}
+                          offer={offer}
+                          onOpen={setSelectedOffer}
+                          onLike={toggleLike}
+                          isLiked={likedOfferIds.has(offer.id)}
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300 sm:col-span-2">
+                        Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
+                      </div>
+                    )}
                   </div>
                 </section>
               </section>
             </section>
+
+            {likeToast && (
+              <div className="fixed left-1/2 top-1/2 z-[60] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-mint/25 bg-[#101522]/95 px-6 py-5 text-center shadow-2xl shadow-mint/10 backdrop-blur-2xl">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-mint text-2xl text-ink shadow-glow">♥</div>
+                <p className="mt-3 whitespace-nowrap text-base font-black text-white">{likeToast}</p>
+              </div>
+            )}
 
             <nav className="fixed inset-x-0 bottom-3 z-40 mx-auto w-[min(calc(100%-16px),520px)] rounded-[24px] border border-white/10 bg-[#101522]/88 p-1.5 shadow-nav backdrop-blur-2xl sm:bottom-4 sm:rounded-[28px] sm:p-2">
               <div className="grid grid-cols-5 gap-1">

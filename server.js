@@ -1119,6 +1119,7 @@ app.post("/api/admin/launch-reset/preview", async (request, response) => {
       "purchases",
       "ticket_verifications",
       "point_transfers",
+      "liked_offers",
       "stripe_point_recharges",
       "premium_subscriptions",
       "premium_subscription_charges",
@@ -1174,6 +1175,7 @@ app.post("/api/admin/launch-reset", async (request, response) => {
 
     if (options.offers !== false) deleted.business_offers = await deleteAdminTable("business_offers");
     if (options.transfers !== false) deleted.point_transfers = await deleteAdminTable("point_transfers");
+    if (options.likes !== false) deleted.liked_offers = await deleteAdminTable("liked_offers");
     if (options.stripe !== false) deleted.stripe_point_recharges = await deleteAdminTable("stripe_point_recharges");
 
     if (options.premium !== false) {
@@ -2405,6 +2407,46 @@ async function enrichPurchases(purchases) {
   }));
 }
 
+const publicOfferSelect =
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+
+function remainingOfferStock(offer) {
+  if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
+  return Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
+}
+
+function isOfferVisibleForPublic(offer) {
+  if (!offer || offer.is_hidden) return false;
+  const remaining = remainingOfferStock(offer);
+  if (remaining === null || remaining > 0) return true;
+  if (!offer.out_of_stock_since) return true;
+  return Date.now() - new Date(offer.out_of_stock_since).getTime() < 24 * 60 * 60 * 1000;
+}
+
+async function enrichOffersWithBusiness(offers) {
+  const businessIds = [...new Set((offers || []).map((offer) => offer.business_id).filter(Boolean))];
+  let businessesById = {};
+
+  if (businessIds.length > 0) {
+    const { data: businesses, error } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, is_verified")
+      .in("id", businessIds);
+
+    if (error) console.error("Offers business enrichment error:", error);
+    businessesById = Object.fromEntries((businesses || []).map((business) => [business.id, business]));
+  }
+
+  return (offers || []).map((offer) => {
+    const business = businessesById[offer.business_id];
+    return {
+      ...offer,
+      business_display_name: business?.display_name || offer.business_display_name,
+      business_is_verified: Boolean(business?.is_verified || offer.business_is_verified),
+    };
+  });
+}
+
 function publicPlanProfile(profile) {
   if (!profile) return null;
   return {
@@ -2839,6 +2881,152 @@ async function markSideGroupMessagesRead(messages = [], planId, readerId) {
     console.error("Side group read receipt error:", error);
   }
 }
+
+app.get("/api/offers/featured", async (_request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música"];
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("business_offers")
+      .select(publicOfferSelect)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Featured offers error:", error);
+      return response.status(500).json({ error: "featured_offers_failed" });
+    }
+
+    const visibleOffers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
+    const usedIds = new Set();
+    const featured = [];
+
+    for (const category of wantedCategories) {
+      const offer = visibleOffers.find((item) => !usedIds.has(item.id) && (item.categories || []).includes(category));
+      if (offer) {
+        usedIds.add(offer.id);
+        featured.push({ ...offer, featured_category: category });
+      }
+    }
+
+    if (featured.length < 6) {
+      for (const offer of visibleOffers) {
+        if (usedIds.has(offer.id)) continue;
+        usedIds.add(offer.id);
+        featured.push({ ...offer, featured_category: offer.categories?.[0] || "Oferta" });
+        if (featured.length >= 6) break;
+      }
+    }
+
+    response.json({ offers: featured });
+  } catch (error) {
+    console.error("Featured offers fatal error:", error);
+    response.status(500).json({ error: "featured_offers_failed" });
+  }
+});
+
+app.get("/api/me/liked-offers", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const { data: likes, error } = await supabaseAdmin
+      .from("liked_offers")
+      .select("id, offer_id, created_at")
+      .eq("profile_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) {
+      console.error("Liked offers load error:", error);
+      return response.status(500).json({
+        error: error.code === "42P01" ? "liked_offers_table_missing" : "liked_offers_failed",
+      });
+    }
+
+    const offerIds = [...new Set((likes || []).map((like) => like.offer_id).filter(Boolean))];
+    let offersById = {};
+
+    if (offerIds.length > 0) {
+      const { data: offers, error: offersError } = await supabaseAdmin
+        .from("business_offers")
+        .select(publicOfferSelect)
+        .in("id", offerIds);
+
+      if (offersError) console.error("Liked offers detail error:", offersError);
+      const enriched = await enrichOffersWithBusiness(offers || []);
+      offersById = Object.fromEntries(enriched.map((offer) => [offer.id, offer]));
+    }
+
+    response.json({
+      likes: (likes || []).map((like) => ({
+        ...like,
+        offer: offersById[like.offer_id] || null,
+      })),
+      offer_ids: (likes || []).map((like) => like.offer_id),
+    });
+  } catch (error) {
+    console.error("Liked offers fatal error:", error);
+    response.status(500).json({ error: "liked_offers_failed" });
+  }
+});
+
+app.post("/api/me/liked-offers", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const offerId = String(request.body?.offerId || "").trim();
+  const shouldLike = request.body?.liked !== false;
+  if (!offerId) return response.status(400).json({ error: "offer_missing" });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+
+    if (shouldLike) {
+      const { error } = await supabaseAdmin
+        .from("liked_offers")
+        .upsert({ profile_id: profile.id, offer_id: offerId }, { onConflict: "profile_id,offer_id" });
+
+      if (error) {
+        console.error("Liked offer save error:", error);
+        return response.status(500).json({
+          error: error.code === "42P01" ? "liked_offers_table_missing" : "liked_offer_save_failed",
+        });
+      }
+    } else {
+      const { error } = await supabaseAdmin
+        .from("liked_offers")
+        .delete()
+        .eq("profile_id", profile.id)
+        .eq("offer_id", offerId);
+
+      if (error) {
+        console.error("Liked offer delete error:", error);
+        return response.status(500).json({
+          error: error.code === "42P01" ? "liked_offers_table_missing" : "liked_offer_delete_failed",
+        });
+      }
+    }
+
+    response.json({ offer_id: offerId, liked: shouldLike });
+  } catch (error) {
+    console.error("Liked offer fatal error:", error);
+    response.status(500).json({ error: "liked_offer_save_failed" });
+  }
+});
 
 app.get("/api/me/purchases", async (request, response) => {
   if (!supabaseAdmin) {
