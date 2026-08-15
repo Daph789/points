@@ -185,6 +185,12 @@
         const displayedDonosId = formatDonosId(transactionId);
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
         const centsToEuros = (value) => Number(value || 0) / 100;
+        const rechargeValueText = {
+          50: "Con 5€ convertidos en puntos, podrás comprar planes que suelen valer hasta 10€.",
+          100: "Con 10€ convertidos en puntos, podrás comprar cosas que suelen valer entre 15€ y 20€.",
+          250: "Con 25€ convertidos en puntos, tendrás margen para planes que normalmente valen entre 35€ y 50€.",
+          500: "Con 50€ convertidos en puntos, puedes cubrir varios planes y ofertas que suelen sumar entre 70€ y 100€.",
+        };
 
         function VerifiedBadge() {
           return (
@@ -577,7 +583,7 @@
                     </div>
                   </div>
                   <p className="mt-5 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-2 text-xs font-bold text-slate-400">
-                    Equivale aprox. a {euros.toLocaleString("es-ES", { maximumFractionDigits: 2 })}€ · 1€ = 10 ptos.
+                    Equivale aprox. a {euros.toLocaleString("es-ES", { maximumFractionDigits: 2 })}€ · 1 punto = 0,10 €
                   </p>
                 </div>
               </div>
@@ -604,7 +610,7 @@
                       <p className="text-sm font-black text-white">Elige una recarga</p>
                       <p className="mt-1 text-xs font-bold text-slate-400">Pago seguro con Stripe Checkout.</p>
                     </div>
-                    <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">1€ = 10 ptos.</span>
+                    <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">1 punto = 0,10 €</span>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {pointPacks.map((pack) => (
@@ -620,6 +626,9 @@
                           <div>
                             <p className="text-2xl font-black text-white">{pack.points} ptos.</p>
                             <p className="mt-1 text-sm font-bold text-slate-400">{formatMoney(centsToEuros(pack.baseAmount))} de puntos</p>
+                            <p className="mt-2 max-w-[230px] text-xs font-bold leading-5 text-mint">
+                              {rechargeValueText[pack.points] || "Convierte tu recarga en puntos para desbloquear mejores precios en Donoss."}
+                            </p>
                           </div>
                           <span className={`rounded-full px-3 py-1 text-xs font-black ring-1 ${pack.is_disabled ? "bg-coral/10 text-coral ring-coral/20" : "bg-mint/10 text-mint ring-mint/20"}`}>
                             {pack.is_disabled ? "Suspendido" : formatMoney(centsToEuros(pack.amount))}

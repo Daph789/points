@@ -1492,7 +1492,7 @@ app.post("/api/admin/business-settlements", async (request, response) => {
 
   const { data: businesses, error } = await supabaseAdmin
     .from("profiles")
-    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, created_at")
+    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, bank_account_holder, bank_iban, bank_name, bank_bic, created_at")
     .eq("account_type", "business")
     .order("created_at", { ascending: false });
 
@@ -1526,7 +1526,7 @@ app.post("/api/admin/business-settlements/:businessId", async (request, response
   const businessId = String(request.params.businessId || "");
   const { data: business, error: businessError } = await supabaseAdmin
     .from("profiles")
-    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, created_at")
+    .select("id, display_name, email, phone, address, neighborhood, transaction_id, points, is_verified, bank_account_holder, bank_iban, bank_name, bank_bic, created_at")
     .eq("id", businessId)
     .eq("account_type", "business")
     .maybeSingle();
