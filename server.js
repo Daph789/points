@@ -406,8 +406,9 @@ async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
+  const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
   const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at`;
-  const profileColumns = `${premiumProfileColumns}, plan_gender_preference, plan_photo_data_url`;
+  const profileColumns = `${bankProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, plan_gender_preference, plan_photo_data_url`;
   let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -425,9 +426,31 @@ async function ensureProfileForUser(user) {
   }
 
   if (existingError) throw existingError;
-  if (existing) return existing;
-
   const metadata = user.user_metadata || user.raw_user_meta_data || {};
+  if (existing) {
+    const metadataBankIban = metadataText(metadata, "bank_iban").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    if (existing.account_type === "business" && metadataBankIban && !existing.bank_iban) {
+      try {
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            bank_account_holder: metadataText(metadata, "bank_account_holder") || existing.display_name,
+            bank_iban: metadataBankIban,
+            bank_name: metadataText(metadata, "bank_name") || null,
+            bank_bic: metadataText(metadata, "bank_bic").replace(/\s+/g, "").toUpperCase() || null,
+          })
+          .eq("id", user.id)
+          .select(profileColumns)
+          .maybeSingle();
+        if (!updateError && updated) return updated;
+        if (updateError?.code !== "42703") console.error("Business bank details backfill error:", updateError);
+      } catch (error) {
+        if (error?.code !== "42703") console.error("Business bank details backfill fatal error:", error);
+      }
+    }
+    return existing;
+  }
+
   const accountType = metadataText(metadata, "account_type") === "business" ? "business" : "user";
   const businessCategories = Array.isArray(metadata.business_categories) ? metadata.business_categories : null;
   const displayName =
@@ -449,6 +472,13 @@ async function ensureProfileForUser(user) {
     points: 0,
     is_verified: false,
   };
+
+  if (accountType === "business") {
+    baseProfile.bank_account_holder = metadataText(metadata, "bank_account_holder") || null;
+    baseProfile.bank_iban = metadataText(metadata, "bank_iban").replace(/[^A-Z0-9]/gi, "").toUpperCase() || null;
+    baseProfile.bank_name = metadataText(metadata, "bank_name") || null;
+    baseProfile.bank_bic = metadataText(metadata, "bank_bic").replace(/\s+/g, "").toUpperCase() || null;
+  }
 
   const metadataId = cleanValidDonosId(metadata.transaction_id);
   const transactionIds = [
@@ -4965,6 +4995,71 @@ async function getStripeAmounts(session) {
     return fallback;
   }
 }
+
+app.get("/api/app-update/latest", async (_request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(204).end();
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("app_update_broadcasts")
+      .select("id, title, message, update_size, created_at, expires_at")
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "42P01") return response.json({ update: null, missing_sql: true });
+      console.error("App update latest error:", error);
+      return response.status(500).json({ error: "app_update_latest_failed" });
+    }
+
+    response.json({ update: data || null });
+  } catch (error) {
+    console.error("App update latest fatal error:", error);
+    response.status(500).json({ error: "app_update_latest_failed" });
+  }
+});
+
+app.post("/api/admin/app-update", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const updateSize = request.body?.updateSize === "large" ? "large" : "small";
+  const title = updateSize === "large" ? "Gran actualización Donoss" : "Nueva actualización Donoss";
+  const message = updateSize === "large"
+    ? "Hay una actualización importante en la app. Lánzala para cargar la nueva versión sin cerrar sesión."
+    : "Hay una novedad en la app. Lánzala para cargar la última versión sin cerrar sesión.";
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("app_update_broadcasts")
+    .insert({
+      title,
+      message,
+      update_size: updateSize,
+      created_by: "admin",
+      expires_at: expiresAt,
+    })
+    .select("id, title, message, update_size, created_at, expires_at")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Admin app update broadcast error:", error);
+    return response.status(500).json({
+      error: error.code === "42P01" ? "Falta ejecutar el SQL de actualizaciones." : "No se ha podido lanzar la actualización",
+    });
+  }
+
+  response.json({ update: data });
+});
 
 app.use(express.static(__dirname));
 

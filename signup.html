@@ -288,6 +288,12 @@
         const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState([]);
         const [taxId, setTaxId] = React.useState("");
         const [businessAddress, setBusinessAddress] = React.useState("");
+        const [isBankOverlayOpen, setIsBankOverlayOpen] = React.useState(false);
+        const [bankAccountHolder, setBankAccountHolder] = React.useState("");
+        const [bankIban, setBankIban] = React.useState("");
+        const [bankIbanConfirm, setBankIbanConfirm] = React.useState("");
+        const [bankName, setBankName] = React.useState("");
+        const [bankBic, setBankBic] = React.useState("");
         const [status, setStatus] = React.useState({ type: "", message: "" });
         const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -298,6 +304,11 @@
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedEmailConfirm = emailConfirm.trim().toLowerCase();
         const emailsMatch = normalizedEmail && normalizedEmail === normalizedEmailConfirm;
+        const normalizedIban = normalizeIban(bankIban);
+        const normalizedIbanConfirm = normalizeIban(bankIbanConfirm);
+        const ibanIsValid = isValidIbanShape(normalizedIban);
+        const ibansMatch = normalizedIban && normalizedIban === normalizedIbanConfirm;
+        const bankDetailsComplete = bankAccountHolder.trim() && ibanIsValid && ibansMatch;
         const canSubmit =
           accountType &&
           displayName.trim() &&
@@ -307,7 +318,20 @@
           password.length >= 8 &&
           password === passwordConfirm &&
           acceptedTerms &&
-          (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim()));
+          (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim() && bankDetailsComplete));
+
+        function normalizeIban(value) {
+          return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        }
+
+        function formatIban(value) {
+          return normalizeIban(value).match(/.{1,4}/g)?.join(" ") || "";
+        }
+
+        function isValidIbanShape(value) {
+          const clean = normalizeIban(value);
+          return /^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(clean);
+        }
 
         function chooseAccountType(type) {
           setAccountType(type);
@@ -332,7 +356,30 @@
             business_categories: isBusiness ? businessCategoriesSelected : null,
             tax_id: isBusiness ? taxId.trim().toUpperCase() : null,
             address: isBusiness ? businessAddress.trim() : null,
+            bank_account_holder: isBusiness ? bankAccountHolder.trim() : null,
+            bank_iban: isBusiness ? normalizedIban : null,
+            bank_name: isBusiness ? bankName.trim() || null : null,
+            bank_bic: isBusiness ? bankBic.trim().toUpperCase() || null : null,
           };
+        }
+
+        function saveBankDetailsFromOverlay() {
+          if (!bankAccountHolder.trim()) {
+            setStatus({ type: "error", message: "Añade el titular de la cuenta bancaria." });
+            return;
+          }
+          if (!ibanIsValid) {
+            setStatus({ type: "error", message: "El IBAN no parece válido. Revisa que empiece por país y tenga todos los caracteres." });
+            return;
+          }
+          if (!ibansMatch) {
+            setStatus({ type: "error", message: "Los IBAN no coinciden." });
+            return;
+          }
+          setBankIban(formatIban(normalizedIban));
+          setBankIbanConfirm(formatIban(normalizedIbanConfirm));
+          setStatus({ type: "success", message: "Datos bancarios guardados para el registro." });
+          setIsBankOverlayOpen(false);
         }
 
         function toggleBusinessCategory(category) {
@@ -354,6 +401,12 @@
 
           if (password !== passwordConfirm) {
             setStatus({ type: "error", message: "Las contraseñas no coinciden." });
+            return;
+          }
+
+          if (isBusiness && !bankDetailsComplete) {
+            setStatus({ type: "error", message: "Añade los datos bancarios de la empresa para poder recibir transferencias." });
+            setIsBankOverlayOpen(true);
             return;
           }
 
@@ -683,6 +736,39 @@
                               onChange={(event) => setBusinessAddress(event.target.value)}
                             />
                           </Field>
+
+                          <section className={`rounded-[24px] border p-4 ${
+                            bankDetailsComplete
+                              ? "border-mint/30 bg-mint/10"
+                              : "border-white/10 bg-white/[0.045]"
+                          }`}>
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="text-sm font-black text-white">Datos bancarios para pagos</p>
+                                <p className="mt-1 text-xs font-bold leading-5 text-slate-400">
+                                  Necesarios para enviarte dinero desde Donoss cuando corresponda.
+                                </p>
+                              </div>
+                              <span className={`rounded-full px-3 py-1 text-xs font-black ${
+                                bankDetailsComplete ? "bg-mint text-ink" : "bg-white/[0.08] text-slate-300"
+                              }`}>
+                                {bankDetailsComplete ? "Añadido" : "Pendiente"}
+                              </span>
+                            </div>
+                            {bankDetailsComplete && (
+                              <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                                <p className="truncate text-sm font-black text-white">{bankAccountHolder.trim()}</p>
+                                <p className="mt-1 font-mono text-xs font-bold text-mint">{formatIban(normalizedIban)}</p>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="mt-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]"
+                              onClick={() => setIsBankOverlayOpen(true)}
+                            >
+                              {bankDetailsComplete ? "Modificar IBAN" : "Añadir un IBAN"}
+                            </button>
+                          </section>
                         </>
                       )}
 
@@ -847,6 +933,109 @@
                     }}
                   >
                     Aceptar condiciones
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {isBankOverlayOpen && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-3 py-5 backdrop-blur-xl">
+              <div className="max-h-[90vh] w-full max-w-lg overflow-hidden rounded-[30px] border border-white/10 bg-[#0b0f1a] shadow-2xl shadow-black/60">
+                <div className="border-b border-white/10 p-5 sm:p-6">
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Datos de cobro</p>
+                  <h3 className="mt-2 text-2xl font-black leading-tight text-white">Añadir cuenta bancaria</h3>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                    Estos datos solo se usan para que Donoss pueda enviarte dinero por transferencia cuando corresponda.
+                  </p>
+                </div>
+
+                <div className="max-h-[58vh] space-y-4 overflow-y-auto p-5 sm:p-6">
+                  <Field label="Titular de la cuenta">
+                    <input
+                      className={inputClass}
+                      type="text"
+                      placeholder="Nombre fiscal o razón social"
+                      autoComplete="organization"
+                      value={bankAccountHolder}
+                      onChange={(event) => setBankAccountHolder(event.target.value)}
+                    />
+                  </Field>
+
+                  <Field label="IBAN">
+                    <input
+                      className="h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 font-mono text-[15px] uppercase tracking-[0.08em] text-white outline-none transition placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10"
+                      type="text"
+                      inputMode="text"
+                      placeholder="ES00 0000 0000 0000 0000 0000"
+                      autoComplete="off"
+                      value={bankIban}
+                      onChange={(event) => setBankIban(formatIban(event.target.value))}
+                    />
+                    {bankIban.trim() && !ibanIsValid && (
+                      <p className="mt-2 text-xs font-bold text-coral">El IBAN no parece válido.</p>
+                    )}
+                  </Field>
+
+                  <Field label="Repetir IBAN">
+                    <input
+                      className="h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 font-mono text-[15px] uppercase tracking-[0.08em] text-white outline-none transition placeholder:font-sans placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10"
+                      type="text"
+                      inputMode="text"
+                      placeholder="Vuelve a escribir el IBAN"
+                      autoComplete="off"
+                      value={bankIbanConfirm}
+                      onChange={(event) => setBankIbanConfirm(formatIban(event.target.value))}
+                    />
+                    {bankIbanConfirm.trim() && !ibansMatch && (
+                      <p className="mt-2 text-xs font-bold text-coral">Los IBAN no coinciden.</p>
+                    )}
+                  </Field>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Banco">
+                      <input
+                        className={inputClass}
+                        type="text"
+                        placeholder="Ej. CaixaBank, BBVA..."
+                        value={bankName}
+                        onChange={(event) => setBankName(event.target.value)}
+                      />
+                    </Field>
+
+                    <Field label="BIC / SWIFT opcional">
+                      <input
+                        className={inputClass}
+                        type="text"
+                        placeholder="Ej. CAIXESBBXXX"
+                        value={bankBic}
+                        onChange={(event) => setBankBic(event.target.value.toUpperCase())}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="rounded-2xl border border-mint/20 bg-mint/10 p-4">
+                    <p className="text-sm font-black text-mint">Revisión antes de guardar</p>
+                    <p className="mt-2 text-xs font-bold leading-5 text-slate-300">
+                      Donoss no mostrará tu IBAN al público. Revísalo bien: un IBAN incorrecto puede retrasar tus pagos.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 border-t border-white/10 p-5 sm:grid-cols-2 sm:p-6">
+                  <button
+                    type="button"
+                    className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white"
+                    onClick={() => setIsBankOverlayOpen(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="h-12 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                    onClick={saveBankDetailsFromOverlay}
+                    disabled={!bankAccountHolder.trim() || !ibanIsValid || !ibansMatch}
+                  >
+                    Guardar IBAN
                   </button>
                 </div>
               </div>

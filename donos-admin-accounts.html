@@ -224,6 +224,29 @@
           }
         }
 
+        async function launchAppUpdate(updateSize = "small") {
+          const label = updateSize === "large" ? "gran actualización" : "actualización rápida";
+          const ok = window.confirm(`¿Enviar aviso de ${label} a la app? Los usuarios conectados verán el overlay cuando la app compruebe novedades.`);
+          if (!ok) return;
+          setStatus("");
+          setIsLoading(true);
+
+          try {
+            const response = await fetch("/api/admin/app-update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, updateSize }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "No se ha podido lanzar la actualización.");
+            setStatus("Aviso de actualización lanzado correctamente.");
+          } catch (error) {
+            setStatus(error.message || "No se ha podido lanzar la actualización.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
         if (!isUnlocked) {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -259,6 +282,12 @@
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-business-settlements.html">Empresas</a>
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-activity.html">Actividad</a>
                 <a className="flex-1 rounded-full border border-coral/25 bg-coral/10 px-4 py-2 text-center text-sm font-black text-coral sm:flex-none" href="donos-admin-launch-reset.html">Lanzamiento</a>
+                <button className="flex-1 rounded-full border border-mint/25 bg-mint/10 px-4 py-2 text-sm font-black text-mint sm:flex-none" onClick={() => launchAppUpdate("small")} disabled={isLoading}>
+                  Avisar update
+                </button>
+                <button className="hidden rounded-full border border-sun/25 bg-sun/10 px-4 py-2 text-sm font-black text-sun sm:inline-flex" onClick={() => launchAppUpdate("large")} disabled={isLoading}>
+                  Gran update
+                </button>
                 <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadAccounts}>
                   Actualizar
                 </button>
