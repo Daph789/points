@@ -4934,6 +4934,71 @@ async function getStripeAmounts(session) {
   }
 }
 
+app.get("/api/app-update/latest", async (_request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(204).end();
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("app_update_broadcasts")
+      .select("id, title, message, update_size, created_at, expires_at")
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "42P01") return response.json({ update: null, missing_sql: true });
+      console.error("App update latest error:", error);
+      return response.status(500).json({ error: "app_update_latest_failed" });
+    }
+
+    response.json({ update: data || null });
+  } catch (error) {
+    console.error("App update latest fatal error:", error);
+    response.status(500).json({ error: "app_update_latest_failed" });
+  }
+});
+
+app.post("/api/admin/app-update", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const updateSize = request.body?.updateSize === "large" ? "large" : "small";
+  const title = updateSize === "large" ? "Gran actualización Donoss" : "Nueva actualización Donoss";
+  const message = updateSize === "large"
+    ? "Hay una actualización importante en la app. Lánzala para cargar la nueva versión sin cerrar sesión."
+    : "Hay una novedad en la app. Lánzala para actualizar sin cerrar sesión.";
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("app_update_broadcasts")
+    .insert({
+      title,
+      message,
+      update_size: updateSize,
+      created_by: "admin",
+      expires_at: expiresAt,
+    })
+    .select("id, title, message, update_size, created_at, expires_at")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Admin app update broadcast error:", error);
+    return response.status(500).json({
+      error: error.code === "42P01" ? "Falta ejecutar el SQL de actualizaciones." : "No se ha podido lanzar la actualización",
+    });
+  }
+
+  response.json({ update: data });
+});
+
 app.use(express.static(__dirname));
 
 app.listen(port, () => {

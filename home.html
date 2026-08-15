@@ -274,6 +274,13 @@
           }, window.location.origin);
           return;
         }
+        if (target.pathname.endsWith("offer-detail.html") && window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: "donos:offer-detail",
+            id: target.searchParams.get("id") || "",
+          }, window.location.origin);
+          return;
+        }
         if (window.parent && window.parent !== window) {
           window.parent.location.href = url;
         } else {
