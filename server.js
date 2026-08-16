@@ -2470,7 +2470,7 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, additional_links, additional_details, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -2988,6 +2988,56 @@ app.get("/api/offers/featured", async (_request, response) => {
   } catch (error) {
     console.error("Featured offers fatal error:", error);
     response.status(500).json({ error: "featured_offers_failed" });
+  }
+});
+
+app.get("/api/offers/categories/summary", async (_request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música"];
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("business_offers")
+      .select(publicOfferSelect)
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    if (error) {
+      console.error("Offer category summary error:", error);
+      return response.status(500).json({ error: "offer_category_summary_failed" });
+    }
+
+    const visibleOffers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
+    const summary = wantedCategories.map((category) => {
+      const offers = visibleOffers.filter((offer) => (offer.categories || []).includes(category));
+      const preview = offers[0] || null;
+      return {
+        category,
+        count: offers.length,
+        preview: preview
+          ? {
+              id: preview.id,
+              title: preview.title,
+              cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+              required_points: preview.required_points,
+              business_display_name: preview.business_display_name,
+              business_is_verified: Boolean(preview.business_is_verified),
+            }
+          : null,
+      };
+    });
+
+    response.json({
+      categories: summary,
+      active_categories: summary.filter((item) => item.count > 0),
+      total: visibleOffers.length,
+    });
+  } catch (error) {
+    console.error("Offer category summary fatal error:", error);
+    response.status(500).json({ error: "offer_category_summary_failed" });
   }
 });
 
@@ -4430,7 +4480,8 @@ app.post("/api/purchases/offer", async (request, response) => {
   }
 
   const offerId = String(request.body?.offerId || "");
-  const deliveryMethod = request.body?.deliveryMethod === "home" ? "home" : "pickup";
+  const rawDeliveryMethod = String(request.body?.deliveryMethod || "").trim();
+  const deliveryMethod = rawDeliveryMethod === "home" ? "home" : rawDeliveryMethod === "none" ? "none" : "pickup";
   const deliveryAddress = String(request.body?.deliveryAddress || "").trim();
 
   if (!offerId) {
@@ -4452,6 +4503,10 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     if (offer.is_hidden) {
       return response.status(400).json({ error: "offer_hidden" });
+    }
+
+    if (deliveryMethod === "none" && (offer.delivery_pickup_enabled === true || offer.delivery_home_enabled === true)) {
+      return response.status(400).json({ error: "delivery_method_required" });
     }
 
     if (deliveryMethod === "pickup" && offer.delivery_pickup_enabled === false) {

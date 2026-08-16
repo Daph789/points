@@ -48,6 +48,16 @@
       const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
       if (isEmbeddedCategory) document.body.classList.add("embedded-category");
 
+      const categories = [
+        { label: "Libros", icon: "📚", color: "from-mint/95 to-emerald-300" },
+        { label: "Cine", icon: "🎬", color: "from-coral to-rose-300" },
+        { label: "Festivales", icon: "🎪", color: "from-sun to-orange-300" },
+        { label: "Conciertos", icon: "🎤", color: "from-violet-400 to-fuchsia-300" },
+        { label: "Museos", icon: "🏛️", color: "from-sky-300 to-cyan-200" },
+        { label: "Gaming", icon: "🎮", color: "from-lime-300 to-mint" },
+        { label: "Música", icon: "🎧", color: "from-indigo-300 to-violet-400" },
+      ];
+
       function goBackToInicio(event) {
         if (!isEmbeddedCategory || window.parent === window) return;
         event.preventDefault();
@@ -117,6 +127,64 @@
           .join(" ")
           .toLowerCase()
           .includes(cleanQuery);
+      }
+
+      function openCategoryInsideApp(category) {
+        if (isEmbeddedCategory && window.parent !== window) {
+          window.parent.postMessage({ type: "donos:category", category }, window.location.origin);
+          return;
+        }
+        window.location.href = `category.html?category=${encodeURIComponent(category)}`;
+      }
+
+      function CategoryDiscovery({ items, currentCategory }) {
+        const visibleItems = (items || []).filter((item) => Number(item.count || 0) > 0 && item.category !== currentCategory);
+        if (visibleItems.length === 0) return null;
+
+        return (
+          <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ver más</p>
+                <h2 className="mt-1 text-xl font-black text-white">Secciones con ofertas</h2>
+              </div>
+              <button
+                className="shrink-0 rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
+                onClick={() => openCategoryInsideApp(visibleItems[0].category)}
+              >
+                Abrir
+              </button>
+            </div>
+            <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">
+              {visibleItems.map((item) => {
+                const categoryData = categories.find((category) => category.label === item.category) || categories[0];
+                return (
+                  <button
+                    key={item.category}
+                    className="group relative min-h-[126px] min-w-[205px] overflow-hidden rounded-[24px] border border-white/10 bg-[#101522] p-4 text-left shadow-xl shadow-black/20 transition hover:-translate-y-0.5 hover:border-mint/30"
+                    onClick={() => openCategoryInsideApp(item.category)}
+                  >
+                    {item.preview?.cover_photo_data_url && (
+                      <img className="absolute inset-0 h-full w-full object-cover opacity-35 transition group-hover:opacity-45" src={item.preview.cover_photo_data_url} alt="" />
+                    )}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${categoryData.color} opacity-20`}></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
+                    <div className="relative flex h-full flex-col justify-between gap-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/12 text-2xl ring-1 ring-white/10">{categoryData.icon}</span>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} ofertas</span>
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-white">{item.category}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-slate-300">{item.preview?.title || "Ver ofertas"}</p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
       }
 
       function OfferCard({ offer, isLiked, onLike }) {
@@ -201,6 +269,7 @@
         const [likeToast, setLikeToast] = React.useState("");
         const [search, setSearch] = React.useState("");
         const [status, setStatus] = React.useState("Cargando ofertas...");
+        const [categorySummary, setCategorySummary] = React.useState([]);
         const filteredOffers = offers.filter((offer) => matchesSearch(offer, search));
 
         const loadOffers = React.useCallback(async ({ silent = false } = {}) => {
@@ -224,7 +293,18 @@
         React.useEffect(() => {
           loadOffers();
           loadLikedOffers();
+          loadCategorySummary();
         }, [loadOffers]);
+
+        async function loadCategorySummary() {
+          try {
+            const response = await fetch("/api/offers/categories/summary");
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setCategorySummary(data.categories || []);
+          } catch (error) {
+            setCategorySummary([]);
+          }
+        }
 
         async function loadLikedOffers() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -287,11 +367,14 @@
             if (event.origin !== window.location.origin) return;
             if (event.data?.type !== "donos:refresh-category") return;
             loadOffers({ silent: true });
+            loadCategorySummary();
           }
 
           window.addEventListener("message", handleMessage);
           return () => window.removeEventListener("message", handleMessage);
         }, [loadOffers]);
+
+        const activeCategorySummary = categorySummary.filter((item) => Number(item.count || 0) > 0 && item.category !== category);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -308,7 +391,17 @@
 
             <section className="mt-8">
               <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">Explorar</p>
-              <h1 className="mt-2 break-words text-3xl font-black tracking-normal text-white sm:text-4xl">{category}</h1>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <h1 className="break-words text-3xl font-black tracking-normal text-white sm:text-4xl">{category}</h1>
+                {activeCategorySummary.length > 0 && (
+                  <button
+                    className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200 transition hover:bg-white/[0.1]"
+                    onClick={() => openCategoryInsideApp(activeCategorySummary[0].category)}
+                  >
+                    Ver más
+                  </button>
+                )}
+              </div>
             </section>
 
             <section className="mt-6">
@@ -325,21 +418,30 @@
               </div>
 
               {status ? (
-                <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+                <div>
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+                  <CategoryDiscovery items={categorySummary} currentCategory={category} />
+                </div>
               ) : filteredOffers.length === 0 ? (
-                <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                  No hay resultados para esta búsqueda.
+                <div>
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                    No hay resultados para esta búsqueda.
+                  </div>
+                  <CategoryDiscovery items={categorySummary} currentCategory={category} />
                 </div>
               ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {filteredOffers.map((offer) => (
-                    <OfferCard
-                      key={offer.id}
-                      offer={offer}
-                      isLiked={likedOfferIds.has(offer.id)}
-                      onLike={toggleLike}
-                    />
-                  ))}
+                <div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {filteredOffers.map((offer) => (
+                      <OfferCard
+                        key={offer.id}
+                        offer={offer}
+                        isLiked={likedOfferIds.has(offer.id)}
+                        onLike={toggleLike}
+                      />
+                    ))}
+                  </div>
+                  <CategoryDiscovery items={categorySummary} currentCategory={category} />
                 </div>
               )}
             </section>

@@ -245,18 +245,77 @@
         );
       }
 
-      function Category({ category, active, onClick }) {
+      function Category({ category, active, onClick, count }) {
+        const hasContent = Number(count || 0) > 0;
         return (
           <button className="min-w-[74px] text-center focus:outline-none sm:min-w-[82px]" onClick={onClick}>
             <div
               className={`mx-auto grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br ${category.color} ${category.tint} text-2xl ring-1 transition hover:scale-[1.03] sm:h-[70px] sm:w-[70px] sm:text-3xl ${
                 active ? "ring-mint ring-offset-4 ring-offset-[#060914]" : "ring-white/20"
-              }`}
+              } ${hasContent ? "" : "opacity-60 saturate-[0.75]"}`}
             >
               <span aria-hidden="true">{category.icon}</span>
             </div>
             <p className={`mt-2 text-xs font-bold ${active ? "text-mint" : "text-slate-300"}`}>{category.label}</p>
+            {hasContent && (
+              <span className="mt-1 inline-flex rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint ring-1 ring-mint/15">
+                {count}
+              </span>
+            )}
           </button>
+        );
+      }
+
+      function CategoryDiscovery({ items, onOpenCategory }) {
+        const visibleItems = (items || []).filter((item) => Number(item.count || 0) > 0);
+        if (visibleItems.length === 0) return null;
+
+        return (
+          <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ahora mismo</p>
+                <h2 className="mt-1 text-xl font-black text-white">Categorías con chollos</h2>
+              </div>
+              <button
+                className="shrink-0 rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
+                onClick={() => onOpenCategory(visibleItems[0].category)}
+              >
+                Ver más
+              </button>
+            </div>
+
+            <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">
+              {visibleItems.map((item) => {
+                const categoryData = categories.find((category) => category.label === item.category) || categories[0];
+                return (
+                  <button
+                    key={item.category}
+                    className="group relative min-h-[132px] min-w-[210px] overflow-hidden rounded-[24px] border border-white/10 bg-[#101522] p-4 text-left shadow-xl shadow-black/20 transition hover:-translate-y-0.5 hover:border-mint/30"
+                    onClick={() => onOpenCategory(item.category)}
+                  >
+                    {item.preview?.cover_photo_data_url && (
+                      <img className="absolute inset-0 h-full w-full object-cover opacity-35 transition group-hover:opacity-45" src={item.preview.cover_photo_data_url} alt="" />
+                    )}
+                    <div className={`absolute inset-0 bg-gradient-to-br ${categoryData.color} opacity-20`}></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
+                    <div className="relative flex h-full flex-col justify-between gap-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/12 text-2xl ring-1 ring-white/10">{categoryData.icon}</span>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} ofertas</span>
+                      </div>
+                      <div>
+                        <p className="text-lg font-black text-white">{item.category}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-slate-300">
+                          {item.preview?.title || "Ver propuestas disponibles"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         );
       }
 
@@ -522,6 +581,7 @@
         const [selectedCategory, setSelectedCategory] = React.useState("");
         const [categoryOffers, setCategoryOffers] = React.useState([]);
         const [featuredOffers, setFeaturedOffers] = React.useState([]);
+        const [categorySummary, setCategorySummary] = React.useState([]);
         const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
         const [likeToast, setLikeToast] = React.useState("");
         const [selectedOffer, setSelectedOffer] = React.useState(null);
@@ -547,6 +607,16 @@
             if (response.ok) setFeaturedOffers(data.offers || []);
           } catch (error) {
             setFeaturedOffers([]);
+          }
+        }
+
+        async function loadCategorySummary() {
+          try {
+            const response = await fetch("/api/offers/categories/summary");
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setCategorySummary(data.categories || []);
+          } catch (error) {
+            setCategorySummary([]);
           }
         }
 
@@ -624,6 +694,7 @@
         React.useEffect(() => {
           loadAccount();
           loadFeaturedOffers();
+          loadCategorySummary();
         }, [loadAccount]);
 
         React.useEffect(() => {
@@ -643,6 +714,11 @@
         const isBusiness = accountType === "business";
         const displayAccountName = accountName || (isBusiness ? "Empresa" : "Usuario");
         const displayedDonosId = formatDonosId(transactionId);
+        const categoryCountByName = React.useMemo(
+          () => Object.fromEntries((categorySummary || []).map((item) => [item.category, item.count || 0])),
+          [categorySummary]
+        );
+        const activeCategorySummary = categorySummary.filter((item) => Number(item.count || 0) > 0);
         const copyTransactionId = async () => {
           const clean = String(transactionId || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
           if (!clean) return;
@@ -809,8 +885,14 @@
                         </a>
                       </div>
                     ) : (
-                      <button className="hidden rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200 sm:block">
-                        Ver todo
+                      <button
+                        className="hidden rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200 transition hover:bg-white/[0.1] sm:block"
+                        onClick={() => {
+                          const firstActive = activeCategorySummary[0]?.category || "Libros";
+                          openFullPage(`category.html?category=${encodeURIComponent(firstActive)}`);
+                        }}
+                      >
+                        Ver más
                       </button>
                     )}
                   </div>
@@ -821,6 +903,7 @@
                         key={category.label}
                         category={category}
                         active={selectedCategory === category.label}
+                        count={categoryCountByName[category.label]}
                         onClick={() => {
                           openFullPage(`category.html?category=${encodeURIComponent(category.label)}`);
                         }}
@@ -828,6 +911,11 @@
                     ))}
                   </div>
                 </section>
+
+                <CategoryDiscovery
+                  items={categorySummary}
+                  onOpenCategory={(category) => openFullPage(`category.html?category=${encodeURIComponent(category)}`)}
+                />
 
                 {selectedCategory && (
                   <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
@@ -853,8 +941,14 @@
                         Cargando ofertas...
                       </div>
                     ) : offersStatus ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm font-bold text-slate-300">
-                        {offersStatus}
+                      <div className="space-y-4">
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm font-bold text-slate-300">
+                          {offersStatus}
+                        </div>
+                        <CategoryDiscovery
+                          items={categorySummary.filter((item) => item.category !== selectedCategory)}
+                          onOpenCategory={(category) => openFullPage(`category.html?category=${encodeURIComponent(category)}`)}
+                        />
                       </div>
                     ) : (
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -889,8 +983,14 @@
                         />
                       ))
                     ) : (
-                      <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300 sm:col-span-2">
-                        Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
+                      <div className="space-y-4 sm:col-span-2">
+                        <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300">
+                          Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
+                        </div>
+                        <CategoryDiscovery
+                          items={categorySummary}
+                          onOpenCategory={(category) => openFullPage(`category.html?category=${encodeURIComponent(category)}`)}
+                        />
                       </div>
                     )}
                   </div>

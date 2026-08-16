@@ -163,6 +163,34 @@
         );
       }
 
+      function emptyAdditionalLink() {
+        return { label: "", url: "" };
+      }
+
+      function emptyAdditionalDetail() {
+        return { label: "", value: "" };
+      }
+
+      function normalizeAdditionalLinks(items) {
+        return (Array.isArray(items) ? items : [])
+          .map((item) => ({
+            label: String(item?.label || "").trim(),
+            url: String(item?.url || "").trim(),
+          }))
+          .filter((item) => item.label && item.url)
+          .slice(0, 6);
+      }
+
+      function normalizeAdditionalDetails(items) {
+        return (Array.isArray(items) ? items : [])
+          .map((item) => ({
+            label: String(item?.label || "").trim(),
+            value: String(item?.value || "").trim(),
+          }))
+          .filter((item) => item.label && item.value)
+          .slice(0, 8);
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const editId = params.get("id");
@@ -183,6 +211,8 @@
         const [age, setAge] = React.useState("");
         const [author, setAuthor] = React.useState("");
         const [description, setDescription] = React.useState("");
+        const [additionalLinks, setAdditionalLinks] = React.useState([emptyAdditionalLink()]);
+        const [additionalDetails, setAdditionalDetails] = React.useState([emptyAdditionalDetail()]);
         const [cartButtonText, setCartButtonText] = React.useState("Comprar");
         const [receiverMode, setReceiverMode] = React.useState("business");
         const [businessProfile, setBusinessProfile] = React.useState(null);
@@ -191,6 +221,7 @@
         const [receiverId, setReceiverId] = React.useState("");
         const [receiverName, setReceiverName] = React.useState("");
         const [receiverStatus, setReceiverStatus] = React.useState("");
+        const [deliveryOptionsEnabled, setDeliveryOptionsEnabled] = React.useState(false);
         const [homeDeliveryEnabled, setHomeDeliveryEnabled] = React.useState(false);
         const [homeDeliveryPrice, setHomeDeliveryPrice] = React.useState("");
         const [pickupEnabled, setPickupEnabled] = React.useState(true);
@@ -237,11 +268,14 @@
             setAge(draft.age || "");
             setAuthor(draft.author || "");
             setDescription(draft.description || "");
+            setAdditionalLinks(Array.isArray(draft.additionalLinks) && draft.additionalLinks.length ? draft.additionalLinks : [emptyAdditionalLink()]);
+            setAdditionalDetails(Array.isArray(draft.additionalDetails) && draft.additionalDetails.length ? draft.additionalDetails : [emptyAdditionalDetail()]);
             setCartButtonText(draft.cartButtonText || "Comprar");
             setReceiverMode(draft.receiverMode || "business");
             setReceiverId(draft.receiverId || "");
             setReceiverName(draft.receiverName || "");
             setReceiverStatus(draft.receiverStatus || "");
+            setDeliveryOptionsEnabled(Boolean(draft.deliveryOptionsEnabled));
             setHomeDeliveryEnabled(Boolean(draft.homeDeliveryEnabled));
             setHomeDeliveryPrice(draft.homeDeliveryPrice || "");
             setPickupEnabled(draft.pickupEnabled !== false);
@@ -288,11 +322,14 @@
             setAge(data.age || "");
             setAuthor(data.author || "");
             setDescription(data.description || "");
+            setAdditionalLinks(Array.isArray(data.additional_links) && data.additional_links.length ? data.additional_links : [emptyAdditionalLink()]);
+            setAdditionalDetails(Array.isArray(data.additional_details) && data.additional_details.length ? data.additional_details : [emptyAdditionalDetail()]);
             setCartButtonText(data.cart_button_text || "Comprar");
             setReceiverId(data.receiver_transaction_id || "");
             setReceiverName(data.receiver_display_name || "");
             setReceiverMode("custom");
             setReceiverStatus(data.receiver_display_name ? "Cuenta encontrada." : "");
+            setDeliveryOptionsEnabled(Boolean(data.delivery_home_enabled || data.delivery_pickup_enabled));
             setHomeDeliveryEnabled(Boolean(data.delivery_home_enabled));
             setHomeDeliveryPrice(data.delivery_home_price === null || data.delivery_home_price === undefined ? "" : String(data.delivery_home_price));
             setPickupEnabled(data.delivery_pickup_enabled !== false);
@@ -384,11 +421,14 @@
             age,
             author,
             description,
+            additionalLinks,
+            additionalDetails,
             cartButtonText,
             receiverMode,
             receiverId,
             receiverName,
             receiverStatus,
+            deliveryOptionsEnabled,
             homeDeliveryEnabled,
             homeDeliveryPrice,
             pickupEnabled,
@@ -414,11 +454,14 @@
           age,
           author,
           description,
+          additionalLinks,
+          additionalDetails,
           cartButtonText,
           receiverMode,
           receiverId,
           receiverName,
           receiverStatus,
+          deliveryOptionsEnabled,
           homeDeliveryEnabled,
           homeDeliveryPrice,
           pickupEnabled,
@@ -519,11 +562,14 @@
           setAge("");
           setAuthor("");
           setDescription("");
+          setAdditionalLinks([emptyAdditionalLink()]);
+          setAdditionalDetails([emptyAdditionalDetail()]);
           setCartButtonText("Comprar");
           setReceiverMode("business");
           setReceiverId(businessProfile?.transaction_id || "");
           setReceiverName(businessProfile?.display_name || "");
           setReceiverStatus(businessProfile?.transaction_id ? "Usando el ID Donoss de la empresa." : "");
+          setDeliveryOptionsEnabled(false);
           setHomeDeliveryEnabled(false);
           setHomeDeliveryPrice("");
           setPickupEnabled(true);
@@ -595,15 +641,17 @@
               age: age.trim() || null,
               author: author.trim() || null,
               description: description.trim() || null,
+              additional_links: normalizeAdditionalLinks(additionalLinks),
+              additional_details: normalizeAdditionalDetails(additionalDetails),
               cart_button_text: cartButtonText.trim() || "Comprar",
               receiver_transaction_id: cleanDonosId(receiverId) || null,
               receiver_display_name: receiverName || null,
               business_display_name: businessProfile?.display_name || null,
               business_is_verified: Boolean(businessProfile?.is_verified),
-              delivery_home_enabled: homeDeliveryEnabled,
-              delivery_home_price: homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
-              delivery_home_points: homeDeliveryEnabled ? deliveryPoints : null,
-              delivery_pickup_enabled: pickupEnabled,
+              delivery_home_enabled: deliveryOptionsEnabled && homeDeliveryEnabled,
+              delivery_home_price: deliveryOptionsEnabled && homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
+              delivery_home_points: deliveryOptionsEnabled && homeDeliveryEnabled ? deliveryPoints : null,
+              delivery_pickup_enabled: deliveryOptionsEnabled && pickupEnabled,
               stock_quantity: stockQuantity === "" ? null : soldItemsCount + Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
               out_of_stock_since: stockQuantity !== "" && Math.max(Number.parseInt(stockQuantity, 10) || 0, 0) <= 0 ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
@@ -926,59 +974,177 @@
                   <textarea className={textareaClass} value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Cuenta qué incluye la oferta..." />
                 </Field>
 
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-black text-white">Información adicional</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
+                        Añade enlaces o datos útiles sin llenar la descripción. El comprador verá botones limpios como “Ver vídeo”.
+                      </p>
+                    </div>
+                    <span className="hidden rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20 sm:inline-flex">Opcional</span>
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Enlaces</p>
+                      <button
+                        type="button"
+                        className="rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10"
+                        onClick={() => setAdditionalLinks((current) => [...current, emptyAdditionalLink()].slice(0, 6))}
+                      >
+                        Añadir enlace
+                      </button>
+                    </div>
+                    {additionalLinks.map((link, index) => (
+                      <div key={`link-${index}`} className="grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 sm:grid-cols-[0.8fr_1fr_auto]">
+                        <input
+                          className={inputClass}
+                          value={link.label}
+                          onChange={(event) => setAdditionalLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))}
+                          placeholder="Texto visible: Ver vídeo"
+                        />
+                        <input
+                          className={inputClass}
+                          value={link.url}
+                          onChange={(event) => setAdditionalLinks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, url: event.target.value } : item))}
+                          placeholder="https://..."
+                        />
+                        <button
+                          type="button"
+                          className="h-12 rounded-2xl border border-coral/20 bg-coral/10 px-4 text-xs font-black text-coral"
+                          onClick={() => setAdditionalLinks((current) => current.length <= 1 ? [emptyAdditionalLink()] : current.filter((_, itemIndex) => itemIndex !== index))}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Otros datos</p>
+                      <button
+                        type="button"
+                        className="rounded-full bg-white/[0.08] px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10"
+                        onClick={() => setAdditionalDetails((current) => [...current, emptyAdditionalDetail()].slice(0, 8))}
+                      >
+                        Añadir dato
+                      </button>
+                    </div>
+                    {additionalDetails.map((detail, index) => (
+                      <div key={`detail-${index}`} className="grid gap-2 rounded-2xl border border-white/10 bg-black/20 p-3 sm:grid-cols-[0.8fr_1fr_auto]">
+                        <input
+                          className={inputClass}
+                          value={detail.label}
+                          onChange={(event) => setAdditionalDetails((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item))}
+                          placeholder="Título: Dress code"
+                        />
+                        <input
+                          className={inputClass}
+                          value={detail.value}
+                          onChange={(event) => setAdditionalDetails((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, value: event.target.value } : item))}
+                          placeholder="Valor: Casual"
+                        />
+                        <button
+                          type="button"
+                          className="h-12 rounded-2xl border border-coral/20 bg-coral/10 px-4 text-xs font-black text-coral"
+                          onClick={() => setAdditionalDetails((current) => current.length <= 1 ? [emptyAdditionalDetail()] : current.filter((_, itemIndex) => itemIndex !== index))}
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <Field label="Botón de acción">
                   <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Comprar, reservar, apuntarme..." />
                 </Field>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
-                  <p className="text-sm font-medium text-slate-300">Propuesta de entrega</p>
-                  <div className="mt-3 grid gap-3">
-                    <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <input
-                        type="checkbox"
-                        className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
-                        checked={pickupEnabled}
-                        onChange={(event) => setPickupEnabled(event.target.checked)}
-                      />
-                      <span>
-                        <span className="block text-sm font-black text-white">Recogida en tienda</span>
-                        <span className="mt-1 block text-xs leading-5 text-slate-400">La persona viene a la dirección indicada. No paga puntos extra.</span>
-                      </span>
-                    </label>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-black text-white">¿Añadir entrega o recogida?</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
+                        Si es solo un billete digital, déjalo apagado. El comprador pagará directamente sin elegir entrega.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition ${
+                        deliveryOptionsEnabled ? "bg-mint" : "bg-white/10 ring-1 ring-white/10"
+                      }`}
+                      onClick={() => {
+                        setDeliveryOptionsEnabled((current) => {
+                          const next = !current;
+                          if (next && !pickupEnabled && !homeDeliveryEnabled) setPickupEnabled(true);
+                          return next;
+                        });
+                      }}
+                      aria-pressed={deliveryOptionsEnabled}
+                    >
+                      <span className={`block h-6 w-6 rounded-full bg-white shadow-lg transition ${deliveryOptionsEnabled ? "translate-x-6" : "translate-x-0"}`}></span>
+                    </button>
+                  </div>
 
-                    <label className="rounded-2xl border border-white/10 bg-black/20 p-3">
-                      <span className="flex items-start gap-3">
+                  {!deliveryOptionsEnabled ? (
+                    <div className="mt-4 rounded-2xl border border-mint/20 bg-mint/10 p-4">
+                      <p className="text-sm font-black text-mint">Billete digital / sin entrega</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+                        Perfecto para cine, conciertos, museos, gaming o cualquier compra que se valide con QR.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-4 grid gap-3">
+                      <p className="text-sm font-medium text-slate-300">Propuesta de entrega</p>
+                      <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
                         <input
                           type="checkbox"
                           className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
-                          checked={homeDeliveryEnabled}
-                          onChange={(event) => setHomeDeliveryEnabled(event.target.checked)}
+                          checked={pickupEnabled}
+                          onChange={(event) => setPickupEnabled(event.target.checked)}
                         />
                         <span>
-                          <span className="block text-sm font-black text-white">Entrega a domicilio</span>
-                          <span className="mt-1 block text-xs leading-5 text-slate-400">Indica el coste en euros y Donoss lo convierte automáticamente a puntos.</span>
+                          <span className="block text-sm font-black text-white">Recogida en tienda</span>
+                          <span className="mt-1 block text-xs leading-5 text-slate-400">La persona viene a la dirección indicada. No paga puntos extra.</span>
                         </span>
-                      </span>
+                      </label>
 
-                      {homeDeliveryEnabled && (
-                        <div className="mt-3">
+                      <label className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                        <span className="flex items-start gap-3">
                           <input
-                            className={inputClass}
-                            inputMode="decimal"
-                            value={homeDeliveryPrice}
-                            onChange={(event) => setHomeDeliveryPrice(event.target.value.replace(/[^0-9,.]/g, ""))}
-                            placeholder="Coste de entrega en €"
+                            type="checkbox"
+                            className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
+                            checked={homeDeliveryEnabled}
+                            onChange={(event) => setHomeDeliveryEnabled(event.target.checked)}
                           />
-                          <div className="mt-3 rounded-2xl border border-mint/20 bg-mint/10 p-3">
-                            <p className="text-sm font-black text-mint">
-                              {deliveryPoints} puntos extra por entrega
-                            </p>
-                            <p className="mt-1 text-xs font-semibold text-slate-400">1 punto = 0,01 €</p>
+                          <span>
+                            <span className="block text-sm font-black text-white">Entrega a domicilio</span>
+                            <span className="mt-1 block text-xs leading-5 text-slate-400">Indica el coste en euros y Donoss lo convierte automáticamente a puntos.</span>
+                          </span>
+                        </span>
+
+                        {homeDeliveryEnabled && (
+                          <div className="mt-3">
+                            <input
+                              className={inputClass}
+                              inputMode="decimal"
+                              value={homeDeliveryPrice}
+                              onChange={(event) => setHomeDeliveryPrice(event.target.value.replace(/[^0-9,.]/g, ""))}
+                              placeholder="Coste de entrega en €"
+                            />
+                            <div className="mt-3 rounded-2xl border border-mint/20 bg-mint/10 p-3">
+                              <p className="text-sm font-black text-mint">
+                                {deliveryPoints} puntos extra por entrega
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-slate-400">1 punto = 0,01 €</p>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </label>
-                  </div>
+                        )}
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <div>

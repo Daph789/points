@@ -104,6 +104,12 @@ alter table public.business_offers
 alter table public.business_offers
   add column if not exists is_hidden boolean not null default false;
 
+alter table public.business_offers
+  add column if not exists additional_links jsonb not null default '[]'::jsonb;
+
+alter table public.business_offers
+  add column if not exists additional_details jsonb not null default '[]'::jsonb;
+
 drop policy if exists "Businesses can read their own offers" on public.business_offers;
 drop policy if exists "Businesses can insert their own offers" on public.business_offers;
 drop policy if exists "Businesses can update their own offers" on public.business_offers;

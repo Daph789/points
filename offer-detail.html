@@ -71,6 +71,38 @@
         return Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
       }
 
+      function normalizeAdditionalLinks(items) {
+        return (Array.isArray(items) ? items : [])
+          .map((item) => ({
+            label: String(item?.label || "").trim(),
+            url: String(item?.url || "").trim(),
+          }))
+          .filter((item) => item.label && item.url)
+          .slice(0, 6);
+      }
+
+      function normalizeAdditionalDetails(items) {
+        return (Array.isArray(items) ? items : [])
+          .map((item) => ({
+            label: String(item?.label || "").trim(),
+            value: String(item?.value || "").trim(),
+          }))
+          .filter((item) => item.label && item.value)
+          .slice(0, 8);
+      }
+
+      function safeExternalUrl(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+        try {
+          const url = new URL(withProtocol);
+          return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+        } catch {
+          return "";
+        }
+      }
+
       function isOutOfStock(offer) {
         const remaining = getRemainingStock(offer);
         return remaining !== null && remaining <= 0;
@@ -121,7 +153,7 @@
               return;
             }
             setOffer(data);
-            setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "");
+            setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "none");
             setStatus("");
           }
 
@@ -193,6 +225,7 @@
           : "";
         const dateRange = [offer.start_date, offer.end_date].filter(Boolean).join(" - ");
         const basePoints = Number(offer.required_points || 0);
+        const hasDeliveryOptions = Boolean(offer.delivery_pickup_enabled || offer.delivery_home_enabled);
         const deliveryExtraPoints = deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0;
         const totalPoints = basePoints + deliveryExtraPoints;
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
@@ -200,6 +233,8 @@
         const outOfStock = isOutOfStock(offer);
         const canBuy = Boolean(deliveryChoice && totalPoints > 0 && !outOfStock);
         const actionButtonText = (offer.cart_button_text || "Comprar").trim() || "Comprar";
+        const additionalLinks = normalizeAdditionalLinks(offer.additional_links);
+        const additionalDetails = normalizeAdditionalDetails(offer.additional_details);
         const checkoutDockClass = `fixed left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl ${
           isEmbeddedDetail ? "bottom-[92px] sm:bottom-[104px]" : "bottom-0"
         }`;
@@ -364,6 +399,50 @@
                 </section>
               )}
 
+              {(additionalLinks.length > 0 || additionalDetails.length > 0) && (
+                <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.045] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">Información adicional</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-400">Detalles útiles antes de comprar.</p>
+                    </div>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg ring-1 ring-mint/20">↗</span>
+                  </div>
+
+                  {additionalLinks.length > 0 && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {additionalLinks.map((link, index) => {
+                        const href = safeExternalUrl(link.url);
+                        if (!href) return null;
+                        return (
+                          <a
+                            key={`${link.label}-${index}`}
+                            className="inline-flex min-h-11 items-center gap-2 rounded-2xl border border-mint/20 bg-mint/10 px-4 py-2 text-sm font-black text-mint transition hover:bg-mint hover:text-ink"
+                            href={href}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <span>{link.label}</span>
+                            <span aria-hidden="true">↗</span>
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {additionalDetails.length > 0 && (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {additionalDetails.map((detail, index) => (
+                        <div key={`${detail.label}-${index}`} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{detail.label}</p>
+                          <p className="mt-2 text-sm font-black leading-5 text-white">{detail.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
+
               <section className="mt-8 space-y-5">
                 {offer.categories?.length > 0 && (
                   <div>
@@ -428,48 +507,61 @@
                   </div>
                 )}
 
-                <div>
-                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Elige la entrega</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <button
-                      className={`rounded-3xl border p-4 text-left transition ${
-                        deliveryChoice === "pickup"
-                          ? "border-mint bg-mint/10 shadow-glow"
-                          : offer.delivery_pickup_enabled
-                            ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
-                            : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
-                      }`}
-                      disabled={!offer.delivery_pickup_enabled}
-                      onClick={() => setDeliveryChoice("pickup")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⌂</div>
-                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">0 ptos. extra</span>
-                      </div>
-                      <p className="mt-4 text-base font-black text-white">Recogida en tienda</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">Vienes a recogerlo en la dirección indicada.</p>
-                    </button>
+                {hasDeliveryOptions ? (
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Elige la entrega</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <button
+                        className={`rounded-3xl border p-4 text-left transition ${
+                          deliveryChoice === "pickup"
+                            ? "border-mint bg-mint/10 shadow-glow"
+                            : offer.delivery_pickup_enabled
+                              ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
+                              : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
+                        }`}
+                        disabled={!offer.delivery_pickup_enabled}
+                        onClick={() => setDeliveryChoice("pickup")}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⌂</div>
+                          <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">0 ptos. extra</span>
+                        </div>
+                        <p className="mt-4 text-base font-black text-white">Recogida en tienda</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-400">Vienes a recogerlo en la dirección indicada.</p>
+                      </button>
 
-                    <button
-                      className={`rounded-3xl border p-4 text-left transition ${
-                        deliveryChoice === "home"
-                          ? "border-mint bg-mint/10 shadow-glow"
-                          : offer.delivery_home_enabled
-                            ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
-                            : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
-                      }`}
-                      disabled={!offer.delivery_home_enabled}
-                      onClick={() => setDeliveryChoice("home")}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⇥</div>
-                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.delivery_home_points || 0} ptos. extra</span>
-                      </div>
-                      <p className="mt-4 text-base font-black text-white">Entrega a domicilio</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">Se suma al total de puntos al comprar.</p>
-                    </button>
+                      <button
+                        className={`rounded-3xl border p-4 text-left transition ${
+                          deliveryChoice === "home"
+                            ? "border-mint bg-mint/10 shadow-glow"
+                            : offer.delivery_home_enabled
+                              ? "border-white/10 bg-white/[0.055] hover:border-mint/30"
+                              : "cursor-not-allowed border-white/10 bg-white/[0.03] opacity-45"
+                        }`}
+                        disabled={!offer.delivery_home_enabled}
+                        onClick={() => setDeliveryChoice("home")}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⇥</div>
+                          <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.delivery_home_points || 0} ptos. extra</span>
+                        </div>
+                        <p className="mt-4 text-base font-black text-white">Entrega a domicilio</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-400">Se suma al total de puntos al comprar.</p>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint/15 text-xl ring-1 ring-mint/20">▣</div>
+                      <div>
+                        <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Sin entrega</p>
+                        <p className="mt-1 text-base font-black text-white">Billete digital</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-300">No hace falta elegir recogida ni domicilio. Compra y guarda tu QR en Donoss.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </section>
             </section>
 
