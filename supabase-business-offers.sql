@@ -17,6 +17,8 @@ create table if not exists public.business_offers (
   age text,
   author text,
   description text,
+  additional_links jsonb not null default '[]'::jsonb,
+  additional_details jsonb not null default '[]'::jsonb,
   cart_button_text text,
   receiver_transaction_id text,
   receiver_display_name text,
@@ -89,6 +91,12 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists description text;
+
+alter table public.business_offers
+  add column if not exists additional_links jsonb not null default '[]'::jsonb;
+
+alter table public.business_offers
+  add column if not exists additional_details jsonb not null default '[]'::jsonb;
 
 alter table public.business_offers
   add column if not exists cart_button_text text;
