@@ -245,19 +245,19 @@
         );
       }
 
-      function Category({ category, active, onClick, count }) {
+      function Category({ category, active, onClick, count, isReady }) {
         const hasContent = Number(count || 0) > 0;
         return (
           <button className="min-w-[74px] text-center focus:outline-none sm:min-w-[82px]" onClick={onClick}>
             <div
               className={`mx-auto grid h-16 w-16 place-items-center rounded-full bg-gradient-to-br ${category.color} ${category.tint} text-2xl ring-1 transition hover:scale-[1.03] sm:h-[70px] sm:w-[70px] sm:text-3xl ${
                 active ? "ring-mint ring-offset-4 ring-offset-[#060914]" : "ring-white/20"
-              } ${hasContent ? "" : "opacity-60 saturate-[0.75]"}`}
+              } ${isReady && !hasContent ? "opacity-60 saturate-[0.75]" : ""}`}
             >
               <span aria-hidden="true">{category.icon}</span>
             </div>
             <p className={`mt-2 text-xs font-bold ${active ? "text-mint" : "text-slate-300"}`}>{category.label}</p>
-            {hasContent && (
+            {isReady && hasContent && (
               <span className="mt-1 inline-flex rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint ring-1 ring-mint/15">
                 {count}
               </span>
@@ -613,6 +613,7 @@
         const [categoryOffers, setCategoryOffers] = React.useState([]);
         const [featuredOffers, setFeaturedOffers] = React.useState([]);
         const [categorySummary, setCategorySummary] = React.useState([]);
+        const [homeDataReady, setHomeDataReady] = React.useState(false);
         const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
         const [likeToast, setLikeToast] = React.useState("");
         const [selectedOffer, setSelectedOffer] = React.useState(null);
@@ -773,7 +774,10 @@
         React.useEffect(() => {
           let cancelled = false;
           Promise.all([loadAccount(), loadFeaturedOffers(), loadCategorySummary()]).finally(() => {
-            if (!cancelled) notifyInicioReady();
+            if (!cancelled) {
+              setHomeDataReady(true);
+              window.requestAnimationFrame(() => notifyInicioReady());
+            }
           });
           return () => {
             cancelled = true;
@@ -986,7 +990,8 @@
                         key={category.label}
                         category={category}
                         active={selectedCategory === category.label}
-                        count={categoryCountByName[category.label]}
+                        count={homeDataReady ? categoryCountByName[category.label] : 0}
+                        isReady={homeDataReady}
                         onClick={() => {
                           openFullPage(`category.html?category=${encodeURIComponent(category.label)}`);
                         }}
@@ -1050,7 +1055,18 @@
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {featuredOffers.length > 0 ? (
+                    {!homeDataReady ? (
+                      [1, 2].map((item) => (
+                        <div key={item} className="overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
+                          <div className="h-[150px] animate-pulse bg-gradient-to-br from-mint/20 via-white/[0.06] to-coral/20"></div>
+                          <div className="space-y-3 p-4">
+                            <div className="h-5 w-3/4 animate-pulse rounded-full bg-white/10"></div>
+                            <div className="h-4 w-1/2 animate-pulse rounded-full bg-white/10"></div>
+                            <div className="h-11 w-full animate-pulse rounded-2xl bg-white/[0.08]"></div>
+                          </div>
+                        </div>
+                      ))
+                    ) : featuredOffers.length > 0 ? (
                       featuredOffers.map((offer) => (
                         <OfferCard
                           key={offer.id}

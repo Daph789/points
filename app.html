@@ -646,7 +646,10 @@
 
         baseFrames.forEach(watchFrame);
 
-        window.setTimeout(() => boot.classList.add("is-hidden"), 3400);
+        window.setTimeout(() => {
+          if (activeRoute === "inicio" && !inicioReady) return;
+          boot.classList.add("is-hidden");
+        }, 3400);
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);
