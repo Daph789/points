@@ -189,6 +189,9 @@
         const [isEditingName, setIsEditingName] = React.useState(false);
         const [displayNameDraft, setDisplayNameDraft] = React.useState("");
         const [isSavingName, setIsSavingName] = React.useState(false);
+        const [premiumDni, setPremiumDni] = React.useState("");
+        const [premiumPhoto, setPremiumPhoto] = React.useState("");
+        const [isSavingPremiumIdentity, setIsSavingPremiumIdentity] = React.useState(false);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -259,6 +262,8 @@
 
             setProfile({ points: 0, ...data });
             setPlanPhotos(data?.plan_photo_data_urls || []);
+            setPremiumDni(data?.premium_identity?.dni || data?.premium_identity_dni || "");
+            setPremiumPhoto(data?.premium_identity?.photo_data_url || data?.premium_identity_photo_data_url || "");
             setStatus("");
 
             if (accessToken) {
@@ -389,6 +394,71 @@
           }
         }
 
+        async function handlePremiumPhotoUpload(event) {
+          const file = Array.from(event.target.files || [])[0];
+          if (!file) return;
+          if (file.size > 8 * 1024 * 1024) {
+            setStatus("La foto es demasiado grande. Usa una imagen de menos de 8 MB.");
+            event.target.value = "";
+            return;
+          }
+          try {
+            const compressed = await compressImageToDataUrl(file, 900, 0.84);
+            setPremiumPhoto(compressed);
+            setStatus("");
+          } catch (_error) {
+            setStatus("No se ha podido preparar la foto.");
+          } finally {
+            event.target.value = "";
+          }
+        }
+
+        async function savePremiumIdentity({ activateAfter = false } = {}) {
+          if (!accessToken) return redirectToLogin();
+          const cleanDni = premiumDni.trim().toUpperCase().replace(/\s+/g, "");
+          if (cleanDni.length < 5) {
+            setStatus("Añade tu NIE o DNI para activar Premium.");
+            return false;
+          }
+          if (!premiumPhoto) {
+            setStatus("Añade una foto visible de ti para activar Premium.");
+            return false;
+          }
+
+          setIsSavingPremiumIdentity(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/premium/identity", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ dni: cleanDni, photo_data_url: premiumPhoto }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "identity_failed");
+            setPremiumDni(data.premium_identity?.dni || cleanDni);
+            setPremiumPhoto(data.premium_identity?.photo_data_url || premiumPhoto);
+            setProfile((current) => current ? { ...current, premium_identity: data.premium_identity || current.premium_identity } : current);
+            if (activateAfter) {
+              await activatePremium();
+            } else {
+              setStatus("Identidad Premium guardada correctamente.");
+            }
+            return true;
+          } catch (error) {
+            if (error.message === "premium_identity_sql_missing") {
+              setStatus("Falta ejecutar el SQL de identidad Premium en Supabase.");
+            } else {
+              setStatus("No se ha podido guardar la identidad Premium.");
+            }
+            return false;
+          } finally {
+            setIsSavingPremiumIdentity(false);
+          }
+        }
+
         async function signOut() {
           await supabaseClient.auth.signOut();
           localStorage.removeItem("donosAccountType");
@@ -436,6 +506,8 @@
               setStatus("Falta ejecutar el SQL de Premium en Supabase.");
             } else if (error.message === "insufficient_points") {
               setStatus("No tienes puntos suficientes para activar Premium.");
+            } else if (error.message === "premium_identity_required") {
+              setStatus("Completa tu NIE/DNI y una foto visible antes de activar Premium.");
             } else {
               setStatus("No se ha podido activar Premium.");
             }
@@ -457,6 +529,8 @@
         const premiumPoints = isBusiness ? 30 : 20;
         const premiumActive = premium?.status === "active";
         const premiumFailed = premium?.status === "failed";
+        const premiumIdentity = profile.premium_identity || {};
+        const premiumIdentityComplete = Boolean((premiumIdentity.dni || premiumDni) && (premiumIdentity.photo_data_url || premiumPhoto));
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-28 pt-4 sm:px-6">
@@ -578,12 +652,9 @@
                     Ejemplos: correo electrónico, teléfono principal, datos fiscales{isBusiness ? ", dirección fiscal o cuenta bancaria/IBAN" : " o datos sensibles de tu cuenta"}.
                   </p>
                 </div>
-                <a
-                  className="rounded-2xl border border-sun/25 bg-sun px-4 py-2 text-xs font-black text-ink shadow-glow"
-                  href="mailto:pixmell.contact@gmail.com?subject=Modificar%20dato%20esencial%20Donoss"
-                >
-                  Contactar
-                </a>
+                <span className="rounded-2xl border border-sun/25 bg-sun/10 px-4 py-2 text-xs font-black text-sun">
+                  Contacta con Donoss
+                </span>
               </div>
             </section>
 
@@ -628,10 +699,11 @@
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
                 <InfoCard label="Estado" value={premiumActive ? "Pago al día" : premiumFailed ? "Pago fallido" : "Sin activar"} />
                 <InfoCard label="Próximo cobro" value={premiumActive ? formatDateTime(premium?.next_charge_at) : "Al activar Premium"} />
                 <InfoCard label="Certificación" value={profile.is_verified ? "Activa" : "No activa"} />
+                <InfoCard label="Identidad" value={premiumIdentityComplete ? "Completa" : "Pendiente"} />
               </div>
 
               {premiumFailed && (
@@ -783,12 +855,69 @@
                       Se cobra ahora y después cada 31 días cuando entres en Donoss. Si no hay puntos suficientes, Premium se pausa y desaparece la certificación hasta que lo actives otra vez.
                     </p>
                   </div>
+                  <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-white">Verificación de identidad</p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-400">
+                          Para activar Premium necesitamos tu NIE o DNI y una foto visible. Si después quieres modificar estos datos, contacta con Donoss.
+                        </p>
+                      </div>
+                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${premiumIdentityComplete ? "bg-mint text-ink" : "bg-sun text-ink"}`}>
+                        {premiumIdentityComplete ? "Lista" : "Pendiente"}
+                      </span>
+                    </div>
+
+                    {premiumIdentityComplete ? (
+                      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-mint/20 bg-mint/10 p-3">
+                        {premiumPhoto && <img className="h-14 w-14 rounded-2xl object-cover ring-1 ring-white/10" src={premiumPhoto} alt="" />}
+                        <div className="min-w-0">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">NIE / DNI</p>
+                          <p className="mt-1 break-all text-sm font-black text-white">{premiumDni || premiumIdentity.dni}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">Para modificarlo, contacta con Donoss.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3">
+                        <label className="block">
+                          <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">NIE o DNI</span>
+                          <input
+                            className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/25 px-4 text-sm font-black uppercase text-white outline-none placeholder:text-slate-600 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                            value={premiumDni}
+                            onChange={(event) => setPremiumDni(event.target.value)}
+                            placeholder="Ej. 12345678Z"
+                          />
+                        </label>
+                        <div className="grid gap-3 sm:grid-cols-[104px_1fr] sm:items-center">
+                          <div className="h-28 overflow-hidden rounded-[26px] border border-white/10 bg-black/25">
+                            {premiumPhoto ? (
+                              <img className="h-full w-full object-cover" src={premiumPhoto} alt="" />
+                            ) : (
+                              <div className="grid h-full place-items-center text-center text-xs font-black text-slate-500">Foto visible</div>
+                            )}
+                          </div>
+                          <label className="grid min-h-12 cursor-pointer place-items-center rounded-2xl border border-dashed border-mint/35 bg-mint/10 px-4 text-sm font-black text-mint">
+                            Añadir foto desde galería
+                            <input className="hidden" type="file" accept="image/*" onChange={handlePremiumPhotoUpload} />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" onClick={() => setIsPremiumOpen(false)}>
                       Cerrar
                     </button>
-                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" onClick={activatePremium} disabled={isActivatingPremium || premiumSqlMissing}>
-                      {isActivatingPremium ? "Activando..." : premiumActive ? "Renovar ahora" : "Activar"}
+                    <button
+                      className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                      onClick={() => premiumIdentityComplete ? activatePremium() : savePremiumIdentity({ activateAfter: true })}
+                      disabled={isActivatingPremium || isSavingPremiumIdentity || premiumSqlMissing}
+                    >
+                      {isActivatingPremium || isSavingPremiumIdentity
+                        ? "Preparando..."
+                        : premiumIdentityComplete
+                          ? premiumActive ? "Renovar ahora" : "Activar"
+                          : "Guardar y activar"}
                     </button>
                   </div>
                 </div>

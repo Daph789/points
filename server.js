@@ -154,6 +154,20 @@ function premiumPublicStatus(subscription, profile) {
   };
 }
 
+function premiumIdentityPublic(profile) {
+  return {
+    dni: profile?.premium_identity_dni || "",
+    photo_data_url: profile?.premium_identity_photo_data_url || "",
+    verified_at: profile?.premium_identity_verified_at || null,
+    updated_at: profile?.premium_identity_updated_at || null,
+    is_complete: Boolean(profile?.premium_identity_dni && profile?.premium_identity_photo_data_url),
+  };
+}
+
+function cleanIdentityDni(value) {
+  return String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+}
+
 async function syncBusinessVerification(profile) {
   if (!supabaseAdmin || profile?.account_type !== "business") return;
   const { error } = await supabaseAdmin
@@ -226,7 +240,7 @@ async function syncPremiumForProfile(profile) {
               premium_failed_at: null,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -266,7 +280,7 @@ async function syncPremiumForProfile(profile) {
               premium_failed_at: now,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -407,8 +421,8 @@ async function ensureProfileForUser(user) {
 
   const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
   const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
-  const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at`;
-  const profileColumns = `${bankProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, plan_gender_preference, plan_photo_data_url`;
+  const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at`;
+  const profileColumns = `${bankProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, plan_gender_preference, plan_photo_data_url`;
   let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -795,7 +809,7 @@ app.post("/api/admin/accounts", async (request, response) => {
   ] = await Promise.all([
     supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, created_at")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, created_at")
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("stripe_point_recharges")
@@ -1073,6 +1087,54 @@ app.post("/api/admin/accounts/email", async (request, response) => {
   if (error || !profile) {
     console.error("Admin profile email update error:", error);
     return response.status(500).json({ error: "El login cambió, pero no se pudo actualizar la ficha del perfil" });
+  }
+
+  response.json({ profile });
+});
+
+app.post("/api/admin/accounts/profile", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const profileId = String(request.body?.profileId || "").trim();
+  const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
+  const dni = cleanIdentityDni(request.body?.premium_identity_dni);
+  const photoDataUrl = String(request.body?.premium_identity_photo_data_url || "").trim();
+
+  if (!profileId) return response.status(400).json({ error: "Falta la cuenta" });
+  if (displayName.length < 2 || displayName.length > 60) return response.status(400).json({ error: "Nombre no válido" });
+  if (dni && (dni.length < 5 || dni.length > 20)) return response.status(400).json({ error: "DNI/NIE no válido" });
+  if (photoDataUrl && !photoDataUrl.startsWith("data:image/")) return response.status(400).json({ error: "Foto no válida" });
+
+  const now = new Date().toISOString();
+  const payload = {
+    display_name: displayName,
+    premium_identity_dni: dni || null,
+    premium_identity_photo_data_url: photoDataUrl || null,
+    premium_identity_updated_at: now,
+    premium_identity_verified_at: dni && photoDataUrl ? now : null,
+  };
+
+  const { data: profile, error } = await supabaseAdmin
+    .from("profiles")
+    .update(payload)
+    .eq("id", profileId)
+    .select("id, display_name, account_type, is_verified, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+    .maybeSingle();
+
+  if (error || !profile) {
+    console.error("Admin profile update error:", error);
+    if (error?.code === "42703") return response.status(500).json({ error: "Falta ejecutar el SQL de identidad Premium." });
+    return response.status(500).json({ error: "No se ha podido actualizar la ficha" });
+  }
+
+  if (profile.account_type === "business") {
+    await syncBusinessVerification(profile);
   }
 
   response.json({ profile });
@@ -1693,6 +1755,7 @@ app.get("/api/me/profile", async (request, response) => {
       profile: profile ? {
         ...profile,
         plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+        premium_identity: premiumIdentityPublic(profile),
       } : null,
       premium: premiumPublicStatus(premium.subscription, profile),
       premium_charges: premium.charges || [],
@@ -1723,7 +1786,7 @@ app.put("/api/me/profile", async (request, response) => {
       .from("profiles")
       .update({ display_name: displayName })
       .eq("id", profile.id)
-      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (error) throw error;
@@ -1733,6 +1796,49 @@ app.put("/api/me/profile", async (request, response) => {
   } catch (error) {
     console.error("Me profile update error:", error);
     response.status(500).json({ error: "profile_update_failed" });
+  }
+});
+
+app.put("/api/me/premium/identity", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const dni = cleanIdentityDni(request.body?.dni);
+  const photoDataUrl = String(request.body?.photo_data_url || "").trim();
+
+  if (dni.length < 5 || dni.length > 20) {
+    return response.status(400).json({ error: "invalid_dni" });
+  }
+
+  if (!photoDataUrl.startsWith("data:image/")) {
+    return response.status(400).json({ error: "identity_photo_required" });
+  }
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("profiles")
+      .update({
+        premium_identity_dni: dni,
+        premium_identity_photo_data_url: photoDataUrl,
+        premium_identity_updated_at: now,
+        premium_identity_verified_at: profile?.premium_identity_verified_at || now,
+      })
+      .eq("id", profile.id)
+      .select("id, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .maybeSingle();
+
+    if (error) throw error;
+    response.json({ premium_identity: premiumIdentityPublic(data) });
+  } catch (error) {
+    console.error("Premium identity update error:", error);
+    if (error.code === "42703") return response.status(500).json({ error: "premium_identity_sql_missing" });
+    response.status(500).json({ error: "premium_identity_update_failed" });
   }
 });
 
@@ -1752,6 +1858,10 @@ app.post("/api/me/premium/subscribe", async (request, response) => {
     }
 
     profile = current.profile || profile;
+    if (!premiumIdentityPublic(profile).is_complete) {
+      return response.status(400).json({ error: "premium_identity_required" });
+    }
+
     const points = premiumPointsForAccountType(profile.account_type);
     const currentPoints = Number(profile.points || 0);
     if (currentPoints < points) {
@@ -1810,7 +1920,7 @@ app.post("/api/me/premium/subscribe", async (request, response) => {
         premium_failed_at: null,
       })
       .eq("id", profile.id)
-      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at")
+      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (profileError) throw profileError;

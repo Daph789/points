@@ -73,6 +73,15 @@
         ].filter(Boolean).join(" ").toLowerCase().includes(cleanQuery);
       }
 
+      function readImageAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      }
+
       function InfoTip({ title, text, example }) {
         return (
           <span className="group relative inline-flex">
@@ -124,6 +133,9 @@
         const [emailAccount, setEmailAccount] = React.useState(null);
         const [emailValue, setEmailValue] = React.useState("");
         const [isSavingEmail, setIsSavingEmail] = React.useState(false);
+        const [profileAccount, setProfileAccount] = React.useState(null);
+        const [profileDraft, setProfileDraft] = React.useState({ display_name: "", premium_identity_dni: "", premium_identity_photo_data_url: "" });
+        const [isSavingProfile, setIsSavingProfile] = React.useState(false);
         const filteredAccounts = accounts.filter((account) => matchesAccount(account, search));
         const premiumAccounts = accounts.filter((account) => account.premium?.status === "active");
 
@@ -160,6 +172,67 @@
           setStatus("");
           setEmailAccount(account);
           setEmailValue(account.email || "");
+        }
+
+        function openProfileEditor(account) {
+          setStatus("");
+          setProfileAccount(account);
+          setProfileDraft({
+            display_name: account.display_name || "",
+            premium_identity_dni: account.premium_identity_dni || "",
+            premium_identity_photo_data_url: account.premium_identity_photo_data_url || "",
+          });
+        }
+
+        async function handleAdminIdentityPhoto(event) {
+          const file = Array.from(event.target.files || [])[0];
+          if (!file) return;
+          if (file.size > 8 * 1024 * 1024) {
+            setStatus("La foto es demasiado grande.");
+            event.target.value = "";
+            return;
+          }
+          try {
+            const dataUrl = await readImageAsDataUrl(file);
+            setProfileDraft((current) => ({ ...current, premium_identity_photo_data_url: dataUrl }));
+          } catch (_error) {
+            setStatus("No se ha podido leer la foto.");
+          } finally {
+            event.target.value = "";
+          }
+        }
+
+        async function saveProfileInfo(event) {
+          event?.preventDefault();
+          if (!profileAccount) return;
+          setStatus("");
+          setIsSavingProfile(true);
+
+          try {
+            const response = await fetch("/api/admin/accounts/profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                password,
+                profileId: profileAccount.id,
+                display_name: profileDraft.display_name,
+                premium_identity_dni: profileDraft.premium_identity_dni,
+                premium_identity_photo_data_url: profileDraft.premium_identity_photo_data_url,
+              }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || "No se ha podido guardar la ficha.");
+
+            setAccounts((current) =>
+              current.map((item) => (item.id === profileAccount.id ? { ...item, ...data.profile } : item))
+            );
+            setProfileAccount(null);
+            setStatus("Ficha actualizada correctamente.");
+          } catch (error) {
+            setStatus(error.message || "No se ha podido guardar la ficha.");
+          } finally {
+            setIsSavingProfile(false);
+          }
         }
 
         async function saveEmail(event) {
@@ -435,6 +508,13 @@
                       </p>
                       <p className="mt-1 truncate text-sm font-bold text-slate-400">{account.email || "Sin email"}</p>
                       <p className="mt-1 truncate text-xs font-bold text-slate-500">{account.phone || account.neighborhood || "Sin contacto"}</p>
+                      <p className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${
+                        account.premium_identity_dni && account.premium_identity_photo_data_url
+                          ? "bg-mint/10 text-mint ring-1 ring-mint/20"
+                          : "bg-white/[0.06] text-slate-500 ring-1 ring-white/10"
+                      }`}>
+                        {account.premium_identity_dni && account.premium_identity_photo_data_url ? "Identidad Premium completa" : "Sin identidad Premium"}
+                      </p>
                     </div>
                     <p className="text-sm font-black text-slate-200">{account.account_type === "business" ? "Empresa" : "Usuario"}</p>
                     <p className="break-all font-mono text-xs font-black text-slate-300">{formatDonosId(account.transaction_id)}</p>
@@ -447,6 +527,13 @@
                         onClick={() => openEmailEditor(account)}
                       >
                         Correo
+                      </button>
+                      <button
+                        className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-slate-100 transition hover:bg-white/[0.1]"
+                        type="button"
+                        onClick={() => openProfileEditor(account)}
+                      >
+                        Ficha
                       </button>
                       <button
                         className={`h-10 rounded-2xl px-4 text-sm font-black transition disabled:opacity-50 ${
@@ -538,6 +625,74 @@
                     </button>
                     <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingEmail}>
                       {isSavingEmail ? "Guardando..." : "Guardar correo"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {profileAccount && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <form className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50" onSubmit={saveProfileInfo}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Ficha de cuenta</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Modificar datos</h2>
+                  <p className="mt-3 text-sm font-bold leading-6 text-slate-300">
+                    Puedes corregir el nombre visible y la identidad Premium de <span className="text-white">{profileAccount.email || "esta cuenta"}</span>.
+                  </p>
+
+                  <label className="mt-4 block">
+                    <span className="text-sm font-black text-white">Nombre visible</span>
+                    <input
+                      className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                      value={profileDraft.display_name}
+                      onChange={(event) => setProfileDraft((current) => ({ ...current, display_name: event.target.value }))}
+                      placeholder="Nombre o apodo"
+                      required
+                    />
+                  </label>
+
+                  <label className="mt-4 block">
+                    <span className="text-sm font-black text-white">NIE o DNI Premium</span>
+                    <input
+                      className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 py-3 uppercase text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                      value={profileDraft.premium_identity_dni}
+                      onChange={(event) => setProfileDraft((current) => ({ ...current, premium_identity_dni: event.target.value }))}
+                      placeholder="Ej. 12345678Z"
+                    />
+                  </label>
+
+                  <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                    <p className="text-sm font-black text-white">Foto de identidad Premium</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-[112px_1fr] sm:items-center">
+                      <div className="h-32 overflow-hidden rounded-[26px] border border-white/10 bg-black/25">
+                        {profileDraft.premium_identity_photo_data_url ? (
+                          <img className="h-full w-full object-cover" src={profileDraft.premium_identity_photo_data_url} alt="" />
+                        ) : (
+                          <div className="grid h-full place-items-center px-3 text-center text-xs font-black text-slate-500">Sin foto</div>
+                        )}
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="grid h-11 cursor-pointer place-items-center rounded-2xl border border-dashed border-mint/35 bg-mint/10 px-4 text-sm font-black text-mint">
+                          Cambiar foto
+                          <input className="hidden" type="file" accept="image/*" onChange={handleAdminIdentityPhoto} />
+                        </label>
+                        <button
+                          className="h-11 rounded-2xl border border-coral/25 bg-coral/10 px-4 text-sm font-black text-coral"
+                          type="button"
+                          onClick={() => setProfileDraft((current) => ({ ...current, premium_identity_photo_data_url: "" }))}
+                        >
+                          Quitar foto
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" type="button" onClick={() => setProfileAccount(null)}>
+                      Cancelar
+                    </button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingProfile}>
+                      {isSavingProfile ? "Guardando..." : "Guardar ficha"}
                     </button>
                   </div>
                 </form>
