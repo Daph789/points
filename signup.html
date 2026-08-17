@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-country-guard="auth">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="country-guard.js"></script>
     <script defer src="activity-tracker.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
@@ -108,6 +109,8 @@
         "Cine / Cultura",
         "Moda / Segunda mano",
         "Restauración",
+        "Restaurantes",
+        "Viajes",
         "Eventos",
         "Librería",
         "Gaming",
@@ -421,6 +424,9 @@
           localStorage.setItem("donosDisplayName", displayName.trim());
 
           try {
+            const canAccess = await window.donossCountryGuard?.requireSpainAccess?.();
+            if (canAccess === false) return;
+
             const transactionId = generateTransactionId();
             const { data, error } = await supabaseClient.auth.signUp({
               email: normalizedEmail,
@@ -463,6 +469,8 @@
 
         async function handleSocialLogin(provider) {
           setStatus({ type: "", message: "" });
+          const canAccess = await window.donossCountryGuard?.requireSpainAccess?.();
+          if (canAccess === false) return;
           localStorage.setItem("donosAccountType", accountType || "user");
           const { error } = await supabaseClient.auth.signInWithOAuth({
             provider,

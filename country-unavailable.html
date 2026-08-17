@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Donoss | Not available yet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.18)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&display=swap");
+      html { background: #060914; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        overflow-x: hidden;
+        color: white;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% 0%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(255, 107, 107, 0.13), transparent 28%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 55%, #050711 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="grid min-h-screen place-items-center px-4 py-8">
+      <section class="w-full max-w-3xl overflow-hidden rounded-[38px] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:p-8">
+        <div class="flex items-center justify-between gap-4">
+          <a href="index.html" class="flex items-center gap-3">
+            <span class="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</span>
+            <span>
+              <span class="block text-xl font-black">Donoss</span>
+              <span class="block text-xs font-bold text-slate-500">Spain first</span>
+            </span>
+          </a>
+          <span class="rounded-full border border-sun/25 bg-sun/10 px-3 py-1 text-xs font-black text-sun">Disponible en España</span>
+        </div>
+
+        <div class="mt-8 grid gap-5 lg:grid-cols-[1fr_.85fr] lg:items-center">
+          <div>
+            <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Not available yet</p>
+            <h1 class="mt-3 text-4xl font-black leading-tight text-white sm:text-6xl">Donoss is not available in your country yet.</h1>
+            <p class="mt-4 text-base font-bold leading-7 text-slate-300">
+              We are currently launching Donoss in Spain first. If you think this is a mistake or you want to contact the company, please reach out to Donoss.
+            </p>
+          </div>
+          <div class="rounded-[32px] border border-mint/20 bg-mint/10 p-5">
+            <p class="text-sm font-black uppercase tracking-[0.18em] text-mint">Pas encore disponible</p>
+            <h2 class="mt-3 text-3xl font-black leading-tight text-white">Donoss n’est pas encore disponible dans votre pays.</h2>
+            <p class="mt-3 text-sm font-bold leading-6 text-slate-300">
+              Le lancement se fait d’abord en Espagne. Si vous pensez qu’il s’agit d’une erreur, veuillez contacter l’entreprise Donoss.
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-7 grid gap-3 sm:grid-cols-2">
+          <a class="grid h-13 min-h-13 place-items-center rounded-2xl bg-mint px-5 py-4 text-center text-sm font-black text-ink shadow-glow" href="mailto:pixmell.contact@gmail.com?subject=Donoss%20-%20Country%20access">
+            Contact Donoss
+          </a>
+          <a class="grid h-13 min-h-13 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-4 text-center text-sm font-black text-white" href="index.html">
+            Back to presentation
+          </a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

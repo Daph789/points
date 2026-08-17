@@ -3062,7 +3062,7 @@ app.get("/api/offers/featured", async (_request, response) => {
     return response.status(500).json({ error: "Supabase admin is not configured" });
   }
 
-  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música"];
+  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
     const { data, error } = await supabaseAdmin
@@ -3109,7 +3109,7 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
     return response.status(500).json({ error: "Supabase admin is not configured" });
   }
 
-  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música"];
+  const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
     const { data, error } = await supabaseAdmin
