@@ -274,7 +274,7 @@
           <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ahora mismo</p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ver más</p>
                 <h2 className="mt-1 text-xl font-black text-white">Categorías con chollos</h2>
               </div>
               <button
@@ -317,6 +317,28 @@
             </div>
           </section>
         );
+      }
+
+      function buildCategorySummaryFromOffers(offers) {
+        const visibleOffers = (offers || []).filter(isVisibleForUsers);
+        return categories.map((category) => {
+          const categoryOffers = visibleOffers.filter((offer) => (offer.categories || []).includes(category.label));
+          const preview = categoryOffers[0] || null;
+          return {
+            category: category.label,
+            count: categoryOffers.length,
+            preview: preview
+              ? {
+                  id: preview.id,
+                  title: preview.title,
+                  cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+                  required_points: preview.required_points,
+                  business_display_name: preview.business_display_name,
+                  business_is_verified: Boolean(preview.business_is_verified),
+                }
+              : null,
+          };
+        });
       }
 
       function formatEuro(value) {
@@ -604,7 +626,40 @@
           try {
             const response = await fetch("/api/offers/featured");
             const data = await response.json().catch(() => ({}));
-            if (response.ok) setFeaturedOffers(data.offers || []);
+            if (response.ok) {
+              setFeaturedOffers(data.offers || []);
+              return;
+            }
+          } catch (error) {
+            // Fallback below keeps Inicio useful even if the server route is still warming up.
+          }
+
+          try {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("*")
+              .order("created_at", { ascending: false })
+              .limit(250);
+            if (error) throw error;
+            const visibleOffers = (data || []).filter(isVisibleForUsers);
+            const usedIds = new Set();
+            const featured = [];
+            for (const category of categories) {
+              const offer = visibleOffers.find((item) => !usedIds.has(item.id) && (item.categories || []).includes(category.label));
+              if (!offer) continue;
+              usedIds.add(offer.id);
+              featured.push({ ...offer, featured_category: category.label });
+              if (featured.length >= 6) break;
+            }
+            if (featured.length < 6) {
+              for (const offer of visibleOffers) {
+                if (usedIds.has(offer.id)) continue;
+                usedIds.add(offer.id);
+                featured.push({ ...offer, featured_category: offer.categories?.[0] || "Oferta" });
+                if (featured.length >= 6) break;
+              }
+            }
+            setFeaturedOffers(featured);
           } catch (error) {
             setFeaturedOffers([]);
           }
@@ -614,7 +669,22 @@
           try {
             const response = await fetch("/api/offers/categories/summary");
             const data = await response.json().catch(() => ({}));
-            if (response.ok) setCategorySummary(data.categories || []);
+            if (response.ok) {
+              setCategorySummary(data.categories || []);
+              return;
+            }
+          } catch (error) {
+            // Fallback below keeps the UI useful even if the server summary is not deployed yet.
+          }
+
+          try {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,required_points,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
+              .order("created_at", { ascending: false })
+              .limit(250);
+            if (error) throw error;
+            setCategorySummary(buildCategorySummaryFromOffers(data || []));
           } catch (error) {
             setCategorySummary([]);
           }
@@ -912,11 +982,6 @@
                   </div>
                 </section>
 
-                <CategoryDiscovery
-                  items={categorySummary}
-                  onOpenCategory={(category) => openFullPage(`category.html?category=${encodeURIComponent(category)}`)}
-                />
-
                 {selectedCategory && (
                   <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
                     <div className="mb-4 flex items-center justify-between gap-3">
@@ -983,14 +1048,8 @@
                         />
                       ))
                     ) : (
-                      <div className="space-y-4 sm:col-span-2">
-                        <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300">
-                          Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
-                        </div>
-                        <CategoryDiscovery
-                          items={categorySummary}
-                          onOpenCategory={(category) => openFullPage(`category.html?category=${encodeURIComponent(category)}`)}
-                        />
+                      <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300 sm:col-span-2">
+                        Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
                       </div>
                     )}
                   </div>

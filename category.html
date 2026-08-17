@@ -187,6 +187,28 @@
         );
       }
 
+      function buildCategorySummaryFromOffers(offers) {
+        const visibleOffers = (offers || []).filter(isVisibleForUsers);
+        return categories.map((category) => {
+          const categoryOffers = visibleOffers.filter((offer) => (offer.categories || []).includes(category.label));
+          const preview = categoryOffers[0] || null;
+          return {
+            category: category.label,
+            count: categoryOffers.length,
+            preview: preview
+              ? {
+                  id: preview.id,
+                  title: preview.title,
+                  cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+                  required_points: preview.required_points,
+                  business_display_name: preview.business_display_name,
+                  business_is_verified: Boolean(preview.business_is_verified),
+                }
+              : null,
+          };
+        });
+      }
+
       function OfferCard({ offer, isLiked, onLike }) {
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
@@ -300,7 +322,22 @@
           try {
             const response = await fetch("/api/offers/categories/summary");
             const data = await response.json().catch(() => ({}));
-            if (response.ok) setCategorySummary(data.categories || []);
+            if (response.ok) {
+              setCategorySummary(data.categories || []);
+              return;
+            }
+          } catch (error) {
+            // Fallback below keeps empty sections helpful even before the API is refreshed.
+          }
+
+          try {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,required_points,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
+              .order("created_at", { ascending: false })
+              .limit(250);
+            if (error) throw error;
+            setCategorySummary(buildCategorySummaryFromOffers(data || []));
           } catch (error) {
             setCategorySummary([]);
           }
@@ -375,6 +412,9 @@
         }, [loadOffers]);
 
         const activeCategorySummary = categorySummary.filter((item) => Number(item.count || 0) > 0 && item.category !== category);
+        const emptyCategoryText = activeCategorySummary.length
+          ? `Todavía no hay ofertas en ${category}, pero puedes explorar estas secciones activas.`
+          : `Todavía no hay ofertas en ${category}.`;
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -419,7 +459,9 @@
 
               {status ? (
                 <div>
-                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                    {status.includes("Todavía no hay ofertas") ? emptyCategoryText : status}
+                  </div>
                   <CategoryDiscovery items={categorySummary} currentCategory={category} />
                 </div>
               ) : filteredOffers.length === 0 ? (
