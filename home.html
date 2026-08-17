@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Donoss | Inicio</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="theme.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -632,6 +634,13 @@
         const [isLoadingOffers, setIsLoadingOffers] = React.useState(false);
         const [offersStatus, setOffersStatus] = React.useState("");
         const [navBadges, setNavBadges] = React.useState({});
+        const [themeMode, setThemeMode] = React.useState(window.donossTheme?.getTheme?.() || "dark");
+
+        React.useEffect(() => {
+          const syncTheme = (event) => setThemeMode(event.detail?.theme || window.donossTheme?.getTheme?.() || "dark");
+          window.addEventListener("donoss:theme-changed", syncTheme);
+          return () => window.removeEventListener("donoss:theme-changed", syncTheme);
+        }, []);
 
         async function loadNotificationBadges() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -811,6 +820,7 @@
         }, [loadAccount]);
 
         const isBusiness = accountType === "business";
+        const toggleThemeMode = () => setThemeMode(window.donossTheme?.toggleTheme?.() || "dark");
         const displayAccountName = accountName || (isBusiness ? "Empresa" : "Usuario");
         const displayedDonosId = formatDonosId(transactionId);
         const categoryCountByName = React.useMemo(
@@ -916,8 +926,14 @@
                       <p className="text-xs font-semibold text-slate-400">Inicio</p>
                     </div>
                   </div>
-                  <button className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-xl sm:h-11 sm:w-11">
-                    ◐
+                  <button
+                    type="button"
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-xl transition hover:bg-white/[0.1] active:scale-95 sm:h-11 sm:w-11"
+                    title={themeMode === "light" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
+                    aria-label={themeMode === "light" ? "Cambiar a tema oscuro" : "Cambiar a tema claro"}
+                    onClick={toggleThemeMode}
+                  >
+                    {themeMode === "light" ? "☀" : "◐"}
                   </button>
                 </header>
 

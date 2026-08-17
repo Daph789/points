@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Donoss | App</title>
     <link rel="stylesheet" href="app-shell.css" />
+    <link rel="stylesheet" href="theme.css" />
+    <script src="theme.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="activity-tracker.js"></script>
     <style>
@@ -284,6 +286,22 @@
         let activeCategoryKey = "";
         let inicioReady = false;
 
+        function currentTheme() {
+          return window.donossTheme?.getTheme?.() || "dark";
+        }
+
+        function sendThemeToFrame(frame) {
+          try {
+            frame.contentWindow?.postMessage({ type: "donos:theme-apply", theme: currentTheme() }, window.location.origin);
+          } catch (_error) {}
+        }
+
+        function broadcastTheme(theme) {
+          const nextTheme = window.donossTheme?.applyTheme?.(theme) || "dark";
+          localStorage.setItem(window.donossTheme?.key || "donossTheme", nextTheme);
+          allFrames().forEach(sendThemeToFrame);
+        }
+
         function launchDonossRefresh() {
           boot.classList.remove("is-hidden");
           updateOverlay.classList.remove("is-visible");
@@ -402,6 +420,7 @@
 
         function watchFrame(frame) {
           frame.addEventListener("load", () => {
+            sendThemeToFrame(frame);
             try {
               const childUrl = new URL(frame.contentWindow.location.href);
               if (childUrl.pathname.endsWith("/login.html") || childUrl.pathname.endsWith("login.html")) {
@@ -589,6 +608,10 @@
         });
         window.addEventListener("message", (event) => {
           if (event.origin !== window.location.origin) return;
+          if (event.data?.type === "donos:theme") {
+            broadcastTheme(event.data.theme);
+            return;
+          }
           if (event.data?.type === "donos:category") {
             openCategory(event.data.category);
             return;
@@ -645,6 +668,7 @@
         }
 
         baseFrames.forEach(watchFrame);
+        allFrames().forEach(sendThemeToFrame);
 
         window.setTimeout(() => {
           if (activeRoute === "inicio" && !inicioReady) return;

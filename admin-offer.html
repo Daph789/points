@@ -208,6 +208,7 @@
         const [endDate, setEndDate] = React.useState("");
         const [qrValidFrom, setQrValidFrom] = React.useState(todayDateString());
         const [qrValidUntil, setQrValidUntil] = React.useState("");
+        const [qrNoExpiry, setQrNoExpiry] = React.useState(false);
         const [age, setAge] = React.useState("");
         const [author, setAuthor] = React.useState("");
         const [description, setDescription] = React.useState("");
@@ -265,6 +266,7 @@
             setEndDate(draft.endDate || "");
             setQrValidFrom(draft.qrValidFrom || todayDateString());
             setQrValidUntil(draft.qrValidUntil || "");
+            setQrNoExpiry(Boolean(draft.qrNoExpiry));
             setAge(draft.age || "");
             setAuthor(draft.author || "");
             setDescription(draft.description || "");
@@ -318,7 +320,8 @@
             setStartDate(data.start_date || "");
             setEndDate(data.end_date || "");
             setQrValidFrom(data.qr_valid_from || data.start_date || todayDateString());
-            setQrValidUntil(data.qr_valid_until || data.end_date || "");
+            setQrValidUntil(data.qr_valid_until || "");
+            setQrNoExpiry(!data.qr_valid_until);
             setAge(data.age || "");
             setAuthor(data.author || "");
             setDescription(data.description || "");
@@ -418,6 +421,7 @@
             endDate,
             qrValidFrom,
             qrValidUntil,
+            qrNoExpiry,
             age,
             author,
             description,
@@ -451,6 +455,7 @@
           endDate,
           qrValidFrom,
           qrValidUntil,
+          qrNoExpiry,
           age,
           author,
           description,
@@ -559,6 +564,7 @@
           setEndDate("");
           setQrValidFrom(todayDateString());
           setQrValidUntil("");
+          setQrNoExpiry(false);
           setAge("");
           setAuthor("");
           setDescription("");
@@ -592,7 +598,7 @@
             }
 
             const today = todayDateString();
-            const effectiveQrUntil = qrValidUntil || endDate || "";
+            const effectiveQrUntil = qrNoExpiry ? "" : (qrValidUntil || "");
             if (startDate && startDate < today) {
               setStatus({ type: "error", message: "La fecha de inicio no puede ser anterior a hoy." });
               return;
@@ -637,7 +643,7 @@
               start_date: startDate || null,
               end_date: endDate || null,
               qr_valid_from: qrValidFrom || todayDateString(),
-              qr_valid_until: qrValidUntil || endDate || null,
+              qr_valid_until: qrNoExpiry ? null : (qrValidUntil || null),
               age: age.trim() || null,
               author: author.trim() || null,
               description: description.trim() || null,
@@ -927,8 +933,29 @@
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
                   <p className="text-sm font-black text-white">Validez del QR de compra</p>
                   <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
-                    Se generará un QR único para cada compra. La fecha de inicio viene preparada para hoy.
+                    Se generará un QR único para cada compra. Si tu producto no caduca, activa la opción sin caducidad.
                   </p>
+                  <button
+                    type="button"
+                    className={`mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left transition ${
+                      qrNoExpiry ? "border-mint/35 bg-mint/10 text-mint" : "border-white/10 bg-black/20 text-slate-300"
+                    }`}
+                    onClick={() => {
+                      setQrNoExpiry((current) => {
+                        const next = !current;
+                        if (next) setQrValidUntil("");
+                        return next;
+                      });
+                    }}
+                  >
+                    <span>
+                      <span className="block text-sm font-black">Este producto no caduca</span>
+                      <span className="mt-1 block text-xs font-bold text-slate-500">El QR no tendrá fecha final.</span>
+                    </span>
+                    <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-sm font-black ${qrNoExpiry ? "bg-mint text-ink" : "bg-white/10 text-white"}`}>
+                      {qrNoExpiry ? "✓" : ""}
+                    </span>
+                  </button>
                   <div className="mt-4 grid gap-4 min-[430px]:grid-cols-2">
                     <Field label="QR válido desde">
                       <input className={inputClass} type="date" min={todayDateString()} value={qrValidFrom} onChange={(event) => {
@@ -938,7 +965,14 @@
                         }} />
                     </Field>
                     <Field label="QR válido hasta">
-                      <input className={inputClass} type="date" min={qrValidFrom || todayDateString()} value={qrValidUntil} onChange={(event) => setQrValidUntil(event.target.value)} />
+                      <input
+                        className={`${inputClass} ${qrNoExpiry ? "opacity-45" : ""}`}
+                        type="date"
+                        min={qrValidFrom || todayDateString()}
+                        value={qrValidUntil}
+                        disabled={qrNoExpiry}
+                        onChange={(event) => setQrValidUntil(event.target.value)}
+                      />
                     </Field>
                   </div>
                 </div>
