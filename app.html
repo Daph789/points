@@ -282,6 +282,7 @@
         let activeIndex = 0;
         let activeRoute = "inicio";
         let activeCategoryKey = "";
+        let inicioReady = false;
 
         function launchDonossRefresh() {
           boot.classList.remove("is-hidden");
@@ -412,7 +413,7 @@
               const messageType = frame.dataset.route === "side" ? "donos:activate-side-group" : frame.dataset.route === "chat" ? "donos:activate-chat" : "";
               if (messageType) frame.contentWindow?.postMessage({ type: messageType }, window.location.origin);
             }
-            hideBootWhenReady();
+            if (frame.dataset.route !== "inicio") hideBootWhenReady();
           }, { once: false });
         }
 
@@ -628,18 +629,24 @@
           }
           if (event.data?.type === "donos:hard-refresh") {
             launchDonossRefresh();
+            return;
+          }
+          if (event.data?.type === "donos:page-ready" && event.data.route === "inicio") {
+            inicioReady = true;
+            hideBootWhenReady({ force: true });
           }
         });
 
         let loaded = 0;
-        function hideBootWhenReady() {
+        function hideBootWhenReady(options = {}) {
+          if (!options.force && !inicioReady && activeRoute === "inicio") return;
           loaded += 1;
           if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
         }
 
         baseFrames.forEach(watchFrame);
 
-        window.setTimeout(() => boot.classList.add("is-hidden"), 1600);
+        window.setTimeout(() => boot.classList.add("is-hidden"), 3400);
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);

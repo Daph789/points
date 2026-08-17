@@ -88,6 +88,9 @@
 
       function isVisibleForUsers(offer) {
         if (offer.is_hidden) return false;
+        const today = new Date().toISOString().slice(0, 10);
+        const validUntil = offer.qr_valid_until || offer.end_date || null;
+        if (validUntil && String(validUntil).slice(0, 10) < today) return false;
         if (!isOutOfStock(offer)) return true;
         if (!offer.out_of_stock_since) return true;
         return Date.now() - new Date(offer.out_of_stock_since).getTime() < 24 * 60 * 60 * 1000;

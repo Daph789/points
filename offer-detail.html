@@ -108,6 +108,12 @@
         return remaining !== null && remaining <= 0;
       }
 
+      function isOfferExpired(offer) {
+        const today = new Date().toISOString().slice(0, 10);
+        const validUntil = offer?.qr_valid_until || offer?.end_date || null;
+        return Boolean(validUntil && String(validUntil).slice(0, 10) < today);
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_20px_rgba(14,165,233,0.5)] ring-2 ring-white/20" title="Cuenta certificada">
@@ -150,6 +156,10 @@
             setCanEdit(isOwner);
             if (data.is_hidden && !isOwner) {
               setStatus("Esta oferta ya no está disponible.");
+              return;
+            }
+            if (isOfferExpired(data) && !isOwner) {
+              setStatus("Esta oferta ha caducado.");
               return;
             }
             setOffer(data);

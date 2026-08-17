@@ -276,6 +276,8 @@
                     ? "No puedes comprar tu propia publicación."
                   : message.includes("out_of_stock")
                     ? "Esta oferta está agotada."
+                  : message.includes("offer_expired")
+                    ? "Esta oferta ha caducado."
                   : message.includes("receiver")
                     ? "No se ha encontrado la cuenta que debe recibir los puntos."
                   : message.includes("purchases_table_missing") || message.includes("purchase_insert_failed")

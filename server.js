@@ -2479,6 +2479,9 @@ function remainingOfferStock(offer) {
 
 function isOfferVisibleForPublic(offer) {
   if (!offer || offer.is_hidden) return false;
+  const today = todayDateString();
+  const validUntil = offer.qr_valid_until || offer.end_date || null;
+  if (validUntil && String(validUntil).slice(0, 10) < today) return false;
   const remaining = remainingOfferStock(offer);
   if (remaining === null || remaining > 0) return true;
   if (!offer.out_of_stock_since) return true;
@@ -4503,6 +4506,11 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     if (offer.is_hidden) {
       return response.status(400).json({ error: "offer_hidden" });
+    }
+
+    const validUntil = offer.qr_valid_until || offer.end_date || null;
+    if (validUntil && String(validUntil).slice(0, 10) < todayDateString()) {
+      return response.status(400).json({ error: "offer_expired" });
     }
 
     if (deliveryMethod === "none" && (offer.delivery_pickup_enabled === true || offer.delivery_home_enabled === true)) {
