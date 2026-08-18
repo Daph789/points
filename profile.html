@@ -194,6 +194,7 @@
         const [premiumDni, setPremiumDni] = React.useState("");
         const [premiumPhoto, setPremiumPhoto] = React.useState("");
         const [isSavingPremiumIdentity, setIsSavingPremiumIdentity] = React.useState(false);
+        const [referralSponsor, setReferralSponsor] = React.useState(null);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -280,6 +281,12 @@
               });
               const notifications = await response.json().catch(() => ({}));
               if (response.ok) setNavBadges(notifications.counts?.sections || {});
+
+              const referralResponse = await fetch("/api/me/referral-program", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+              });
+              const referralData = await referralResponse.json().catch(() => ({}));
+              if (referralResponse.ok) setReferralSponsor(referralData.sponsor?.referrer_profile || null);
             }
           }
 
@@ -632,6 +639,23 @@
                   </button>
                 )}
               </div>
+              {referralSponsor && (
+                <div className="mt-3 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Te invitó</p>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-base font-black text-white">
+                        <span>{referralSponsor.display_name || "Cuenta Donoss"}</span>
+                        {referralSponsor.is_verified && <VerifiedBadge />}
+                      </p>
+                      <p className="mt-1 font-mono text-xs font-black text-slate-400">{formatDonosId(referralSponsor.transaction_id)}</p>
+                    </div>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200">
+                      Invitación registrada
+                    </span>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="mt-5 grid gap-3 sm:grid-cols-2">

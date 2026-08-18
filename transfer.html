@@ -175,6 +175,10 @@
         const [confirmMovement, setConfirmMovement] = React.useState(null);
         const [successMovement, setSuccessMovement] = React.useState(null);
         const [navBadges, setNavBadges] = React.useState({});
+        const [showReferralProgram, setShowReferralProgram] = React.useState(false);
+        const [referralProgram, setReferralProgram] = React.useState(null);
+        const [referralStatus, setReferralStatus] = React.useState("");
+        const [showAllReferrals, setShowAllReferrals] = React.useState(false);
         const [pointPacks, setPointPacks] = React.useState([
           { points: 50, baseAmount: 500, feeAmount: 120, amount: 620, is_disabled: false },
           { points: 100, baseAmount: 1000, feeAmount: 120, amount: 1120, is_disabled: false },
@@ -183,6 +187,7 @@
         ]);
         const rechargePanelRef = React.useRef(null);
         const movementPanelRef = React.useRef(null);
+        const referralPanelRef = React.useRef(null);
         const euros = points / 10;
         const displayedDonosId = formatDonosId(transactionId);
         const formatMoney = (value) => `${value.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
@@ -209,6 +214,26 @@
           window.setTimeout(() => {
             ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
           }, 80);
+        }
+
+        async function loadReferralProgram() {
+          try {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) return;
+            const response = await fetch("/api/me/referral-program", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "referrals_failed");
+            setReferralProgram(data);
+          } catch (error) {
+            setReferralStatus(
+              error.message === "referrals_sql_missing"
+                ? "Falta activar supabase-referrals.sql en Supabase."
+                : "No se ha podido cargar tu enlace de invitación."
+            );
+          }
         }
 
         async function loadNotificationBadges() {
@@ -262,6 +287,7 @@
             localStorage.setItem("donosPoints", String(Number(data.points || 0)));
           }
           if (accessToken) loadNotificationBadges();
+          if (accessToken) loadReferralProgram();
           return Number(data?.points || 0);
         }, []);
 
@@ -283,6 +309,34 @@
             if (next) scrollToPanel(rechargePanelRef);
             return next;
           });
+        }
+
+        function toggleReferralProgram() {
+          setShowReferralProgram((current) => {
+            const next = !current;
+            if (next) {
+              loadReferralProgram();
+              scrollToPanel(referralPanelRef);
+            }
+            return next;
+          });
+        }
+
+        async function shareReferralLink() {
+          const link = referralProgram?.referral_link;
+          if (!link) return;
+          const text = "Únete a Donoss con mi enlace. Usa este enlace especial para que cuente la invitación.";
+          try {
+            if (navigator.share) {
+              await navigator.share({ title: "Invitación Donoss", text, url: link });
+              setReferralStatus("Enlace listo para compartir.");
+            } else {
+              await navigator.clipboard.writeText(link);
+              setReferralStatus("Enlace copiado. Compártelo siempre con este enlace especial.");
+            }
+          } catch (_error) {
+            setReferralStatus("No se ha podido compartir. Copia el enlace manualmente.");
+          }
         }
 
         React.useEffect(() => {
@@ -598,6 +652,129 @@
             )}
 
             <section className="mt-5 grid gap-3">
+              <button
+                type="button"
+                onClick={toggleReferralProgram}
+                className="group overflow-hidden rounded-[30px] border border-mint/25 bg-[radial-gradient(circle_at_18%_10%,rgba(66,242,179,0.28),transparent_28%),linear-gradient(135deg,rgba(66,242,179,0.18),rgba(255,255,255,0.055))] p-4 text-left shadow-glow transition hover:translate-y-[-2px]"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Invita y gana</p>
+                    <h2 className="mt-2 text-xl font-black text-white">¿Quieres ganar puntos gratis?</h2>
+                    <p className="mt-1 text-sm font-bold leading-5 text-slate-300">
+                      Invita a 5 personas con tu enlace especial y desbloquea 100 puntos.
+                    </p>
+                  </div>
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-3xl bg-mint text-2xl shadow-glow">🎁</span>
+                </div>
+              </button>
+
+              {showReferralProgram && (
+                <section ref={referralPanelRef} className="scroll-mt-5 rounded-[34px] border border-white/10 bg-white/[0.055] p-4 shadow-2xl shadow-black/20 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Puntos gratis</p>
+                      <h2 className="mt-2 text-2xl font-black text-white">Gana 100 puntos</h2>
+                      <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-slate-400">
+                        Comparte solo este enlace especial. Cuando 5 personas creen una cuenta desde tu enlace y recarguen puntos por primera vez, Donoss podrá darte el bonus.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200"
+                      onClick={() => setShowReferralProgram(false)}
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+
+                  <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-mint">Progreso</p>
+                        <p className="mt-1 text-4xl font-black text-white">
+                          {Math.min(Number(referralProgram?.completed_count || 0), 5)}/5
+                        </p>
+                      </div>
+                      <span className={`rounded-full px-4 py-2 text-sm font-black ${
+                        referralProgram?.reward_paid
+                          ? "bg-white/10 text-slate-200"
+                          : referralProgram?.reward_ready
+                            ? "bg-mint text-ink"
+                            : "bg-white/10 text-slate-300"
+                      }`}>
+                        {referralProgram?.reward_paid ? "Bonus entregado" : referralProgram?.reward_ready ? "Bonus desbloqueado" : "En progreso"}
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-5 gap-2">
+                      {Array.from({ length: 5 }).map((_, index) => (
+                        <span
+                          key={index}
+                          className={`h-3 rounded-full ${index < Number(referralProgram?.completed_count || 0) ? "bg-mint shadow-glow" : "bg-white/10"}`}
+                        ></span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-3xl border border-white/10 bg-[#0D111D] p-4">
+                    <p className="text-sm font-black text-white">Tu enlace especial</p>
+                    <p className="mt-2 break-all rounded-2xl bg-black/25 p-3 font-mono text-xs font-black text-mint">
+                      {referralProgram?.referral_link || "Cargando enlace..."}
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <p className="text-xs font-bold leading-5 text-slate-400">
+                        No compartas otro enlace: este es el que permite reconocer que la invitación viene de ti.
+                      </p>
+                      <button
+                        type="button"
+                        className="h-11 rounded-2xl bg-mint px-5 text-sm font-black text-ink shadow-glow"
+                        onClick={shareReferralLink}
+                      >
+                        Compartir enlace
+                      </button>
+                    </div>
+                  </div>
+
+                  {referralStatus && <p className="mt-3 rounded-2xl border border-white/10 bg-white/[0.055] p-3 text-sm font-bold text-slate-300">{referralStatus}</p>}
+
+                  <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-black text-white">Personas registradas con tu enlace</p>
+                        <p className="mt-1 text-xs font-bold text-slate-400">Solo verás nombre e ID Donoss, no su correo.</p>
+                      </div>
+                      {Number(referralProgram?.total_referred || 0) > 5 && (
+                        <button
+                          type="button"
+                          className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200"
+                          onClick={() => setShowAllReferrals((current) => !current)}
+                        >
+                          {showAllReferrals ? "Ver menos" : "Ver más"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      {(referralProgram?.referrals || []).slice(0, showAllReferrals ? undefined : 5).map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0D111D] p-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-white">{item.referred_profile?.display_name || "Cuenta Donoss"}</p>
+                            <p className="mt-1 font-mono text-xs font-black text-slate-400">{formatDonosId(item.referred_profile?.transaction_id)}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${item.has_recharged ? "bg-mint text-ink" : "bg-white/10 text-slate-300"}`}>
+                            {item.has_recharged ? "Recargó" : "Cuenta creada"}
+                          </span>
+                        </div>
+                      ))}
+                      {(!referralProgram?.referrals || referralProgram.referrals.length === 0) && (
+                        <p className="rounded-2xl border border-white/10 bg-[#0D111D] p-4 text-sm font-bold text-slate-400">
+                          Todavía nadie se ha registrado con tu enlace.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
+
               <ActionButton
                 icon="card"
                 title="Recargar puntos"

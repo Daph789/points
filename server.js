@@ -131,6 +131,17 @@ function transferPublicProfile(profile) {
   };
 }
 
+function referralPublicProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.display_name,
+    account_type: profile.account_type,
+    transaction_id: profile.transaction_id,
+    is_verified: Boolean(profile.is_verified),
+  };
+}
+
 function addDays(date, days) {
   const value = new Date(date);
   value.setUTCDate(value.getUTCDate() + days);
@@ -462,6 +473,7 @@ async function ensureProfileForUser(user) {
         if (error?.code !== "42703") console.error("Business bank details backfill fatal error:", error);
       }
     }
+    await registerReferralForProfile(existing, metadata);
     return existing;
   }
 
@@ -519,13 +531,82 @@ async function ensureProfileForUser(user) {
       error = fallback.error;
     }
 
-    if (!error && created) return created;
+    if (!error && created) {
+      await registerReferralForProfile(created, metadata);
+      return created;
+    }
 
     lastError = error;
     if (error?.code !== "23505") break;
   }
 
   throw lastError || new Error("Could not create profile");
+}
+
+async function registerReferralForProfile(profile, metadata = {}) {
+  if (!supabaseAdmin || !profile?.id) return null;
+  const referralCode = cleanValidDonosId(metadata.referral_code || metadata.referrer_code || metadata.referred_by_code);
+  if (!referralCode) return null;
+
+  try {
+    const { data: referrer, error: referrerError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, transaction_id")
+      .eq("transaction_id", referralCode)
+      .maybeSingle();
+
+    if (referrerError || !referrer?.id || referrer.id === profile.id) return null;
+
+    const { data, error } = await supabaseAdmin
+      .from("referrals")
+      .insert({
+        referrer_profile_id: referrer.id,
+        referred_profile_id: profile.id,
+        referral_code: referralCode,
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (error && error.code !== "23505") throw error;
+    return data || null;
+  } catch (error) {
+    if (error.code !== "42P01" && error.code !== "42703") console.error("Referral register error:", error);
+    return null;
+  }
+}
+
+async function markReferralRecharge(userId) {
+  if (!supabaseAdmin || !userId) return;
+  try {
+    const now = new Date().toISOString();
+    const { data: referral, error } = await supabaseAdmin
+      .from("referrals")
+      .update({ referred_recharged_at: now, reward_eligible_at: now, updated_at: now })
+      .eq("referred_profile_id", userId)
+      .is("referred_recharged_at", null)
+      .select("id, referrer_profile_id")
+      .maybeSingle();
+
+    if (error && error.code !== "PGRST116") throw error;
+    if (!referral?.referrer_profile_id) return;
+
+    const { count } = await supabaseAdmin
+      .from("referrals")
+      .select("id", { count: "exact", head: true })
+      .eq("referrer_profile_id", referral.referrer_profile_id)
+      .not("referred_recharged_at", "is", null);
+
+    if (Number(count || 0) >= 5) {
+      await supabaseAdmin
+        .from("referrals")
+        .update({ reward_eligible_at: now, updated_at: now })
+        .eq("referrer_profile_id", referral.referrer_profile_id)
+        .not("referred_recharged_at", "is", null)
+        .is("reward_paid_at", null);
+    }
+  } catch (error) {
+    if (error.code !== "42P01" && error.code !== "42703") console.error("Referral recharge mark error:", error);
+  }
 }
 
 async function ensureProfileForUserId(userId) {
@@ -578,6 +659,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
         console.error("Supabase credit error:", error);
         return response.status(500).send("Could not credit points");
       }
+      await markReferralRecharge(userId);
     }
   }
 
@@ -585,6 +667,183 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 });
 
 app.use(express.json({ limit: "6mb" }));
+
+app.get("/api/me/referral-program", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const origin = request.headers.origin || `${request.protocol}://${request.get("host")}`;
+    const referralCode = cleanValidDonosId(profile?.transaction_id);
+    const referralLink = referralCode ? `${origin}/?ref=${encodeURIComponent(referralCode)}` : "";
+
+    const [{ data: referrals, error: referralsError }, { data: sponsorRows, error: sponsorError }] = await Promise.all([
+      supabaseAdmin
+        .from("referrals")
+        .select("id, referrer_profile_id, referred_profile_id, referral_code, referred_recharged_at, reward_eligible_at, reward_paid_at, reward_points, created_at")
+        .eq("referrer_profile_id", profile.id)
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("referrals")
+        .select("id, referrer_profile_id, referred_profile_id, referral_code, referred_recharged_at, reward_paid_at, created_at")
+        .eq("referred_profile_id", profile.id)
+        .limit(1),
+    ]);
+
+    if (referralsError) throw referralsError;
+    if (sponsorError) throw sponsorError;
+
+    const referredIds = [...new Set((referrals || []).map((item) => item.referred_profile_id).filter(Boolean))];
+    const sponsorIds = [...new Set((sponsorRows || []).map((item) => item.referrer_profile_id).filter(Boolean))];
+    const profileIds = [...new Set([...referredIds, ...sponsorIds])];
+    let profilesById = {};
+
+    if (profileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, account_type, transaction_id, is_verified")
+        .in("id", profileIds);
+      if (profilesError) throw profilesError;
+      profilesById = Object.fromEntries((profiles || []).map((item) => [item.id, referralPublicProfile(item)]));
+    }
+
+    const completedCount = (referrals || []).filter((item) => item.referred_recharged_at).length;
+    const rewardPaid = (referrals || []).some((item) => item.reward_paid_at);
+
+    response.json({
+      referral_code: referralCode,
+      referral_link: referralLink,
+      target_count: 5,
+      reward_points: 100,
+      total_referred: (referrals || []).length,
+      completed_count: completedCount,
+      reward_ready: completedCount >= 5 && !rewardPaid,
+      reward_paid: rewardPaid,
+      referrals: (referrals || []).map((item) => ({
+        ...item,
+        referred_profile: profilesById[item.referred_profile_id] || null,
+        has_recharged: Boolean(item.referred_recharged_at),
+      })),
+      sponsor: sponsorRows?.[0]
+        ? {
+            ...sponsorRows[0],
+            referrer_profile: profilesById[sponsorRows[0].referrer_profile_id] || null,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Referral program error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "referrals_sql_missing" : "referrals_failed" });
+  }
+});
+
+app.post("/api/admin/referrals", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  try {
+    const { data: referrals, error } = await supabaseAdmin
+      .from("referrals")
+      .select("id, referrer_profile_id, referred_profile_id, referral_code, referred_recharged_at, reward_eligible_at, reward_paid_at, reward_points, created_at")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+
+    const ids = [...new Set((referrals || []).flatMap((item) => [item.referrer_profile_id, item.referred_profile_id]).filter(Boolean))];
+    let profilesById = {};
+    if (ids.length > 0) {
+      const { data: profiles, error: profilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, account_type, transaction_id, points, is_verified")
+        .in("id", ids);
+      if (profilesError) throw profilesError;
+      profilesById = Object.fromEntries((profiles || []).map((item) => [item.id, item]));
+    }
+
+    const grouped = {};
+    for (const referral of referrals || []) {
+      const key = referral.referrer_profile_id;
+      if (!grouped[key]) {
+        grouped[key] = {
+          referrer: referralPublicProfile(profilesById[key]),
+          referrer_private: profilesById[key] || null,
+          referrals: [],
+          total: 0,
+          completed: 0,
+          reward_paid: false,
+        };
+      }
+      grouped[key].total += 1;
+      if (referral.referred_recharged_at) grouped[key].completed += 1;
+      if (referral.reward_paid_at) grouped[key].reward_paid = true;
+      grouped[key].referrals.push({
+        ...referral,
+        referred_profile: referralPublicProfile(profilesById[referral.referred_profile_id]),
+      });
+    }
+
+    const groups = Object.values(grouped).sort((a, b) => b.completed - a.completed || b.total - a.total);
+
+    response.json({
+      referrals: (referrals || []).map((item) => ({
+        ...item,
+        referrer_profile: referralPublicProfile(profilesById[item.referrer_profile_id]),
+        referred_profile: referralPublicProfile(profilesById[item.referred_profile_id]),
+      })),
+      groups,
+      summary: {
+        total_referrals: (referrals || []).length,
+        total_completed: (referrals || []).filter((item) => item.referred_recharged_at).length,
+        reward_ready: groups.filter((group) => group.completed >= 5 && !group.reward_paid).length,
+        reward_paid: groups.filter((group) => group.reward_paid).length,
+      },
+    });
+  } catch (error) {
+    console.error("Admin referrals error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "referrals_sql_missing" : "No se han podido cargar los referidos" });
+  }
+});
+
+app.post("/api/admin/referrals/reward", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const referrerId = String(request.body?.referrerId || "").trim();
+  const rewardPoints = Math.max(Math.floor(Number(request.body?.points || 100)), 1);
+  if (!referrerId) return response.status(400).json({ error: "Falta la cuenta" });
+
+  try {
+    const { data: referrals, error: referralsError } = await supabaseAdmin
+      .from("referrals")
+      .select("id, referred_recharged_at, reward_paid_at")
+      .eq("referrer_profile_id", referrerId);
+    if (referralsError) throw referralsError;
+
+    const completed = (referrals || []).filter((item) => item.referred_recharged_at);
+    const alreadyPaid = (referrals || []).some((item) => item.reward_paid_at);
+    if (alreadyPaid) return response.status(409).json({ error: "reward_already_paid" });
+    if (completed.length < 5) return response.status(400).json({ error: "not_enough_referrals" });
+
+    const now = new Date().toISOString();
+    const { error: markError } = await supabaseAdmin
+      .from("referrals")
+      .update({ reward_paid_at: now, reward_points: rewardPoints, updated_at: now })
+      .eq("referrer_profile_id", referrerId)
+      .not("referred_recharged_at", "is", null);
+
+    if (markError) throw markError;
+    response.json({ ok: true, reward_points: rewardPoints, marked_only: true });
+  } catch (error) {
+    console.error("Admin referral reward error:", error);
+    response.status(500).json({ error: "No se ha podido entregar el bonus" });
+  }
+});
 
 app.post("/api/admin/recharges", async (request, response) => {
   if (!supabaseAdmin) {
@@ -4538,6 +4797,7 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
         console.error("Recharge status credit error:", error);
         return response.status(500).json({ error: "Could not credit points" });
       }
+      await markReferralRecharge(userId);
     }
 
     let { data: profile } = userId
@@ -4561,6 +4821,7 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
           .maybeSingle();
 
         if (!correctionError && correctedProfile) profile = correctedProfile;
+        if (!correctionError && correctedProfile) await markReferralRecharge(userId);
       }
     }
 

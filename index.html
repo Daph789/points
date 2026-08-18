@@ -119,6 +119,23 @@
     </style>
   </head>
   <body class="antialiased">
+    <script>
+      (function () {
+        const params = new URLSearchParams(window.location.search);
+        const rawRef = params.get("ref") || params.get("r") || "";
+        const cleanRef = String(rawRef).replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        if (cleanRef) localStorage.setItem("donossReferralCode", cleanRef);
+        const referralCode = cleanRef || localStorage.getItem("donossReferralCode") || "";
+        if (!referralCode) return;
+        document.addEventListener("DOMContentLoaded", () => {
+          document.querySelectorAll('a[href^="signup.html"]').forEach((link) => {
+            const url = new URL(link.getAttribute("href"), window.location.href);
+            url.searchParams.set("ref", referralCode);
+            link.setAttribute("href", `${url.pathname.split("/").pop()}${url.search}${url.hash}`);
+          });
+        });
+      })();
+    </script>
     <header class="fixed left-0 right-0 top-0 z-50 px-4 pt-4">
       <nav class="mx-auto flex max-w-6xl items-center justify-between rounded-[24px] border border-white/10 bg-[#070A12]/72 px-3 py-3 shadow-soft backdrop-blur-2xl sm:rounded-[26px] sm:px-4">
         <a href="index.html" class="flex items-center gap-3" aria-label="Donoss">
