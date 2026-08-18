@@ -19,6 +19,7 @@ const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || "";
 const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const adminPassword = process.env.ADMIN_DONOS_PASSWORD || "";
+const publicAppUrl = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -42,6 +43,27 @@ function pointPackFor(points) {
 function computedStripeFeeForRecharge(recharge) {
   const pack = pointPackFor(recharge?.points);
   return pack ? pack.stripeFeeAmount : Number(recharge?.stripe_fee_amount || 0);
+}
+
+function publicOriginForRequest(request) {
+  if (publicAppUrl) return publicAppUrl.replace(/\/+$/, "");
+
+  const headerOrigin = String(request.headers.origin || "").trim();
+  if (headerOrigin) {
+    try {
+      const url = new URL(headerOrigin);
+      if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return url.origin;
+      url.protocol = "https:";
+      return url.origin;
+    } catch (_error) {}
+  }
+
+  const host = String(request.get("host") || "").trim();
+  if (!host) return `http://localhost:${port}`;
+  const hostname = host.split(":")[0];
+  const forwardedProto = String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const protocol = hostname === "localhost" || hostname === "127.0.0.1" ? "http" : forwardedProto === "https" ? "https" : "https";
+  return `${protocol}://${host}`;
 }
 
 function enrichRechargeAccounting(recharge) {
@@ -675,7 +697,7 @@ app.get("/api/me/referral-program", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const origin = request.headers.origin || `${request.protocol}://${request.get("host")}`;
+    const origin = publicOriginForRequest(request);
     const referralCode = cleanValidDonosId(profile?.transaction_id);
     const referralLink = referralCode ? `${origin}/?ref=${encodeURIComponent(referralCode)}` : "";
 
@@ -5357,7 +5379,7 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
     return response.status(403).json({ error: "point_pack_disabled" });
   }
 
-  const origin = request.headers.origin || `http://localhost:${port}`;
+  const origin = publicOriginForRequest(request);
 
   try {
     const session = await stripe.checkout.sessions.create({
