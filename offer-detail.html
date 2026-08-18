@@ -220,6 +220,16 @@
           }
         }
 
+        const liveGallery = offer?.presentation_image_data_urls || [];
+        const liveAllImages = offer ? [offer.cover_photo_data_url, ...liveGallery].filter(Boolean) : [];
+        const activeImage = activeImageIndex !== null ? liveAllImages[activeImageIndex] : null;
+
+        React.useEffect(() => {
+          if (!isEmbeddedDetail || window.parent === window) return undefined;
+          window.parent.postMessage({ type: activeImage ? "donos:hide-nav" : "donos:show-nav" }, window.location.origin);
+          return () => window.parent.postMessage({ type: "donos:show-nav" }, window.location.origin);
+        }, [activeImage]);
+
         if (status) {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -228,10 +238,9 @@
           );
         }
 
-        const gallery = offer.presentation_image_data_urls || [];
-        const allImages = [offer.cover_photo_data_url, ...gallery].filter(Boolean);
+        const gallery = liveGallery;
+        const allImages = liveAllImages;
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
-        const activeImage = activeImageIndex !== null ? allImages[activeImageIndex] : null;
         const mapsUrl = offer.address
           ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${offer.address} Donostia`)}`
           : "";
@@ -596,7 +605,7 @@
             </div>
 
             {activeImage && (
-              <div className="fixed inset-0 z-50 flex flex-col bg-[#03050B]/95 px-4 py-5 backdrop-blur-2xl">
+              <div className="fixed inset-0 z-50 flex flex-col bg-[#03050B]/95 px-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] pt-5 backdrop-blur-2xl">
                 <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Galería</p>

@@ -155,6 +155,12 @@
         pointer-events: none;
       }
 
+      body.is-overlay-route #donos-static-nav {
+        opacity: 0;
+        transform: translateY(120%);
+        pointer-events: none;
+      }
+
       .donos-update-overlay {
         position: fixed;
         inset: 0;
@@ -643,6 +649,14 @@
           }
           if (event.data?.type === "donos:detail-back") {
             history.back();
+            return;
+          }
+          if (event.data?.type === "donos:hide-nav") {
+            document.body.classList.add("is-overlay-route");
+            return;
+          }
+          if (event.data?.type === "donos:show-nav") {
+            document.body.classList.remove("is-overlay-route");
             return;
           }
           if (event.data?.type === "donos:navigate") {
