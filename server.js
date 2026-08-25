@@ -2093,10 +2093,12 @@ app.put("/api/me/profile", async (request, response) => {
   const hasDisplayName = Object.prototype.hasOwnProperty.call(request.body || {}, "display_name");
   const hasBio = Object.prototype.hasOwnProperty.call(request.body || {}, "bio");
   const hasProfilePhoto = Object.prototype.hasOwnProperty.call(request.body || {}, "profile_photo_data_url");
+  const hasNeighborhood = Object.prototype.hasOwnProperty.call(request.body || {}, "neighborhood");
   const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
   const bio = String(request.body?.bio || "").trim().replace(/\s+/g, " ");
   const profilePhoto = String(request.body?.profile_photo_data_url || "");
-  if (!hasDisplayName && !hasBio && !hasProfilePhoto) {
+  const neighborhood = String(request.body?.neighborhood || "").trim().replace(/\s+/g, " ");
+  if (!hasDisplayName && !hasBio && !hasProfilePhoto && !hasNeighborhood) {
     return response.status(400).json({ error: "nothing_to_update" });
   }
   if (hasDisplayName && (displayName.length < 2 || displayName.length > 60)) {
@@ -2108,6 +2110,9 @@ app.put("/api/me/profile", async (request, response) => {
   if (hasProfilePhoto && profilePhoto && (!profilePhoto.startsWith("data:image/") || profilePhoto.length > 1400000)) {
     return response.status(400).json({ error: "invalid_profile_photo" });
   }
+  if (hasNeighborhood && (neighborhood.length < 2 || neighborhood.length > 60)) {
+    return response.status(400).json({ error: "invalid_neighborhood" });
+  }
 
   try {
     const profile = await ensureProfileForUser(auth.user);
@@ -2118,6 +2123,7 @@ app.put("/api/me/profile", async (request, response) => {
     if (hasDisplayName) payload.display_name = displayName;
     if (hasBio) payload.bio = bio;
     if (hasProfilePhoto) payload.profile_photo_data_url = profilePhoto || null;
+    if (hasNeighborhood) payload.neighborhood = neighborhood;
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .update(payload)

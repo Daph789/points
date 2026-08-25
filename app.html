@@ -277,6 +277,7 @@
         const baseFrames = Array.from(document.querySelectorAll(".spa-frame"));
         const categoryFrames = new Map();
         const offerFrames = new Map();
+        const businessFrames = new Map();
         const chatFrames = new Map();
         const sideGroupFrames = new Map();
         const pendingChatPrefetches = new Set();
@@ -365,13 +366,14 @@
           const clean = window.location.hash.replace("#", "");
           if (clean.startsWith("categoria=")) return "categoria";
           if (clean.startsWith("detalle=")) return "detalle";
+          if (clean.startsWith("empresa=")) return "empresa";
           if (clean.startsWith("chat=")) return "chat";
           if (clean.startsWith("side=")) return "side";
           return routeNames.includes(clean) ? clean : "inicio";
         }
 
         function setRoute(route, options = {}) {
-          const isExternalInicioRoute = route === "categoria" || route === "detalle";
+          const isExternalInicioRoute = route === "categoria" || route === "detalle" || route === "empresa";
           const navRoute = route === "chat" || route === "side" ? "quedar" : isExternalInicioRoute ? "inicio" : route;
           const nextIndex = Math.max(bottomRoutes.indexOf(navRoute), 0);
           const direction = nextIndex < activeIndex ? "left" : "right";
@@ -402,6 +404,8 @@
                 ? frame.dataset.route === "categoria" && frame.dataset.categoryKey === activeCategoryKey
                 : route === "detalle"
                   ? frame.dataset.route === "detalle" && frame.dataset.offerId === activeOfferId
+                : route === "empresa"
+                  ? frame.dataset.route === "empresa" && frame.dataset.businessId === activeBusinessId
                 : route === "chat"
                   ? frame.dataset.route === "chat" && frame.dataset.planId === activePlanChatId
                 : route === "side"
@@ -417,7 +421,7 @@
         }
 
         function allFrames() {
-          return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values(), ...chatFrames.values(), ...sideGroupFrames.values()];
+          return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values(), ...businessFrames.values(), ...chatFrames.values(), ...sideGroupFrames.values()];
         }
 
         function categoryKey(category) {
@@ -486,6 +490,29 @@
           setRoute("detalle", { skipHash: true });
           if (!options.skipHash) {
             history.pushState({ route: "detalle", offerId: cleanId }, "", `#detalle=${encodeURIComponent(cleanId)}`);
+          }
+        }
+
+        let activeBusinessId = "";
+        function openBusinessProfile(businessId, options = {}) {
+          const cleanId = String(businessId || "").trim();
+          if (!cleanId) return;
+          activeBusinessId = cleanId;
+          if (!businessFrames.has(cleanId)) {
+            const frame = document.createElement("iframe");
+            frame.className = "spa-frame";
+            frame.dataset.route = "empresa";
+            frame.dataset.businessId = cleanId;
+            frame.dataset.index = "0";
+            frame.title = "Empresa Donoss";
+            frame.src = `business-profile.html?embedded=1&id=${encodeURIComponent(cleanId)}`;
+            watchFrame(frame);
+            root.appendChild(frame);
+            businessFrames.set(cleanId, frame);
+          }
+          setRoute("empresa", { skipHash: true });
+          if (!options.skipHash) {
+            history.pushState({ route: "empresa", businessId: cleanId }, "", `#empresa=${encodeURIComponent(cleanId)}`);
           }
         }
 
@@ -602,6 +629,8 @@
             openCategory(decodeURIComponent(clean.slice("categoria=".length)), { skipHash: true });
           } else if (clean.startsWith("detalle=")) {
             openOfferDetail(decodeURIComponent(clean.slice("detalle=".length)), { skipHash: true });
+          } else if (clean.startsWith("empresa=")) {
+            openBusinessProfile(decodeURIComponent(clean.slice("empresa=".length)), { skipHash: true });
           } else if (clean.startsWith("chat=")) {
             openPlanChat(decodeURIComponent(clean.slice("chat=".length)), { skipHash: true });
           } else if (clean.startsWith("side=")) {
@@ -624,6 +653,10 @@
           }
           if (event.data?.type === "donos:offer-detail") {
             openOfferDetail(event.data.id);
+            return;
+          }
+          if (event.data?.type === "donos:business-profile") {
+            openBusinessProfile(event.data.id);
             return;
           }
           if (event.data?.type === "donos:likes-changed") {
@@ -698,6 +731,8 @@
             openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });
           } else if (hash.startsWith("detalle=")) {
             openOfferDetail(decodeURIComponent(hash.slice("detalle=".length)), { skipHash: true });
+          } else if (hash.startsWith("empresa=")) {
+            openBusinessProfile(decodeURIComponent(hash.slice("empresa=".length)), { skipHash: true });
           } else if (hash.startsWith("chat=")) {
             openPlanChat(decodeURIComponent(hash.slice("chat=".length)), { skipHash: true });
           } else if (hash.startsWith("side=")) {

@@ -81,6 +81,24 @@
         { label: "Perfil", icon: "user", active: true, href: "profile.html" },
       ];
 
+      const neighborhoods = [
+        "Gros",
+        "Amara",
+        "Centro",
+        "Altza",
+        "Herrera",
+        "Egia",
+        "Antiguo",
+        "Intxaurrondo",
+        "Aiete",
+        "Ibaeta",
+        "Loiola",
+        "Martutene",
+        "Parte Vieja",
+        "Riberas de Loiola",
+        "Añadir otro barrio",
+      ];
+      const customNeighborhoodValue = "__custom_neighborhood__";
 
       function NavIcon({ name }) {
         const paths = {
@@ -194,6 +212,10 @@
         const [isEditingBio, setIsEditingBio] = React.useState(false);
         const [bioDraft, setBioDraft] = React.useState("");
         const [isSavingBio, setIsSavingBio] = React.useState(false);
+        const [isEditingNeighborhood, setIsEditingNeighborhood] = React.useState(false);
+        const [neighborhoodDraft, setNeighborhoodDraft] = React.useState("");
+        const [customNeighborhood, setCustomNeighborhood] = React.useState("");
+        const [isSavingNeighborhood, setIsSavingNeighborhood] = React.useState(false);
         const [premiumDni, setPremiumDni] = React.useState("");
         const [premiumPhoto, setPremiumPhoto] = React.useState("");
         const [isSavingPremiumIdentity, setIsSavingPremiumIdentity] = React.useState(false);
@@ -271,6 +293,17 @@
 
             setProfile({ points: 0, ...data });
             setBioDraft(data?.bio || "");
+            const initialNeighborhood = data?.neighborhood || "";
+            if (initialNeighborhood && neighborhoods.includes(initialNeighborhood)) {
+              setNeighborhoodDraft(initialNeighborhood);
+              setCustomNeighborhood("");
+            } else if (initialNeighborhood) {
+              setNeighborhoodDraft(customNeighborhoodValue);
+              setCustomNeighborhood(initialNeighborhood);
+            } else {
+              setNeighborhoodDraft("");
+              setCustomNeighborhood("");
+            }
             setBusinessProfilePhoto(data?.profile_photo_data_url || "");
             setPlanPhotos(data?.plan_photo_data_urls || []);
             setPremiumDni(data?.premium_identity?.dni || data?.premium_identity_dni || "");
@@ -447,6 +480,40 @@
             setStatus(error.message === "profile_bio_sql_missing" ? "Falta ejecutar el SQL de bio de perfiles." : "No se ha podido actualizar tu bio.");
           } finally {
             setIsSavingBio(false);
+          }
+        }
+
+        async function saveNeighborhood(event) {
+          event?.preventDefault();
+          if (!accessToken) return redirectToLogin();
+          const cleanNeighborhood = (neighborhoodDraft === customNeighborhoodValue ? customNeighborhood : neighborhoodDraft)
+            .trim()
+            .replace(/\s+/g, " ");
+          if (cleanNeighborhood.length < 2 || cleanNeighborhood.length > 60) {
+            setStatus("El barrio debe tener entre 2 y 60 caracteres.");
+            return;
+          }
+
+          setIsSavingNeighborhood(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ neighborhood: cleanNeighborhood }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "neighborhood_update_failed");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), neighborhood: cleanNeighborhood } : current);
+            setIsEditingNeighborhood(false);
+            setStatus("Barrio actualizado correctamente.");
+          } catch (_error) {
+            setStatus("No se ha podido actualizar tu barrio.");
+          } finally {
+            setIsSavingNeighborhood(false);
           }
         }
 
@@ -860,7 +927,75 @@
             <section className="mt-5 grid gap-3 sm:grid-cols-2">
               <InfoCard label="Tipo de cuenta" value={isBusiness ? "Comercio / Empresa" : "Usuario"} />
               <InfoCard label="Teléfono" value={profile.phone} />
-              <InfoCard label="Barrio" value={profile.neighborhood} />
+              <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Barrio</p>
+                    {!isEditingNeighborhood && (
+                      <p className="mt-2 break-words text-base font-black text-white">{profile.neighborhood || "No indicado"}</p>
+                    )}
+                  </div>
+                  {!isEditingNeighborhood && (
+                    <button
+                      className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200 transition hover:bg-white/[0.10]"
+                      type="button"
+                      onClick={() => {
+                        const current = profile.neighborhood || "";
+                        if (current && neighborhoods.includes(current)) {
+                          setNeighborhoodDraft(current);
+                          setCustomNeighborhood("");
+                        } else if (current) {
+                          setNeighborhoodDraft(customNeighborhoodValue);
+                          setCustomNeighborhood(current);
+                        } else {
+                          setNeighborhoodDraft("");
+                          setCustomNeighborhood("");
+                        }
+                        setIsEditingNeighborhood(true);
+                      }}
+                    >
+                      Modificar
+                    </button>
+                  )}
+                </div>
+                {isEditingNeighborhood && (
+                  <form className="mt-3 grid gap-3" onSubmit={saveNeighborhood}>
+                    <select
+                      className="h-12 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 text-sm font-black text-white outline-none ring-4 ring-mint/10"
+                      value={neighborhoodDraft}
+                      onChange={(event) => setNeighborhoodDraft(event.target.value)}
+                    >
+                      <option value="">Elige tu barrio</option>
+                      {neighborhoods.map((item) => (
+                        <option key={item} value={item === "Añadir otro barrio" ? customNeighborhoodValue : item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                    {neighborhoodDraft === customNeighborhoodValue && (
+                      <input
+                        className="h-12 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 text-sm font-black text-white outline-none ring-4 ring-mint/10 placeholder:text-slate-600"
+                        value={customNeighborhood}
+                        maxLength="60"
+                        onChange={(event) => setCustomNeighborhood(event.target.value)}
+                        placeholder="Escribe tu barrio"
+                      />
+                    )}
+                    <div className="flex gap-2">
+                      <button className="h-10 rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingNeighborhood}>
+                        {isSavingNeighborhood ? "Guardando..." : "Guardar barrio"}
+                      </button>
+                      <button
+                        className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-white"
+                        type="button"
+                        onClick={() => setIsEditingNeighborhood(false)}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
               <InfoCard label="Dirección" value={profile.address} />
               {isBusiness && <InfoCard label="CIF / NIF" value={profile.tax_id} />}
               {isBusiness && <InfoCard label="Categorías" value={profile.business_categories?.join(", ")} />}

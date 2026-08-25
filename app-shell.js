@@ -21,6 +21,11 @@
         window.parent.postMessage({ type: "donos:offer-detail", id: url.searchParams.get("id") }, window.location.origin);
         return;
       }
+      if (file === "business-profile.html" && url.searchParams.get("id")) {
+        event.preventDefault();
+        window.parent.postMessage({ type: "donos:business-profile", id: url.searchParams.get("id") }, window.location.origin);
+        return;
+      }
       if (file === "plan-chat.html" && url.searchParams.get("id")) {
         event.preventDefault();
         window.parent.postMessage({ type: "donos:plan-chat", id: url.searchParams.get("id") }, window.location.origin);

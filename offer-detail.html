@@ -56,6 +56,14 @@
         history.back();
       }
 
+      function openBusinessProfileFromDetail(event, businessId) {
+        if (!businessId) return;
+        if (isEmbeddedDetail && window.parent !== window) {
+          event.preventDefault();
+          window.parent.postMessage({ type: "donos:business-profile", id: businessId }, window.location.origin);
+        }
+      }
+
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "—";
         return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
@@ -370,6 +378,7 @@
                   <a
                     className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-mint hover:text-ink"
                     href={offer.business_id ? `business-profile.html?id=${encodeURIComponent(offer.business_id)}` : "#"}
+                    onClick={(event) => openBusinessProfileFromDetail(event, offer.business_id)}
                   >
                     <span>{businessName}</span>
                     {offer.business_is_verified && <VerifiedBadge />}
