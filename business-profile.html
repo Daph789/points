@@ -53,6 +53,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const isEmbeddedBusiness = new URLSearchParams(window.location.search).get("embedded") === "1" || window.parent !== window;
 
       function formatNumber(value) {
         return Number(value || 0).toLocaleString("es-ES");
@@ -83,24 +84,38 @@
 
       function StatCard({ label, value }) {
         return (
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-4 text-center shadow-xl shadow-black/15">
-            <p className="text-2xl font-black text-white">{formatNumber(value)}</p>
-            <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.06] px-3 py-4 text-center shadow-xl shadow-black/15 sm:rounded-[24px] sm:p-4">
+            <p className="text-2xl font-black text-white sm:text-3xl">{formatNumber(value)}</p>
+            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-[0.12em]">{label}</p>
           </div>
         );
       }
 
-      function OfferCard({ offer }) {
+      function OfferCard({ offer, isLiked, onLike, onOpen }) {
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0] || "";
         const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
         return (
           <article
             className="group cursor-pointer overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20 transition active:scale-[0.99] sm:hover:-translate-y-1"
-            onClick={() => window.location.href = `offer-detail.html?id=${encodeURIComponent(offer.id)}`}
+            onClick={() => onOpen?.(offer)}
           >
             <div className="relative min-h-[170px] overflow-hidden bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
               {image && <img className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" src={image} alt="" />}
               <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/20 to-black/15"></div>
+              <button
+                className={`absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full text-xl shadow-2xl ring-1 backdrop-blur transition active:scale-90 ${
+                  isLiked ? "bg-coral text-white ring-coral/30" : "bg-black/35 text-white ring-white/15"
+                }`}
+                type="button"
+                aria-label={isLiked ? "Quitar de me gusta" : "Guardar en me gusta"}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onLike?.(offer);
+                }}
+              >
+                {isLiked ? "♥" : "♡"}
+              </button>
               <div className="absolute left-4 top-4 flex flex-wrap gap-2">
                 {(offer.categories || []).slice(0, 2).map((category) => (
                   <span key={category} className="rounded-full bg-black/35 px-3 py-1 text-xs font-black text-white backdrop-blur">{category}</span>
@@ -136,6 +151,7 @@
         const [toast, setToast] = React.useState("");
         const [isSavingFollow, setIsSavingFollow] = React.useState(false);
         const [followPulse, setFollowPulse] = React.useState(false);
+        const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
 
         async function getToken() {
           const { data } = await supabaseClient.auth.getSession();
@@ -162,13 +178,83 @@
           if (!data.follows_sql_missing) setStatus("");
         }
 
+        async function loadLikedOffers() {
+          const token = await getToken();
+          if (!token) return;
+          try {
+            const response = await fetch("/api/me/liked-offers", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) setLikedOfferIds(new Set(data.offer_ids || []));
+          } catch (_error) {
+            setLikedOfferIds(new Set());
+          }
+        }
+
         React.useEffect(() => {
           if (!businessId) {
             setStatus("Falta la empresa.");
             return;
           }
           loadBusiness();
+          loadLikedOffers();
         }, [businessId]);
+
+        function openOffer(offer) {
+          if (isEmbeddedBusiness && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:offer-detail", id: offer.id }, window.location.origin);
+            return;
+          }
+          window.location.href = `offer-detail.html?id=${encodeURIComponent(offer.id)}`;
+        }
+
+        async function toggleLike(offer) {
+          const token = await getToken();
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent(`business-profile.html?id=${businessId}`)}`;
+            return;
+          }
+          const nextLiked = !likedOfferIds.has(offer.id);
+          setLikedOfferIds((current) => {
+            const next = new Set(current);
+            if (nextLiked) next.add(offer.id);
+            else next.delete(offer.id);
+            return next;
+          });
+          setStats((current) => ({
+            ...current,
+            total_likes: Math.max(Number(current.total_likes || 0) + (nextLiked ? 1 : -1), 0),
+          }));
+          setToast(nextLiked ? "Guardado en Me gusta" : "Quitado de Me gusta");
+          window.setTimeout(() => setToast(""), 1500);
+
+          const response = await fetch("/api/me/liked-offers", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ offerId: offer.id, liked: nextLiked }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setLikedOfferIds((current) => {
+              const next = new Set(current);
+              if (nextLiked) next.delete(offer.id);
+              else next.add(offer.id);
+              return next;
+            });
+            setStats((current) => ({
+              ...current,
+              total_likes: Math.max(Number(current.total_likes || 0) + (nextLiked ? -1 : 1), 0),
+            }));
+            setToast(data.error === "liked_offers_table_missing" ? "Ejecuta el SQL de Me gusta" : "No se ha podido guardar");
+            window.setTimeout(() => setToast(""), 2200);
+          } else if (window.parent !== window) {
+            window.parent.postMessage({ type: "donos:likes-changed" }, window.location.origin);
+          }
+        }
 
         async function toggleFollow() {
           const token = await getToken();
@@ -219,7 +305,7 @@
         const avatarLetter = (business?.display_name || "D").trim().charAt(0).toUpperCase();
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-20 pt-5 sm:px-6 lg:px-8">
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-3 pb-36 pt-4 sm:px-6 sm:pb-20 lg:px-8">
             <header className="flex items-center justify-between gap-3">
               <button className="rounded-full bg-white/[0.08] px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => history.back()}>
                 Volver
@@ -229,32 +315,32 @@
               </button>
             </header>
 
-            <section className="mt-6 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] shadow-glow sm:rounded-[42px]">
-              <div className="relative min-h-[170px] bg-gradient-to-br from-mint/30 via-[#172235] to-coral/20">
+            <section className="-mx-3 mt-5 overflow-hidden rounded-b-[34px] border-y border-white/10 bg-white/[0.055] shadow-glow sm:mx-0 sm:rounded-[42px] sm:border">
+              <div className="relative min-h-[150px] bg-gradient-to-br from-mint/30 via-[#172235] to-coral/20 sm:min-h-[190px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_22%,rgba(66,242,179,.24),transparent_28%),radial-gradient(circle_at_78%_18%,rgba(255,209,102,.15),transparent_26%)]"></div>
                 <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0D111D] to-transparent"></div>
               </div>
-              <div className="px-5 pb-6 sm:px-7">
-                <div className="-mt-16 flex flex-wrap items-end justify-between gap-4">
-                  <div className="flex min-w-0 items-end gap-4">
-                    <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-[32px] border-4 border-[#0D111D] bg-mint text-5xl font-black text-ink shadow-2xl shadow-black/35">
+              <div className="px-4 pb-6 sm:px-7">
+                <div className="-mt-12 grid gap-4 sm:-mt-16 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div className="grid min-w-0 grid-cols-[96px_1fr] items-end gap-3 sm:grid-cols-[128px_1fr] sm:gap-4">
+                    <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[28px] border-4 border-[#0D111D] bg-mint text-4xl font-black text-ink shadow-2xl shadow-black/35 sm:h-32 sm:w-32 sm:rounded-[34px] sm:text-5xl">
                       {business?.profile_photo_data_url ? (
                         <img className="h-full w-full object-cover" src={business.profile_photo_data_url} alt="" />
                       ) : (
                         avatarLetter
                       )}
                     </div>
-                    <div className="min-w-0 pb-2">
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Empresa Donoss</p>
-                      <h1 className="mt-1 flex flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
+                    <div className="min-w-0 pb-1">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-mint sm:text-xs">Empresa Donoss</p>
+                      <h1 className="mt-1 flex min-w-0 flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
                         <span>{business?.display_name || "Empresa"}</span>
                         {business?.is_verified && <VerifiedBadge />}
                       </h1>
-                      <p className="mt-2 text-sm font-bold text-slate-400">{business?.address || business?.neighborhood || "Donostia"}</p>
+                      <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-400 sm:mt-2">{business?.address || business?.neighborhood || "Donostia"}</p>
                     </div>
                   </div>
                   <button
-                    className={`h-12 rounded-2xl px-6 text-sm font-black transition disabled:opacity-60 ${
+                    className={`h-12 w-full rounded-2xl px-6 text-sm font-black transition disabled:opacity-60 sm:w-auto ${
                       isFollowing
                         ? "border border-mint/25 bg-mint/10 text-mint"
                         : "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]"
@@ -266,13 +352,13 @@
                   </button>
                 </div>
 
-                <div className="mt-6 grid grid-cols-3 gap-3">
+                <div className="mt-5 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3">
                   <StatCard label="Publicaciones" value={stats.publications_count} />
                   <StatCard label="Me gusta" value={stats.total_likes} />
                   <StatCard label="Abonados" value={stats.followers_count} />
                 </div>
 
-                <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                <div className="mt-5 rounded-[26px] border border-white/10 bg-black/20 p-4 sm:rounded-3xl">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Bio</p>
                   <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-200">
                     {business?.bio || "Esta empresa todavía no ha añadido una bio."}
@@ -304,7 +390,15 @@
 
               {offers.length > 0 ? (
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                  {offers.map((offer) => (
+                    <OfferCard
+                      key={offer.id}
+                      offer={offer}
+                      isLiked={likedOfferIds.has(offer.id)}
+                      onLike={toggleLike}
+                      onOpen={openOffer}
+                    />
+                  ))}
                 </div>
               ) : (
                 <div className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-400">
