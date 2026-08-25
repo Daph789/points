@@ -84,9 +84,9 @@
 
       function StatCard({ label, value }) {
         return (
-          <div className="rounded-[22px] border border-white/10 bg-white/[0.06] px-3 py-4 text-center shadow-xl shadow-black/15 sm:rounded-[24px] sm:p-4">
+          <div className="rounded-[20px] border border-white/10 bg-white/[0.06] px-2 py-4 text-center shadow-xl shadow-black/15 sm:rounded-[24px] sm:p-4">
             <p className="text-2xl font-black text-white sm:text-3xl">{formatNumber(value)}</p>
-            <p className="mt-1 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 sm:text-[11px] sm:tracking-[0.12em]">{label}</p>
+            <p className="mt-1 whitespace-nowrap text-[9px] font-black uppercase tracking-[0.04em] text-slate-500 sm:text-[11px] sm:tracking-[0.12em]">{label}</p>
           </div>
         );
       }
@@ -316,14 +316,14 @@
             </header>
 
             <section className="-mx-3 mt-5 overflow-hidden rounded-b-[34px] border-y border-white/10 bg-white/[0.055] shadow-glow sm:mx-0 sm:rounded-[42px] sm:border">
-              <div className="relative min-h-[150px] bg-gradient-to-br from-mint/30 via-[#172235] to-coral/20 sm:min-h-[190px]">
+              <div className="relative min-h-[118px] bg-gradient-to-br from-mint/30 via-[#172235] to-coral/20 sm:min-h-[190px]">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_22%,rgba(66,242,179,.24),transparent_28%),radial-gradient(circle_at_78%_18%,rgba(255,209,102,.15),transparent_26%)]"></div>
-                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0D111D] to-transparent"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#111827] to-transparent sm:h-24 sm:from-[#0D111D]"></div>
               </div>
-              <div className="px-4 pb-6 sm:px-7">
-                <div className="-mt-12 grid gap-4 sm:-mt-16 sm:grid-cols-[1fr_auto] sm:items-end">
-                  <div className="grid min-w-0 grid-cols-[96px_1fr] items-end gap-3 sm:grid-cols-[128px_1fr] sm:gap-4">
-                    <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[28px] border-4 border-[#0D111D] bg-mint text-4xl font-black text-ink shadow-2xl shadow-black/35 sm:h-32 sm:w-32 sm:rounded-[34px] sm:text-5xl">
+              <div className="relative z-10 px-4 pb-6 sm:px-7">
+                <div className="-mt-8 grid gap-4 sm:-mt-16 sm:grid-cols-[1fr_auto] sm:items-end">
+                  <div className="grid min-w-0 grid-cols-[86px_minmax(0,1fr)] items-end gap-3 sm:grid-cols-[128px_minmax(0,1fr)] sm:gap-4">
+                    <div className="relative z-20 grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-[28px] border-4 border-[#0D111D] bg-mint text-4xl font-black text-ink shadow-2xl shadow-black/35 sm:h-32 sm:w-32 sm:rounded-[34px] sm:text-5xl">
                       {business?.profile_photo_data_url ? (
                         <img className="h-full w-full object-cover" src={business.profile_photo_data_url} alt="" />
                       ) : (
@@ -332,8 +332,8 @@
                     </div>
                     <div className="min-w-0 pb-1">
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-mint sm:text-xs">Empresa Donoss</p>
-                      <h1 className="mt-1 flex min-w-0 flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
-                        <span>{business?.display_name || "Empresa"}</span>
+                      <h1 className="mt-1 flex min-w-0 max-w-full flex-wrap items-center gap-2 text-2xl font-black leading-tight text-white sm:text-5xl">
+                        <span className="min-w-0 max-w-full break-words">{business?.display_name || "Empresa"}</span>
                         {business?.is_verified && <VerifiedBadge />}
                       </h1>
                       <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-400 sm:mt-2">{business?.address || business?.neighborhood || "Donostia"}</p>
@@ -353,8 +353,8 @@
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3">
-                  <StatCard label="Publicaciones" value={stats.publications_count} />
-                  <StatCard label="Me gusta" value={stats.total_likes} />
+                  <StatCard label="Posts" value={stats.publications_count} />
+                  <StatCard label="Likes" value={stats.total_likes} />
                   <StatCard label="Abonados" value={stats.followers_count} />
                 </div>
 
