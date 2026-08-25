@@ -23,7 +23,13 @@
       }
       if (file === "business-profile.html" && url.searchParams.get("id")) {
         event.preventDefault();
-        window.parent.postMessage({ type: "donos:business-profile", id: url.searchParams.get("id") }, window.location.origin);
+        const businessId = url.searchParams.get("id");
+        window.parent.postMessage({ type: "donos:business-profile", id: businessId }, window.location.origin);
+        try {
+          window.parent.location.hash = `empresa=${encodeURIComponent(businessId)}`;
+        } catch (_error) {
+          window.parent.location.href = `app.html#empresa=${encodeURIComponent(businessId)}`;
+        }
         return;
       }
       if (file === "plan-chat.html" && url.searchParams.get("id")) {

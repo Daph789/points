@@ -616,14 +616,7 @@
           }
         }
 
-        links.forEach((link) => {
-          link.addEventListener("click", (event) => {
-            event.preventDefault();
-            setRoute(link.dataset.route);
-          });
-        });
-
-        window.addEventListener("popstate", () => {
+        function openRouteFromHash() {
           const clean = window.location.hash.replace("#", "");
           if (clean.startsWith("categoria=")) {
             openCategory(decodeURIComponent(clean.slice("categoria=".length)), { skipHash: true });
@@ -640,7 +633,17 @@
           } else {
             setRoute(routeFromHash(), { skipHash: true });
           }
+        }
+
+        links.forEach((link) => {
+          link.addEventListener("click", (event) => {
+            event.preventDefault();
+            setRoute(link.dataset.route);
+          });
         });
+
+        window.addEventListener("popstate", openRouteFromHash);
+        window.addEventListener("hashchange", openRouteFromHash);
         window.addEventListener("message", (event) => {
           if (event.origin !== window.location.origin) return;
           if (event.data?.type === "donos:theme") {
@@ -726,22 +729,7 @@
           window.setTimeout(hydrateNotificationBadges, 900);
           window.setTimeout(checkAppUpdate, 1800);
           window.setInterval(checkAppUpdate, 15000);
-          const hash = window.location.hash.replace("#", "");
-          if (hash.startsWith("categoria=")) {
-            openCategory(decodeURIComponent(hash.slice("categoria=".length)), { skipHash: true });
-          } else if (hash.startsWith("detalle=")) {
-            openOfferDetail(decodeURIComponent(hash.slice("detalle=".length)), { skipHash: true });
-          } else if (hash.startsWith("empresa=")) {
-            openBusinessProfile(decodeURIComponent(hash.slice("empresa=".length)), { skipHash: true });
-          } else if (hash.startsWith("chat=")) {
-            openPlanChat(decodeURIComponent(hash.slice("chat=".length)), { skipHash: true });
-          } else if (hash.startsWith("side=")) {
-            const raw = decodeURIComponent(hash.slice("side=".length));
-            const [planId, status] = raw.split(":");
-            openSideGroup(planId, status, { skipHash: true });
-          } else {
-            setRoute(routeFromHash(), { skipHash: true });
-          }
+          openRouteFromHash();
         });
       })();
     </script>

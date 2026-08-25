@@ -60,7 +60,13 @@
         if (!businessId) return;
         if (isEmbeddedDetail && window.parent !== window) {
           event.preventDefault();
+          const encodedId = encodeURIComponent(businessId);
           window.parent.postMessage({ type: "donos:business-profile", id: businessId }, window.location.origin);
+          try {
+            window.parent.location.hash = `empresa=${encodedId}`;
+          } catch (_error) {
+            window.parent.location.href = `app.html#empresa=${encodedId}`;
+          }
         }
       }
 

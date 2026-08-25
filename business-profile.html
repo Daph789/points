@@ -204,6 +204,11 @@
         function openOffer(offer) {
           if (isEmbeddedBusiness && window.parent !== window) {
             window.parent.postMessage({ type: "donos:offer-detail", id: offer.id }, window.location.origin);
+            try {
+              window.parent.location.hash = `detalle=${encodeURIComponent(offer.id)}`;
+            } catch (_error) {
+              window.parent.location.href = `app.html#detalle=${encodeURIComponent(offer.id)}`;
+            }
             return;
           }
           window.location.href = `offer-detail.html?id=${encodeURIComponent(offer.id)}`;
