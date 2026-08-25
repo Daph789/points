@@ -153,6 +153,22 @@ function transferPublicProfile(profile) {
   };
 }
 
+function businessPublicProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    display_name: profile.display_name,
+    bio: profile.bio || "",
+    account_type: profile.account_type,
+    business_categories: profile.business_categories || [],
+    address: profile.address || "",
+    neighborhood: profile.neighborhood || "",
+    transaction_id: profile.transaction_id || "",
+    is_verified: Boolean(profile.is_verified),
+    profile_photo_data_url: profile.profile_photo_data_url || "",
+  };
+}
+
 function referralPublicProfile(profile) {
   if (!profile) return null;
   return {
@@ -273,7 +289,7 @@ async function syncPremiumForProfile(profile) {
               premium_failed_at: null,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+            .select("id, account_type, display_name, bio, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -313,7 +329,7 @@ async function syncPremiumForProfile(profile) {
               premium_failed_at: now,
             })
             .eq("id", profile.id)
-            .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+            .select("id, account_type, display_name, bio, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
             .maybeSingle(),
           supabaseAdmin
             .from("premium_subscriptions")
@@ -453,9 +469,10 @@ async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
+  const profileIdentityColumns = `${baseProfileColumns}, bio`;
   const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
   const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at`;
-  const profileColumns = `${bankProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, plan_gender_preference, plan_photo_data_url`;
+  const profileColumns = `${profileIdentityColumns}, profile_photo_data_url, bank_account_holder, bank_iban, bank_name, bank_bic, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, plan_gender_preference, plan_photo_data_url`;
   let { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
     .select(profileColumns)
@@ -475,6 +492,21 @@ async function ensureProfileForUser(user) {
   if (existingError) throw existingError;
   const metadata = user.user_metadata || user.raw_user_meta_data || {};
   if (existing) {
+    const metadataBio = metadataText(metadata, "bio");
+    if (metadataBio && !existing.bio) {
+      try {
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({ bio: metadataBio })
+          .eq("id", user.id)
+          .select(profileColumns)
+          .maybeSingle();
+        if (!updateError && updated) return updated;
+        if (updateError?.code !== "42703") console.error("Profile bio backfill error:", updateError);
+      } catch (error) {
+        if (error?.code !== "42703") console.error("Profile bio backfill fatal error:", error);
+      }
+    }
     const metadataBankIban = metadataText(metadata, "bank_iban").replace(/[^A-Z0-9]/gi, "").toUpperCase();
     if (existing.account_type === "business" && metadataBankIban && !existing.bank_iban) {
       try {
@@ -511,6 +543,7 @@ async function ensureProfileForUser(user) {
     id: user.id,
     account_type: accountType,
     display_name: displayName,
+    bio: metadataText(metadata, "bio") || null,
     email: user.email || metadataText(metadata, "email"),
     phone: metadataText(metadata, "phone") || null,
     neighborhood: metadataText(metadata, "neighborhood") || "Donostia",
@@ -544,10 +577,11 @@ async function ensureProfileForUser(user) {
       .maybeSingle();
 
     if (error?.code === "42703") {
+      const { bio: _bio, ...profileWithoutBio } = baseProfile;
       const fallback = await supabaseAdmin
         .from("profiles")
+        .insert({ ...profileWithoutBio, transaction_id: transactionId })
         .select(baseProfileColumns)
-        .eq("id", user.id)
         .maybeSingle();
       created = fallback.data;
       error = fallback.error;
@@ -2056,20 +2090,42 @@ app.put("/api/me/profile", async (request, response) => {
   const auth = await getAuthenticatedUser(request);
   if (auth.error) return response.status(auth.status).json({ error: auth.error });
 
+  const hasDisplayName = Object.prototype.hasOwnProperty.call(request.body || {}, "display_name");
+  const hasBio = Object.prototype.hasOwnProperty.call(request.body || {}, "bio");
+  const hasProfilePhoto = Object.prototype.hasOwnProperty.call(request.body || {}, "profile_photo_data_url");
   const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
-  if (displayName.length < 2 || displayName.length > 60) {
+  const bio = String(request.body?.bio || "").trim().replace(/\s+/g, " ");
+  const profilePhoto = String(request.body?.profile_photo_data_url || "");
+  if (!hasDisplayName && !hasBio && !hasProfilePhoto) {
+    return response.status(400).json({ error: "nothing_to_update" });
+  }
+  if (hasDisplayName && (displayName.length < 2 || displayName.length > 60)) {
     return response.status(400).json({ error: "invalid_display_name" });
+  }
+  if (hasBio && (bio.length < 20 || bio.length > 500)) {
+    return response.status(400).json({ error: "invalid_bio" });
+  }
+  if (hasProfilePhoto && profilePhoto && (!profilePhoto.startsWith("data:image/") || profilePhoto.length > 1400000)) {
+    return response.status(400).json({ error: "invalid_profile_photo" });
   }
 
   try {
     const profile = await ensureProfileForUser(auth.user);
+    if (hasProfilePhoto && profile.account_type !== "business") {
+      return response.status(403).json({ error: "business_only" });
+    }
+    const payload = {};
+    if (hasDisplayName) payload.display_name = displayName;
+    if (hasBio) payload.bio = bio;
+    if (hasProfilePhoto) payload.profile_photo_data_url = profilePhoto || null;
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .update({ display_name: displayName })
+      .update(payload)
       .eq("id", profile.id)
-      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .select("id, account_type, display_name, bio, profile_photo_data_url, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
+    if (error?.code === "42703") return response.status(500).json({ error: hasProfilePhoto ? "profile_photo_sql_missing" : "profile_bio_sql_missing" });
     if (error) throw error;
     await syncBusinessVerification(data);
 
@@ -2201,7 +2257,7 @@ app.post("/api/me/premium/subscribe", async (request, response) => {
         premium_failed_at: null,
       })
       .eq("id", profile.id)
-      .select("id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .select("id, account_type, display_name, bio, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (profileError) throw profileError;
@@ -3531,6 +3587,179 @@ app.post("/api/me/liked-offers", async (request, response) => {
   } catch (error) {
     console.error("Liked offer fatal error:", error);
     response.status(500).json({ error: "liked_offer_save_failed" });
+  }
+});
+
+app.get("/api/businesses/:businessId/profile", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const businessId = String(request.params.businessId || "").trim();
+  if (!businessId) return response.status(400).json({ error: "business_missing" });
+
+  let viewerProfile = null;
+  const auth = await getAuthenticatedUser(request);
+  if (!auth.error) {
+    try {
+      viewerProfile = await ensureProfileForUser(auth.user);
+    } catch (error) {
+      console.error("Business profile viewer error:", error);
+    }
+  }
+
+  try {
+    let { data: business, error: businessError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, bio, account_type, business_categories, address, neighborhood, transaction_id, is_verified, profile_photo_data_url")
+      .eq("id", businessId)
+      .maybeSingle();
+
+    if (businessError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, account_type, business_categories, address, neighborhood, transaction_id, is_verified")
+        .eq("id", businessId)
+        .maybeSingle();
+      business = fallback.data;
+      businessError = fallback.error;
+    }
+
+    if (businessError) throw businessError;
+    if (!business) return response.status(404).json({ error: "business_not_found" });
+
+    const { data: offers, error: offersError } = await supabaseAdmin
+      .from("business_offers")
+      .select(publicOfferSelect)
+      .eq("business_id", business.id)
+      .order("created_at", { ascending: false })
+      .limit(300);
+
+    if (offersError) throw offersError;
+    const publicOffers = await enrichOffersWithBusiness((offers || []).filter(isOfferVisibleForPublic));
+    const offerIds = publicOffers.map((offer) => offer.id);
+
+    let totalLikes = 0;
+    if (offerIds.length > 0) {
+      const { data: likes, error: likesError } = await supabaseAdmin
+        .from("liked_offers")
+        .select("offer_id")
+        .in("offer_id", offerIds);
+      if (likesError && likesError.code !== "42P01") console.error("Business likes count error:", likesError);
+      totalLikes = (likes || []).length;
+    }
+
+    let followersCount = 0;
+    let isFollowing = false;
+    let followsSqlMissing = false;
+    const { data: followers, error: followersError } = await supabaseAdmin
+      .from("business_follows")
+      .select("follower_id")
+      .eq("business_id", business.id);
+
+    if (followersError) {
+      followsSqlMissing = followersError.code === "42P01";
+      if (!followsSqlMissing) console.error("Business followers count error:", followersError);
+    } else {
+      followersCount = (followers || []).length;
+      isFollowing = Boolean(viewerProfile?.id && (followers || []).some((follow) => follow.follower_id === viewerProfile.id));
+    }
+
+    response.json({
+      business: businessPublicProfile(business),
+      offers: publicOffers,
+      stats: {
+        publications_count: publicOffers.length,
+        total_likes: totalLikes,
+        followers_count: followersCount,
+      },
+      is_following: isFollowing,
+      is_self: viewerProfile?.id === business.id,
+      follows_sql_missing: followsSqlMissing,
+    });
+  } catch (error) {
+    console.error("Business profile load error:", error);
+    response.status(500).json({ error: "business_profile_failed" });
+  }
+});
+
+app.post("/api/businesses/:businessId/follow", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const businessId = String(request.params.businessId || "").trim();
+  if (!businessId) return response.status(400).json({ error: "business_missing" });
+
+  try {
+    const viewer = await ensureProfileForUser(auth.user);
+    if (viewer.id === businessId) return response.status(400).json({ error: "cannot_follow_self" });
+
+    const { data: business, error: businessError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, account_type")
+      .eq("id", businessId)
+      .maybeSingle();
+    if (businessError) throw businessError;
+    if (!business) return response.status(404).json({ error: "business_not_found" });
+
+    const { error } = await supabaseAdmin
+      .from("business_follows")
+      .upsert({ business_id: business.id, follower_id: viewer.id }, { onConflict: "business_id,follower_id" });
+
+    if (error) {
+      console.error("Business follow error:", error);
+      return response.status(500).json({ error: error.code === "42P01" ? "business_follows_sql_missing" : "business_follow_failed" });
+    }
+
+    const { data: followers } = await supabaseAdmin
+      .from("business_follows")
+      .select("id")
+      .eq("business_id", business.id);
+
+    response.json({ is_following: true, followers_count: (followers || []).length });
+  } catch (error) {
+    console.error("Business follow fatal error:", error);
+    response.status(500).json({ error: "business_follow_failed" });
+  }
+});
+
+app.delete("/api/businesses/:businessId/follow", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const businessId = String(request.params.businessId || "").trim();
+  if (!businessId) return response.status(400).json({ error: "business_missing" });
+
+  try {
+    const viewer = await ensureProfileForUser(auth.user);
+    const { error } = await supabaseAdmin
+      .from("business_follows")
+      .delete()
+      .eq("business_id", businessId)
+      .eq("follower_id", viewer.id);
+
+    if (error) {
+      console.error("Business unfollow error:", error);
+      return response.status(500).json({ error: error.code === "42P01" ? "business_follows_sql_missing" : "business_unfollow_failed" });
+    }
+
+    const { data: followers } = await supabaseAdmin
+      .from("business_follows")
+      .select("id")
+      .eq("business_id", businessId);
+
+    response.json({ is_following: false, followers_count: (followers || []).length });
+  } catch (error) {
+    console.error("Business unfollow fatal error:", error);
+    response.status(500).json({ error: "business_unfollow_failed" });
   }
 });
 

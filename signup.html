@@ -285,6 +285,7 @@
         }, []);
         const [accountType, setAccountType] = React.useState("");
         const [displayName, setDisplayName] = React.useState("");
+        const [bio, setBio] = React.useState("");
         const [email, setEmail] = React.useState("");
         const [emailConfirm, setEmailConfirm] = React.useState("");
         const [phone, setPhone] = React.useState("");
@@ -318,9 +319,11 @@
         const ibanIsValid = isValidIbanShape(normalizedIban);
         const ibansMatch = normalizedIban && normalizedIban === normalizedIbanConfirm;
         const bankDetailsComplete = bankAccountHolder.trim() && ibanIsValid && ibansMatch;
+        const bioText = bio.trim();
         const canSubmit =
           accountType &&
           displayName.trim() &&
+          bioText.length >= 20 &&
           emailsMatch &&
           phone.trim() &&
           finalNeighborhood &&
@@ -365,6 +368,7 @@
           return {
             account_type: accountType,
             display_name: displayName.trim(),
+            bio: bioText,
             email: normalizedEmail,
             phone: `+34 ${phone.trim()}`,
             neighborhood: finalNeighborhood,
@@ -435,6 +439,7 @@
           localStorage.setItem("donosAccountType", accountType);
           localStorage.setItem("donosPendingDisplayName", displayName.trim());
           localStorage.setItem("donosDisplayName", displayName.trim());
+          localStorage.setItem("donosProfileBio", bioText);
 
           try {
             const canAccess = await window.donossCountryGuard?.requireSpainAccess?.();
@@ -663,6 +668,26 @@
                           value={displayName}
                           onChange={(event) => setDisplayName(event.target.value)}
                         />
+                      </Field>
+
+                      <Field label={isBusiness ? "Bio de la empresa" : "Bio personal"}>
+                        <textarea
+                          className={`${inputClass} min-h-32 resize-none py-3 leading-6`}
+                          placeholder={
+                            isBusiness
+                              ? "Ej. Somos una librería de Gros que organiza planes culturales, descuentos para jóvenes y eventos cerca del barrio."
+                              : "Ej. Soy una persona a la que le gusta mucho la música, el cine y conocer gente para hacer planes por Donostia."
+                          }
+                          maxLength="500"
+                          value={bio}
+                          onChange={(event) => setBio(event.target.value)}
+                        />
+                        <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
+                          <span className={bioText.length >= 20 ? "text-mint" : "text-coral"}>
+                            Mínimo 20 caracteres para que otros entiendan quién eres.
+                          </span>
+                          <span className="text-slate-500">{bio.length}/500</span>
+                        </div>
                       </Field>
 
                       {isBusiness && (

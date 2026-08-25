@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Empresa</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="theme.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="activity-tracker.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 15% -8%, rgba(66, 242, 179, 0.22), transparent 30%),
+          radial-gradient(circle at 88% 6%, rgba(255, 107, 107, 0.16), transparent 28%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      #root, main { max-width: 100%; overflow-x: hidden; }
+      * { min-width: 0; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .follow-pop { animation: followPop 520ms cubic-bezier(.2,.85,.25,1.25); }
+      @keyframes followPop {
+        0% { transform: scale(.88); filter: brightness(.85); }
+        55% { transform: scale(1.08); filter: brightness(1.2); }
+        100% { transform: scale(1); filter: brightness(1); }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      function formatNumber(value) {
+        return Number(value || 0).toLocaleString("es-ES");
+      }
+
+      function formatEuro(value) {
+        if (value === null || value === undefined || value === "") return "";
+        return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
+      }
+
+      function getDiscountPercent(basePrice, reducedPrice) {
+        const base = Number(basePrice);
+        const reduced = Number(reducedPrice);
+        if (!base || !Number.isFinite(base) || !Number.isFinite(reduced) || reduced >= base) return null;
+        return Math.round(((base - reduced) / base) * 100);
+      }
+
+      function VerifiedBadge() {
+        return (
+          <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
+            <span className="absolute inset-[-2px] rounded-[42%] bg-sky-500"></span>
+            <svg viewBox="0 0 24 24" className="relative h-4 w-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3.5">
+              <path d="m5 12 4 4L19 7" />
+            </svg>
+          </span>
+        );
+      }
+
+      function StatCard({ label, value }) {
+        return (
+          <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-4 text-center shadow-xl shadow-black/15">
+            <p className="text-2xl font-black text-white">{formatNumber(value)}</p>
+            <p className="mt-1 text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{label}</p>
+          </div>
+        );
+      }
+
+      function OfferCard({ offer }) {
+        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0] || "";
+        const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
+        return (
+          <article
+            className="group cursor-pointer overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20 transition active:scale-[0.99] sm:hover:-translate-y-1"
+            onClick={() => window.location.href = `offer-detail.html?id=${encodeURIComponent(offer.id)}`}
+          >
+            <div className="relative min-h-[170px] overflow-hidden bg-gradient-to-br from-mint via-[#183047] to-[#FF6B6B]">
+              {image && <img className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-105" src={image} alt="" />}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/78 via-black/20 to-black/15"></div>
+              <div className="absolute left-4 top-4 flex flex-wrap gap-2">
+                {(offer.categories || []).slice(0, 2).map((category) => (
+                  <span key={category} className="rounded-full bg-black/35 px-3 py-1 text-xs font-black text-white backdrop-blur">{category}</span>
+                ))}
+              </div>
+              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
+                <h3 className="line-clamp-2 text-xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h3>
+                {discount !== null && <span className="shrink-0 rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discount}%</span>}
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="truncate text-sm font-bold text-slate-400">{offer.address || "Donostia"}</p>
+                {offer.base_price !== null && <p className="shrink-0 text-lg font-black text-slate-500 line-through">{formatEuro(offer.base_price)}</p>}
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} puntos</span>
+                <span className="text-xs font-black text-white">Ver detalle</span>
+              </div>
+            </div>
+          </article>
+        );
+      }
+
+      function App() {
+        const businessId = new URLSearchParams(window.location.search).get("id") || "";
+        const [business, setBusiness] = React.useState(null);
+        const [offers, setOffers] = React.useState([]);
+        const [stats, setStats] = React.useState({ publications_count: 0, total_likes: 0, followers_count: 0 });
+        const [isFollowing, setIsFollowing] = React.useState(false);
+        const [isSelf, setIsSelf] = React.useState(false);
+        const [status, setStatus] = React.useState("Cargando empresa...");
+        const [toast, setToast] = React.useState("");
+        const [isSavingFollow, setIsSavingFollow] = React.useState(false);
+        const [followPulse, setFollowPulse] = React.useState(false);
+
+        async function getToken() {
+          const { data } = await supabaseClient.auth.getSession();
+          return data.session?.access_token || "";
+        }
+
+        async function loadBusiness() {
+          setStatus("Cargando empresa...");
+          const token = await getToken();
+          const response = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/profile`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            setStatus("No hemos encontrado esta empresa.");
+            return;
+          }
+          setBusiness(data.business || null);
+          setOffers(data.offers || []);
+          setStats(data.stats || {});
+          setIsFollowing(Boolean(data.is_following));
+          setIsSelf(Boolean(data.is_self));
+          setStatus(data.follows_sql_missing ? "Ejecuta el SQL de seguidores para activar el botón de suscripción." : "");
+          if (!data.follows_sql_missing) setStatus("");
+        }
+
+        React.useEffect(() => {
+          if (!businessId) {
+            setStatus("Falta la empresa.");
+            return;
+          }
+          loadBusiness();
+        }, [businessId]);
+
+        async function toggleFollow() {
+          const token = await getToken();
+          if (!token) {
+            window.location.href = `login.html?next=${encodeURIComponent(`business-profile.html?id=${businessId}`)}`;
+            return;
+          }
+          if (isSelf || isSavingFollow) return;
+          const next = !isFollowing;
+          setIsFollowing(next);
+          setStats((current) => ({
+            ...current,
+            followers_count: Math.max(Number(current.followers_count || 0) + (next ? 1 : -1), 0),
+          }));
+          setFollowPulse(true);
+          setToast(next ? "Te has suscrito" : "Suscripción quitada");
+          window.setTimeout(() => setFollowPulse(false), 540);
+          window.setTimeout(() => setToast(""), 1500);
+
+          setIsSavingFollow(true);
+          const response = await fetch(`/api/businesses/${encodeURIComponent(businessId)}/follow`, {
+            method: next ? "POST" : "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await response.json().catch(() => ({}));
+          setIsSavingFollow(false);
+          if (!response.ok) {
+            setIsFollowing(!next);
+            setStats((current) => ({
+              ...current,
+              followers_count: Math.max(Number(current.followers_count || 0) + (next ? -1 : 1), 0),
+            }));
+            setToast(data.error === "business_follows_sql_missing" ? "Ejecuta el SQL de seguidores" : "No se ha podido guardar");
+            window.setTimeout(() => setToast(""), 2200);
+            return;
+          }
+          setStats((current) => ({ ...current, followers_count: data.followers_count ?? current.followers_count }));
+        }
+
+        if (status && !business) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">{status}</div>
+            </main>
+          );
+        }
+
+        const avatarLetter = (business?.display_name || "D").trim().charAt(0).toUpperCase();
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-20 pt-5 sm:px-6 lg:px-8">
+            <header className="flex items-center justify-between gap-3">
+              <button className="rounded-full bg-white/[0.08] px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => history.back()}>
+                Volver
+              </button>
+              <button className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" onClick={loadBusiness}>
+                Actualizar
+              </button>
+            </header>
+
+            <section className="mt-6 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] shadow-glow sm:rounded-[42px]">
+              <div className="relative min-h-[170px] bg-gradient-to-br from-mint/30 via-[#172235] to-coral/20">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_22%,rgba(66,242,179,.24),transparent_28%),radial-gradient(circle_at_78%_18%,rgba(255,209,102,.15),transparent_26%)]"></div>
+                <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-[#0D111D] to-transparent"></div>
+              </div>
+              <div className="px-5 pb-6 sm:px-7">
+                <div className="-mt-16 flex flex-wrap items-end justify-between gap-4">
+                  <div className="flex min-w-0 items-end gap-4">
+                    <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-[32px] border-4 border-[#0D111D] bg-mint text-5xl font-black text-ink shadow-2xl shadow-black/35">
+                      {business?.profile_photo_data_url ? (
+                        <img className="h-full w-full object-cover" src={business.profile_photo_data_url} alt="" />
+                      ) : (
+                        avatarLetter
+                      )}
+                    </div>
+                    <div className="min-w-0 pb-2">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Empresa Donoss</p>
+                      <h1 className="mt-1 flex flex-wrap items-center gap-2 break-words text-3xl font-black leading-tight text-white sm:text-5xl">
+                        <span>{business?.display_name || "Empresa"}</span>
+                        {business?.is_verified && <VerifiedBadge />}
+                      </h1>
+                      <p className="mt-2 text-sm font-bold text-slate-400">{business?.address || business?.neighborhood || "Donostia"}</p>
+                    </div>
+                  </div>
+                  <button
+                    className={`h-12 rounded-2xl px-6 text-sm font-black transition disabled:opacity-60 ${
+                      isFollowing
+                        ? "border border-mint/25 bg-mint/10 text-mint"
+                        : "bg-mint text-ink shadow-glow hover:bg-[#66ffd0]"
+                    } ${followPulse ? "follow-pop" : ""}`}
+                    disabled={isSelf || isSavingFollow}
+                    onClick={toggleFollow}
+                  >
+                    {isSelf ? "Tu empresa" : isFollowing ? "Siguiendo" : "Seguir"}
+                  </button>
+                </div>
+
+                <div className="mt-6 grid grid-cols-3 gap-3">
+                  <StatCard label="Publicaciones" value={stats.publications_count} />
+                  <StatCard label="Me gusta" value={stats.total_likes} />
+                  <StatCard label="Abonados" value={stats.followers_count} />
+                </div>
+
+                <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Bio</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-200">
+                    {business?.bio || "Esta empresa todavía no ha añadido una bio."}
+                  </p>
+                </div>
+
+                {(business?.business_categories || []).length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {business.business_categories.map((category) => (
+                      <span key={category} className="rounded-full border border-mint/20 bg-mint/10 px-3 py-1.5 text-xs font-black text-mint">
+                        {category}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="mt-8">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Ofertas oficiales</p>
+                  <h2 className="mt-1 text-3xl font-black text-white">Publicaciones</h2>
+                </div>
+                <span className="rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-slate-300 ring-1 ring-white/10">
+                  {formatNumber(offers.length)}
+                </span>
+              </div>
+
+              {offers.length > 0 ? (
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {offers.map((offer) => <OfferCard key={offer.id} offer={offer} />)}
+                </div>
+              ) : (
+                <div className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-400">
+                  Esta empresa todavía no tiene publicaciones visibles.
+                </div>
+              )}
+            </section>
+
+            {toast && (
+              <div className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-[30px] border border-mint/25 bg-[#101522]/95 px-6 py-5 text-center shadow-2xl shadow-mint/10 backdrop-blur-2xl">
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-mint text-2xl font-black text-ink shadow-glow">{isFollowing ? "✓" : "−"}</div>
+                <p className="mt-3 whitespace-nowrap text-base font-black text-white">{toast}</p>
+              </div>
+            )}
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

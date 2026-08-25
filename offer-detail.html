@@ -351,10 +351,13 @@
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
                 <h1 className="mt-2 max-w-3xl break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
                 {businessName && (
-                  <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">
+                  <a
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-mint hover:text-ink"
+                    href={offer.business_id ? `business-profile.html?id=${encodeURIComponent(offer.business_id)}` : "#"}
+                  >
                     <span>{businessName}</span>
                     {offer.business_is_verified && <VerifiedBadge />}
-                  </div>
+                  </a>
                 )}
                 {offer.author && (
                   <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur">

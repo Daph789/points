@@ -191,9 +191,14 @@
         const [isEditingName, setIsEditingName] = React.useState(false);
         const [displayNameDraft, setDisplayNameDraft] = React.useState("");
         const [isSavingName, setIsSavingName] = React.useState(false);
+        const [isEditingBio, setIsEditingBio] = React.useState(false);
+        const [bioDraft, setBioDraft] = React.useState("");
+        const [isSavingBio, setIsSavingBio] = React.useState(false);
         const [premiumDni, setPremiumDni] = React.useState("");
         const [premiumPhoto, setPremiumPhoto] = React.useState("");
         const [isSavingPremiumIdentity, setIsSavingPremiumIdentity] = React.useState(false);
+        const [businessProfilePhoto, setBusinessProfilePhoto] = React.useState("");
+        const [isSavingBusinessPhoto, setIsSavingBusinessPhoto] = React.useState(false);
         const [referralSponsor, setReferralSponsor] = React.useState(null);
 
         React.useEffect(() => {
@@ -209,7 +214,7 @@
               return;
             }
 
-            const columns = "id, display_name, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
+            const columns = "id, display_name, bio, profile_photo_data_url, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
             let data = null;
             let error = null;
 
@@ -251,6 +256,7 @@
               data = {
                 id: userId,
                 display_name: metadata.display_name || authUser.email?.split("@")[0] || "Tu cuenta",
+                bio: metadata.bio || "",
                 email: authUser.email || "",
                 phone: metadata.phone || "",
                 neighborhood: metadata.neighborhood || "",
@@ -264,6 +270,8 @@
             }
 
             setProfile({ points: 0, ...data });
+            setBioDraft(data?.bio || "");
+            setBusinessProfilePhoto(data?.profile_photo_data_url || "");
             setPlanPhotos(data?.plan_photo_data_urls || []);
             setPremiumDni(data?.premium_identity?.dni || data?.premium_identity_dni || "");
             setPremiumPhoto(data?.premium_identity?.photo_data_url || data?.premium_identity_photo_data_url || "");
@@ -406,6 +414,83 @@
             setStatus("No se ha podido actualizar tu nombre.");
           } finally {
             setIsSavingName(false);
+          }
+        }
+
+        async function saveBio(event) {
+          event?.preventDefault();
+          if (!accessToken) return redirectToLogin();
+          const cleanBio = bioDraft.trim().replace(/\s+/g, " ");
+          if (cleanBio.length < 20 || cleanBio.length > 500) {
+            setStatus("La bio debe tener entre 20 y 500 caracteres.");
+            return;
+          }
+
+          setIsSavingBio(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ bio: cleanBio }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "profile_update_failed");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), bio: cleanBio } : current);
+            localStorage.setItem("donosProfileBio", cleanBio);
+            setIsEditingBio(false);
+            setStatus("Bio actualizada correctamente.");
+          } catch (error) {
+            setStatus(error.message === "profile_bio_sql_missing" ? "Falta ejecutar el SQL de bio de perfiles." : "No se ha podido actualizar tu bio.");
+          } finally {
+            setIsSavingBio(false);
+          }
+        }
+
+        async function handleBusinessPhotoUpload(event) {
+          const file = Array.from(event.target.files || [])[0];
+          if (!file) return;
+          if (file.size > 8 * 1024 * 1024) {
+            setStatus("La foto es demasiado grande. Usa una imagen de menos de 8 MB.");
+            event.target.value = "";
+            return;
+          }
+          try {
+            const compressed = await compressImageToDataUrl(file, 900, 0.82);
+            setBusinessProfilePhoto(compressed);
+            setStatus("");
+          } catch (_error) {
+            setStatus("No se ha podido preparar la foto.");
+          } finally {
+            event.target.value = "";
+          }
+        }
+
+        async function saveBusinessProfilePhoto(photo = businessProfilePhoto) {
+          if (!accessToken) return redirectToLogin();
+          setIsSavingBusinessPhoto(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ profile_photo_data_url: photo || "" }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "profile_photo_failed");
+            setBusinessProfilePhoto(data.profile?.profile_photo_data_url || "");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}) } : current);
+            setStatus(photo ? "Foto de empresa guardada correctamente." : "Foto de empresa eliminada.");
+          } catch (error) {
+            setStatus(error.message === "profile_photo_sql_missing" ? "Falta ejecutar el SQL de foto de empresa." : "No se ha podido guardar la foto de empresa.");
+          } finally {
+            setIsSavingBusinessPhoto(false);
           }
         }
 
@@ -633,6 +718,114 @@
                   <p className="mt-1 text-3xl font-black text-white">{formatNumber(profile.points)}</p>
                 </div>
               </div>
+
+              <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{isBusiness ? "Bio de la empresa" : "Bio personal"}</p>
+                    {!isEditingBio && (
+                      <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-200">
+                        {profile.bio || "Todavía no has añadido una bio."}
+                      </p>
+                    )}
+                  </div>
+                  {!isEditingBio && (
+                    <button
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200 transition hover:bg-white/[0.10]"
+                      type="button"
+                      onClick={() => {
+                        setBioDraft(profile.bio || "");
+                        setIsEditingBio(true);
+                      }}
+                    >
+                      Modificar
+                    </button>
+                  )}
+                </div>
+                {isEditingBio && (
+                  <form className="mt-3" onSubmit={saveBio}>
+                    <textarea
+                      className="min-h-32 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 py-3 text-sm font-bold leading-6 text-white outline-none ring-4 ring-mint/10 placeholder:text-slate-600"
+                      value={bioDraft}
+                      maxLength="500"
+                      onChange={(event) => setBioDraft(event.target.value)}
+                      placeholder={
+                        isBusiness
+                          ? "Ej. Somos una librería de Gros que organiza planes culturales, descuentos para jóvenes y eventos cerca del barrio."
+                          : "Ej. Soy una persona a la que le gusta mucho la música, el cine y conocer gente para hacer planes por Donostia."
+                      }
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
+                      <span className={bioDraft.trim().length >= 20 ? "text-mint" : "text-coral"}>Mínimo 20 caracteres.</span>
+                      <span className="text-slate-500">{bioDraft.length}/500</span>
+                    </div>
+                    <div className="mt-3 flex gap-2">
+                      <button className="h-10 rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow disabled:opacity-60" disabled={isSavingBio}>
+                        {isSavingBio ? "Guardando..." : "Guardar bio"}
+                      </button>
+                      <button
+                        className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-white"
+                        type="button"
+                        onClick={() => {
+                          setIsEditingBio(false);
+                          setBioDraft(profile.bio || "");
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+
+              {isBusiness && (
+                <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-[26px] border border-white/10 bg-black/25 text-3xl font-black text-mint">
+                        {businessProfilePhoto ? (
+                          <img className="h-full w-full object-cover" src={businessProfilePhoto} alt="" />
+                        ) : (
+                          (profile.display_name || "D").charAt(0).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Foto de empresa</p>
+                        <p className="mt-1 text-sm font-bold leading-5 text-slate-300">
+                          Se verá en tu página pública de empresa y ayudará a que tus ofertas parezcan más fiables.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <label className="grid h-11 cursor-pointer place-items-center rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow">
+                        Añadir foto
+                        <input className="hidden" type="file" accept="image/*" onChange={handleBusinessPhotoUpload} />
+                      </label>
+                      <button
+                        className="h-11 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-xs font-black text-white disabled:opacity-60"
+                        type="button"
+                        disabled={isSavingBusinessPhoto}
+                        onClick={() => saveBusinessProfilePhoto()}
+                      >
+                        {isSavingBusinessPhoto ? "Guardando..." : "Guardar"}
+                      </button>
+                      {businessProfilePhoto && (
+                        <button
+                          className="h-11 rounded-2xl border border-coral/20 bg-coral/10 px-4 text-xs font-black text-coral disabled:opacity-60"
+                          type="button"
+                          disabled={isSavingBusinessPhoto}
+                          onClick={() => {
+                            setBusinessProfilePhoto("");
+                            saveBusinessProfilePhoto("");
+                          }}
+                        >
+                          Quitar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-5 flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-black/20 p-4">
                 <div className="min-w-0">
