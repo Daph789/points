@@ -53,7 +53,9 @@
       }
 
       function formatDelivery(value) {
-        return value === "home" ? "Entrega a domicilio" : "Recogida en tienda";
+        if (value === "home") return "Entrega a domicilio";
+        if (value === "none") return "Billete digital";
+        return "Recogida en tienda";
       }
 
       function VerifiedBadge() {
@@ -174,6 +176,17 @@
                   <InfoCard label="Oferta" value={`${purchase.offer_points || 0} ptos.`} />
                   <InfoCard label="Entrega" value={`${purchase.delivery_points || 0} ptos.`} />
                 </div>
+
+                {purchase.reservation_requested && (
+                  <section className="rounded-[28px] border border-mint/20 bg-mint/10 p-4">
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Reserva incluida</p>
+                    <div className="mt-3 grid gap-3 min-[430px]:grid-cols-3">
+                      <InfoCard label="Fecha" value={purchase.reservation_date} />
+                      <InfoCard label="Hora" value={purchase.reservation_time} />
+                      <InfoCard label="Personas" value={purchase.reservation_people} />
+                    </div>
+                  </section>
+                )}
 
                 <section className="grid gap-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 sm:grid-cols-[210px_1fr] sm:items-center">
                   <div className="mx-auto rounded-[26px] bg-white p-4 shadow-glow">

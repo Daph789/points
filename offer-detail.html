@@ -562,6 +562,28 @@
                   </div>
                 )}
 
+                {offer.reservation_enabled && (
+                  <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                    <div className="flex items-start gap-4">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint/15 text-xl ring-1 ring-mint/20">◷</div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Reserva disponible</p>
+                        <p className="mt-1 text-base font-black text-white">
+                          Hasta {offer.reservation_max_people || 1} persona{Number(offer.reservation_max_people || 1) === 1 ? "" : "s"} por reserva
+                        </p>
+                        {Array.isArray(offer.reservation_time_slots) && offer.reservation_time_slots.length > 0 && (
+                          <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">
+                            Horarios: {offer.reservation_time_slots.slice(0, 5).join(", ")}{offer.reservation_time_slots.length > 5 ? "..." : ""}
+                          </p>
+                        )}
+                        <p className="mt-1 text-xs font-bold text-slate-400">
+                          Podrás elegir fecha, hora y personas en el pago.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {hasDeliveryOptions ? (
                   <div>
                     <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Elige la entrega</p>

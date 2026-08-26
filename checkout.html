@@ -86,6 +86,10 @@
         const [isSavingAddress, setIsSavingAddress] = React.useState(false);
         const [accessToken, setAccessToken] = React.useState("");
         const [successPurchase, setSuccessPurchase] = React.useState(null);
+        const [wantsReservation, setWantsReservation] = React.useState(false);
+        const [reservationDate, setReservationDate] = React.useState("");
+        const [reservationTime, setReservationTime] = React.useState("");
+        const [reservationPeople, setReservationPeople] = React.useState("1");
 
         function goBackFromCheckout() {
           if (fromApp) {
@@ -145,6 +149,13 @@
             setOffer(offerData);
             setProfile(profileData);
             setDeliveryAddress(profileData?.address || "");
+            if (offerData.reservation_enabled) {
+              const today = new Date().toISOString().slice(0, 10);
+              setReservationDate(today);
+              const slots = Array.isArray(offerData.reservation_time_slots) ? offerData.reservation_time_slots.filter(Boolean) : [];
+              setReservationTime(slots[0] || "");
+              setReservationPeople("1");
+            }
             setStatus("");
           }
 
@@ -178,7 +189,23 @@
         const hasEnoughPoints = userPoints >= totalPoints;
         const needsDeliveryAddress = delivery === "home";
         const hasDeliveryAddress = !needsDeliveryAddress || deliveryAddress.trim().length >= 4;
-        const canConfirmPurchase = hasEnoughPoints && hasDeliveryAddress && !isOwnOffer && !isOutOfStock;
+        const reservationSlots = Array.isArray(offer.reservation_time_slots) ? offer.reservation_time_slots.filter(Boolean) : [];
+        const reservationMaxPeople = Math.max(Number(offer.reservation_max_people || 0), 0);
+        const reservationDaysAhead = Math.max(Number(offer.reservation_days_ahead || 0), 0);
+        const todayString = new Date().toISOString().slice(0, 10);
+        const maxReservationDate = new Date();
+        maxReservationDate.setDate(maxReservationDate.getDate() + reservationDaysAhead);
+        const maxReservationDateString = maxReservationDate.toISOString().slice(0, 10);
+        const reservationPeopleNumber = Math.max(Number.parseInt(reservationPeople, 10) || 0, 0);
+        const hasValidReservation = !wantsReservation || (
+          offer.reservation_enabled &&
+          reservationDate >= todayString &&
+          reservationDate <= maxReservationDateString &&
+          reservationSlots.includes(reservationTime) &&
+          reservationPeopleNumber >= 1 &&
+          (!reservationMaxPeople || reservationPeopleNumber <= reservationMaxPeople)
+        );
+        const canConfirmPurchase = hasEnoughPoints && hasDeliveryAddress && hasValidReservation && !isOwnOffer && !isOutOfStock;
 
         async function saveDeliveryAddress() {
           if (!deliveryAddress.trim() || !userId) return;
@@ -222,6 +249,11 @@
             return;
           }
 
+          if (!hasValidReservation) {
+            setPurchaseStatus({ type: "error", message: "Completa la reserva con una fecha, hora y número de personas válidos." });
+            return;
+          }
+
           setIsBuying(true);
 
           try {
@@ -240,6 +272,10 @@
                 offerId: offer.id,
                 deliveryMethod: delivery,
                 deliveryAddress: needsDeliveryAddress ? deliveryAddress.trim() : "",
+                reservationRequested: wantsReservation,
+                reservationDate: wantsReservation ? reservationDate : "",
+                reservationTime: wantsReservation ? reservationTime : "",
+                reservationPeople: wantsReservation ? reservationPeopleNumber : null,
               }),
             });
 
@@ -258,6 +294,7 @@
               totalPoints,
               remainingPoints: updatedPoints,
               deliveryLabel,
+              reservationLabel: wantsReservation ? `${reservationDate} · ${reservationTime} · ${reservationPeopleNumber} persona${reservationPeopleNumber === 1 ? "" : "s"}` : "",
               receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donoss",
             });
             setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
@@ -278,8 +315,12 @@
                     ? "Esta oferta está agotada."
                   : message.includes("offer_expired")
                     ? "Esta oferta ha caducado."
+                  : message.includes("reservation")
+                    ? "Revisa la reserva: fecha, hora o personas no válidas."
                   : message.includes("receiver")
                     ? "No se ha encontrado la cuenta que debe recibir los puntos."
+                  : message.includes("reservation_columns_missing")
+                    ? "Falta ejecutar el SQL de reservas en Supabase."
                   : message.includes("purchases_table_missing") || message.includes("purchase_insert_failed")
                     ? "Falta activar el SQL de pagos en Supabase."
                   : message.includes("points_update_failed")
@@ -390,6 +431,70 @@
                   </div>
                 )}
 
+                {offer.reservation_enabled && (
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Reserva</p>
+                        <p className="mt-1 text-sm font-semibold leading-5 text-slate-300">
+                          Puedes guardar mesa, plaza u horario junto con esta compra.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition ${
+                          wantsReservation ? "bg-mint" : "bg-white/10 ring-1 ring-white/10"
+                        }`}
+                        onClick={() => setWantsReservation((current) => !current)}
+                      >
+                        <span className={`block h-6 w-6 rounded-full bg-white shadow-lg transition ${wantsReservation ? "translate-x-6" : "translate-x-0"}`}></span>
+                      </button>
+                    </div>
+
+                    {wantsReservation && (
+                      <div className="mt-4 grid gap-3">
+                        <div className="grid gap-3 min-[430px]:grid-cols-2">
+                          <label>
+                            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Fecha</span>
+                            <input
+                              className="h-12 w-full rounded-2xl border border-white/10 bg-[#060914]/70 px-4 text-sm font-bold text-white outline-none focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                              type="date"
+                              min={todayString}
+                              max={maxReservationDateString}
+                              value={reservationDate}
+                              onChange={(event) => setReservationDate(event.target.value)}
+                            />
+                          </label>
+                          <label>
+                            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Personas</span>
+                            <input
+                              className="h-12 w-full rounded-2xl border border-white/10 bg-[#060914]/70 px-4 text-sm font-bold text-white outline-none focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                              type="number"
+                              min="1"
+                              max={reservationMaxPeople || undefined}
+                              value={reservationPeople}
+                              onChange={(event) => setReservationPeople(event.target.value.replace(/[^0-9]/g, ""))}
+                            />
+                          </label>
+                        </div>
+                        <label>
+                          <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Hora</span>
+                          <select
+                            className="h-12 w-full rounded-2xl border border-white/10 bg-[#060914]/70 px-4 text-sm font-bold text-white outline-none focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                            value={reservationTime}
+                            onChange={(event) => setReservationTime(event.target.value)}
+                          >
+                            {reservationSlots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}
+                          </select>
+                        </label>
+                        <p className="rounded-2xl border border-mint/20 bg-mint/10 p-3 text-xs font-bold leading-5 text-mint">
+                          Máximo {reservationMaxPeople || 1} persona{reservationMaxPeople === 1 ? "" : "s"} por reserva. {reservationDaysAhead === 0 ? "Solo disponible para hoy." : `Disponible hasta ${reservationDaysAhead} día${reservationDaysAhead === 1 ? "" : "s"} de antelación.`}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {!hasEnoughPoints && (
                   <div className="rounded-[26px] border border-coral/25 bg-coral/10 p-4">
                     <div className="flex items-start gap-3">
@@ -485,6 +590,12 @@
                         <span className="text-sm font-bold text-slate-400">Entrega</span>
                         <span className="text-sm font-black text-white">{successPurchase.deliveryLabel}</span>
                       </div>
+                      {successPurchase.reservationLabel && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-sm font-bold text-slate-400">Reserva</span>
+                          <span className="text-right text-sm font-black text-white">{successPurchase.reservationLabel}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Comercio</span>
                         <span className="text-sm font-black text-white">{successPurchase.receiver}</span>

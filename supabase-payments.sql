@@ -5,7 +5,7 @@ create table if not exists public.purchases (
   id uuid primary key default gen_random_uuid(),
   buyer_id uuid not null references auth.users(id) on delete cascade,
   offer_id uuid not null references public.business_offers(id) on delete cascade,
-  delivery_method text not null check (delivery_method in ('pickup', 'home')),
+  delivery_method text not null check (delivery_method in ('pickup', 'home', 'none')),
   offer_points integer not null,
   delivery_points integer not null default 0,
   delivery_address text,
@@ -17,6 +17,10 @@ create table if not exists public.purchases (
   qr_token text,
   qr_valid_from date default current_date,
   qr_valid_until date,
+  reservation_requested boolean not null default false,
+  reservation_date date,
+  reservation_time text,
+  reservation_people integer,
   verified_at timestamptz,
   verified_by uuid references auth.users(id),
   verification_method text,
@@ -27,6 +31,12 @@ create table if not exists public.purchases (
 
 alter table public.purchases
   add column if not exists delivery_address text;
+
+alter table public.purchases
+  drop constraint if exists purchases_delivery_method_check;
+
+alter table public.purchases
+  add constraint purchases_delivery_method_check check (delivery_method in ('pickup', 'home', 'none'));
 
 alter table public.purchases
   add column if not exists validation_code text;
@@ -42,6 +52,18 @@ alter table public.purchases
 
 alter table public.purchases
   add column if not exists qr_valid_until date;
+
+alter table public.purchases
+  add column if not exists reservation_requested boolean not null default false;
+
+alter table public.purchases
+  add column if not exists reservation_date date;
+
+alter table public.purchases
+  add column if not exists reservation_time text;
+
+alter table public.purchases
+  add column if not exists reservation_people integer;
 
 alter table public.purchases
   add column if not exists verified_at timestamptz;

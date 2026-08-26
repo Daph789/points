@@ -168,6 +168,12 @@
                 <Detail label="ID Donoss cliente" value={buyer.transaction_id} />
                 <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
                 <Detail label="Fecha de validación" value={formatDateTime(purchase.verified_at)} />
+                {purchase.reservation_requested && (
+                  <>
+                    <Detail label="Reserva" value={`${purchase.reservation_date || ""} ${purchase.reservation_time || ""}`.trim()} />
+                    <Detail label="Personas reserva" value={purchase.reservation_people} />
+                  </>
+                )}
                 <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
                   <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Veces comprobado</p>
                   <p className="mt-1 text-sm font-black text-white">{purchase.verification_count || 0}</p>

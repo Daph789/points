@@ -226,6 +226,10 @@
         const [homeDeliveryEnabled, setHomeDeliveryEnabled] = React.useState(false);
         const [homeDeliveryPrice, setHomeDeliveryPrice] = React.useState("");
         const [pickupEnabled, setPickupEnabled] = React.useState(true);
+        const [reservationEnabled, setReservationEnabled] = React.useState(false);
+        const [reservationTimeSlots, setReservationTimeSlots] = React.useState("");
+        const [reservationMaxPeople, setReservationMaxPeople] = React.useState("");
+        const [reservationDaysAhead, setReservationDaysAhead] = React.useState("0");
         const [stockQuantity, setStockQuantity] = React.useState("");
         const [status, setStatus] = React.useState({ type: "", message: "" });
         const [isSaving, setIsSaving] = React.useState(false);
@@ -240,6 +244,16 @@
         const deliveryPrice = Number.parseFloat(homeDeliveryPrice.replace(",", "."));
         const deliveryPoints = Number.isFinite(deliveryPrice) ? Math.round(deliveryPrice * 10) : 0;
         const soldItemsCount = Number.parseInt(String(soldCount || "0"), 10) || 0;
+        const parsedReservationMaxPeople = Math.max(Number.parseInt(reservationMaxPeople, 10) || 0, 0);
+        const parsedReservationDaysAhead = Math.max(Number.parseInt(reservationDaysAhead, 10) || 0, 0);
+
+        function normalizeReservationSlots(value) {
+          return [...new Set(String(value || "")
+            .split(/[\n,;]+/)
+            .map((slot) => slot.trim())
+            .filter(Boolean))]
+            .slice(0, 24);
+        }
 
         React.useEffect(() => {
           if (editId) {
@@ -281,6 +295,10 @@
             setHomeDeliveryEnabled(Boolean(draft.homeDeliveryEnabled));
             setHomeDeliveryPrice(draft.homeDeliveryPrice || "");
             setPickupEnabled(draft.pickupEnabled !== false);
+            setReservationEnabled(Boolean(draft.reservationEnabled));
+            setReservationTimeSlots(draft.reservationTimeSlots || "");
+            setReservationMaxPeople(draft.reservationMaxPeople || "");
+            setReservationDaysAhead(draft.reservationDaysAhead || "0");
             setStockQuantity(draft.stockQuantity || "");
             setLastDraftSavedAt(draft.savedAt || "");
           } catch (error) {
@@ -336,6 +354,10 @@
             setHomeDeliveryEnabled(Boolean(data.delivery_home_enabled));
             setHomeDeliveryPrice(data.delivery_home_price === null || data.delivery_home_price === undefined ? "" : String(data.delivery_home_price));
             setPickupEnabled(data.delivery_pickup_enabled !== false);
+            setReservationEnabled(Boolean(data.reservation_enabled));
+            setReservationTimeSlots(Array.isArray(data.reservation_time_slots) ? data.reservation_time_slots.join(", ") : "");
+            setReservationMaxPeople(data.reservation_max_people === null || data.reservation_max_people === undefined ? "" : String(data.reservation_max_people));
+            setReservationDaysAhead(data.reservation_days_ahead === null || data.reservation_days_ahead === undefined ? "0" : String(data.reservation_days_ahead));
             setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(Math.max(Number(data.stock_quantity || 0) - Number(data.sold_count || 0), 0)));
             setSoldCount(Number(data.sold_count || 0));
             setIsOfferLoading(false);
@@ -436,6 +458,10 @@
             homeDeliveryEnabled,
             homeDeliveryPrice,
             pickupEnabled,
+            reservationEnabled,
+            reservationTimeSlots,
+            reservationMaxPeople,
+            reservationDaysAhead,
             stockQuantity,
             savedAt,
           };
@@ -470,6 +496,10 @@
           homeDeliveryEnabled,
           homeDeliveryPrice,
           pickupEnabled,
+          reservationEnabled,
+          reservationTimeSlots,
+          reservationMaxPeople,
+          reservationDaysAhead,
           stockQuantity,
         ]);
 
@@ -579,6 +609,10 @@
           setHomeDeliveryEnabled(false);
           setHomeDeliveryPrice("");
           setPickupEnabled(true);
+          setReservationEnabled(false);
+          setReservationTimeSlots("");
+          setReservationMaxPeople("");
+          setReservationDaysAhead("0");
           setStockQuantity("");
           setStatus({ type: "", message: "Borrador limpiado." });
         }
@@ -623,6 +657,15 @@
               setStatus({ type: "error", message: "La fecha final del QR no puede ser anterior a su fecha de inicio." });
               return;
             }
+            const reservationSlots = normalizeReservationSlots(reservationTimeSlots);
+            if (reservationEnabled && reservationSlots.length === 0) {
+              setStatus({ type: "error", message: "Añade al menos un horario disponible para la reserva." });
+              return;
+            }
+            if (reservationEnabled && parsedReservationMaxPeople <= 0) {
+              setStatus({ type: "error", message: "Indica cuántas personas máximo puede reservar el cliente." });
+              return;
+            }
 
             const payload = {
               business_id: userId,
@@ -658,6 +701,10 @@
               delivery_home_price: deliveryOptionsEnabled && homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: deliveryOptionsEnabled && homeDeliveryEnabled ? deliveryPoints : null,
               delivery_pickup_enabled: deliveryOptionsEnabled && pickupEnabled,
+              reservation_enabled: reservationEnabled,
+              reservation_time_slots: reservationEnabled ? reservationSlots : [],
+              reservation_max_people: reservationEnabled ? parsedReservationMaxPeople : null,
+              reservation_days_ahead: reservationEnabled ? parsedReservationDaysAhead : 0,
               stock_quantity: stockQuantity === "" ? null : soldItemsCount + Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
               out_of_stock_since: stockQuantity !== "" && Math.max(Number.parseInt(stockQuantity, 10) || 0, 0) <= 0 ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
@@ -1095,6 +1142,72 @@
                 <Field label="Botón de acción">
                   <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Comprar, reservar, apuntarme..." />
                 </Field>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-black text-white">¿Permitir reserva?</p>
+                      <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
+                        Actívalo si quieres que el comprador pueda elegir fecha, hora y número de personas al pagar.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition ${
+                        reservationEnabled ? "bg-mint" : "bg-white/10 ring-1 ring-white/10"
+                      }`}
+                      onClick={() => setReservationEnabled((current) => !current)}
+                      aria-pressed={reservationEnabled}
+                    >
+                      <span className={`block h-6 w-6 rounded-full bg-white shadow-lg transition ${reservationEnabled ? "translate-x-6" : "translate-x-0"}`}></span>
+                    </button>
+                  </div>
+
+                  {reservationEnabled && (
+                    <div className="mt-4 grid gap-4">
+                      <Field label="Horarios que pueden reservar">
+                        <textarea
+                          className={textareaClass}
+                          value={reservationTimeSlots}
+                          onChange={(event) => setReservationTimeSlots(event.target.value)}
+                          placeholder={"Ej. 13:00, 14:30, 21:00\nTambién puedes escribir uno por línea"}
+                        />
+                      </Field>
+                      <div className="grid gap-4 min-[430px]:grid-cols-2">
+                        <Field label="Personas máximas por reserva">
+                          <input
+                            className={inputClass}
+                            inputMode="numeric"
+                            type="number"
+                            min="1"
+                            value={reservationMaxPeople}
+                            onChange={(event) => setReservationMaxPeople(event.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="Ej. 4"
+                          />
+                        </Field>
+                        <Field label="Días de antelación permitidos">
+                          <input
+                            className={inputClass}
+                            inputMode="numeric"
+                            type="number"
+                            min="0"
+                            value={reservationDaysAhead}
+                            onChange={(event) => setReservationDaysAhead(event.target.value.replace(/[^0-9]/g, ""))}
+                            placeholder="0 = solo hoy"
+                          />
+                        </Field>
+                      </div>
+                      <div className="rounded-2xl border border-mint/20 bg-mint/10 p-3">
+                        <p className="text-sm font-black text-mint">
+                          {parsedReservationDaysAhead === 0 ? "El cliente solo podrá reservar para hoy." : `El cliente podrá reservar desde hoy hasta dentro de ${parsedReservationDaysAhead} día${parsedReservationDaysAhead === 1 ? "" : "s"}.`}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          La reserva no suma puntos extra; solo guarda fecha, hora y personas en el pedido.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
                   <div className="flex items-start justify-between gap-4">

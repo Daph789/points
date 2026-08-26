@@ -2878,7 +2878,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -2923,7 +2923,7 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -5114,6 +5114,10 @@ app.post("/api/purchases/offer", async (request, response) => {
   const rawDeliveryMethod = String(request.body?.deliveryMethod || "").trim();
   const deliveryMethod = rawDeliveryMethod === "home" ? "home" : rawDeliveryMethod === "none" ? "none" : "pickup";
   const deliveryAddress = String(request.body?.deliveryAddress || "").trim();
+  const reservationRequested = request.body?.reservationRequested === true;
+  const reservationDate = String(request.body?.reservationDate || "").slice(0, 10);
+  const reservationTime = String(request.body?.reservationTime || "").trim();
+  const reservationPeople = Math.max(Number.parseInt(request.body?.reservationPeople, 10) || 0, 0);
 
   if (!offerId) {
     return response.status(400).json({ error: "Missing offer" });
@@ -5155,6 +5159,34 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     if (deliveryMethod === "home" && deliveryAddress.length < 4) {
       return response.status(400).json({ error: "delivery_address_missing" });
+    }
+
+    if (reservationRequested) {
+      if (offer.reservation_enabled !== true) {
+        return response.status(400).json({ error: "reservation_not_available" });
+      }
+
+      const reservationSlots = Array.isArray(offer.reservation_time_slots)
+        ? offer.reservation_time_slots.map((slot) => String(slot || "").trim()).filter(Boolean)
+        : [];
+      const maxPeople = Math.max(Number.parseInt(offer.reservation_max_people, 10) || 0, 0);
+      const daysAhead = Math.max(Number.parseInt(offer.reservation_days_ahead, 10) || 0, 0);
+      const today = todayDateString();
+      const maxDate = new Date(`${today}T00:00:00.000Z`);
+      maxDate.setUTCDate(maxDate.getUTCDate() + daysAhead);
+      const maxDateString = maxDate.toISOString().slice(0, 10);
+
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(reservationDate) || reservationDate < today || reservationDate > maxDateString) {
+        return response.status(400).json({ error: "reservation_date_not_allowed" });
+      }
+
+      if (!reservationSlots.includes(reservationTime)) {
+        return response.status(400).json({ error: "reservation_time_not_allowed" });
+      }
+
+      if (reservationPeople < 1 || (maxPeople > 0 && reservationPeople > maxPeople)) {
+        return response.status(400).json({ error: "reservation_people_not_allowed" });
+      }
     }
 
     const receiverId = cleanValidDonosId(offer.receiver_transaction_id);
@@ -5218,6 +5250,10 @@ app.post("/api/purchases/offer", async (request, response) => {
           qr_token: randomUUID(),
           qr_valid_from: offer.qr_valid_from || offer.start_date || todayDateString(),
           qr_valid_until: offer.qr_valid_until || offer.end_date || null,
+          reservation_requested: reservationRequested,
+          reservation_date: reservationRequested ? reservationDate : null,
+          reservation_time: reservationRequested ? reservationTime : null,
+          reservation_people: reservationRequested ? reservationPeople : null,
         })
         .select("id")
         .maybeSingle();
@@ -5229,9 +5265,9 @@ app.post("/api/purchases/offer", async (request, response) => {
     }
 
 	    if (purchaseError) {
-	      console.error("Purchase insert error:", purchaseError);
+      console.error("Purchase insert error:", purchaseError);
       return response.status(500).json({
-        error: purchaseError.code === "42P01" ? "purchases_table_missing" : "purchase_insert_failed",
+        error: purchaseError.code === "42P01" ? "purchases_table_missing" : purchaseError.code === "42703" ? "reservation_columns_missing" : "purchase_insert_failed",
         detail: purchaseError.message || "",
 	      });
 	    }

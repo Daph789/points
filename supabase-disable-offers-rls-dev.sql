@@ -24,6 +24,10 @@ create table if not exists public.business_offers (
   delivery_home_price numeric,
   delivery_home_points integer,
   delivery_pickup_enabled boolean not null default true,
+  reservation_enabled boolean not null default false,
+  reservation_time_slots text[] not null default '{}'::text[],
+  reservation_max_people integer,
+  reservation_days_ahead integer not null default 0,
   is_hidden boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -100,6 +104,18 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists delivery_pickup_enabled boolean not null default true;
+
+alter table public.business_offers
+  add column if not exists reservation_enabled boolean not null default false;
+
+alter table public.business_offers
+  add column if not exists reservation_time_slots text[] not null default '{}'::text[];
+
+alter table public.business_offers
+  add column if not exists reservation_max_people integer;
+
+alter table public.business_offers
+  add column if not exists reservation_days_ahead integer not null default 0;
 
 alter table public.business_offers
   add column if not exists is_hidden boolean not null default false;

@@ -155,6 +155,12 @@
                   <Detail label="Fecha de compra" value={formatDateTime(purchase.created_at)} />
                   <Detail label="Entrega" value={purchase.delivery_method === "home" ? "Entrega a domicilio" : "Recogida en tienda"} />
                   <Detail label="Dirección entrega" value={purchase.delivery_address || "Recogida en tienda"} />
+                  {purchase.reservation_requested && (
+                    <>
+                      <Detail label="Reserva" value={`${purchase.reservation_date || ""} ${purchase.reservation_time || ""}`.trim()} />
+                      <Detail label="Personas reserva" value={purchase.reservation_people} />
+                    </>
+                  )}
                   <Detail label="Código validación" value={purchase.validation_code} />
                   <Detail label="Código seguridad" value={purchase.security_code} />
                 </div>

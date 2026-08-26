@@ -28,6 +28,10 @@ create table if not exists public.business_offers (
   delivery_home_price numeric,
   delivery_home_points integer,
   delivery_pickup_enabled boolean not null default true,
+  reservation_enabled boolean not null default false,
+  reservation_time_slots text[] not null default '{}'::text[],
+  reservation_max_people integer,
+  reservation_days_ahead integer not null default 0,
   qr_valid_from date,
   qr_valid_until date,
   stock_quantity integer,
@@ -124,6 +128,18 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists delivery_pickup_enabled boolean not null default true;
+
+alter table public.business_offers
+  add column if not exists reservation_enabled boolean not null default false;
+
+alter table public.business_offers
+  add column if not exists reservation_time_slots text[] not null default '{}'::text[];
+
+alter table public.business_offers
+  add column if not exists reservation_max_people integer;
+
+alter table public.business_offers
+  add column if not exists reservation_days_ahead integer not null default 0;
 
 alter table public.business_offers
   add column if not exists qr_valid_from date;
