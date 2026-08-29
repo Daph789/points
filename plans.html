@@ -123,6 +123,12 @@
         return plan.title || plan.purchase?.offer?.title || "Plan Donoss";
       }
 
+      function isFreePlan(plan) {
+        return (plan?.plan_type || "ticket") === "free";
+      }
+
+      const FREE_PLAN_CATEGORIES = ["Estudiar", "Pasear", "Tomar algo", "Deporte", "Idiomas", "Fotos", "Meditar", "Otro"];
+
       function ticketImage(ticket) {
         return ticket?.offer?.cover_photo_data_url || ticket?.offer?.presentation_image_data_urls?.[0] || "";
       }
@@ -179,6 +185,9 @@
       function friendlyError(message, fallback = "No se ha podido completar la acción.") {
         const messages = {
           social_plans_table_missing: "Falta activar Quedar en Supabase. Ejecuta supabase-social-plans.sql.",
+          free_social_plans_sql_missing: "Falta activar Planes libres en Supabase. Ejecuta supabase-free-social-plans.sql.",
+          free_plan_location_required: "Indica dónde será el plan libre.",
+          free_plan_date_required: "Elige una fecha válida para el plan libre.",
           purchases_table_missing: "Falta activar el SQL de pagos en Supabase.",
           purchase_already_has_plan: "Este billete ya tiene un plan activo.",
           purchase_not_found: "No encontramos este billete en tu cuenta.",
@@ -303,9 +312,10 @@
       }
 
       function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0 }) {
-        const image = ticketImage(plan.purchase);
-        const merchant = offerMerchant(plan.purchase);
-        const address = plan.purchase?.offer?.address || "";
+        const free = isFreePlan(plan);
+        const image = free ? "" : ticketImage(plan.purchase);
+        const merchant = free ? (plan.free_category || "Plan libre") : offerMerchant(plan.purchase);
+        const address = free ? (plan.location || "") : (plan.purchase?.offer?.address || "");
         const offer = plan.purchase?.offer || {};
         const creatorName = plan.creator?.display_name || "Usuario Donoss";
         const counts = plan.counts || {};
@@ -327,13 +337,14 @@
               {chatUnreadCount > 0 && <span className="absolute right-4 top-4 rounded-full bg-coral px-3 py-1 text-xs font-black text-white shadow-2xl shadow-coral/30">+{chatUnreadCount > 9 ? "9" : chatUnreadCount} chat</span>}
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-xs font-black ${plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{statusLabel(plan.status)}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${free ? "bg-violet text-white" : plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{free ? "Plan libre" : statusLabel(plan.status)}</span>
+                  {!free && plan.status === "confirmed" && <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{statusLabel(plan.status)}</span>}
                   {plan.is_expired && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Caducado</span>}
                   <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">{accepted}/{full} aceptados</span>
                   {plan.viewer_member && <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-black text-white">{statusLabel(plan.viewer_member.status)}</span>}
                 </div>
                 <h2 className="mt-3 text-2xl font-black leading-tight text-white">{planTitle(plan)}</h2>
-                <p className="mt-1 truncate text-sm font-bold text-slate-200">{plan.purchase?.offer?.title || "Billete Donoss"}</p>
+                <p className="mt-1 truncate text-sm font-bold text-slate-200">{free ? `${plan.free_category || "Plan libre"} · ${plan.event_date ? formatDate(plan.event_date) : "Fecha abierta"}` : (plan.purchase?.offer?.title || "Billete Donoss")}</p>
               </div>
             </div>
             <div className="p-4">
@@ -344,7 +355,8 @@
               </div>
               <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400">
                 {address && <p className="rounded-2xl bg-black/20 px-3 py-2">Dirección: <span className="text-slate-200">{address}</span></p>}
-                {(offer.start_date || offer.end_date) && <p className="rounded-2xl bg-black/20 px-3 py-2">{offer.start_date ? `Inicio: ${formatDate(offer.start_date)}` : ""}{offer.start_date && offer.end_date ? " · " : ""}{offer.end_date ? `Fin: ${formatDate(offer.end_date)}` : ""}</p>}
+                {free && plan.event_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Día: {formatDate(plan.event_date)}</p>}
+                {!free && (offer.start_date || offer.end_date) && <p className="rounded-2xl bg-black/20 px-3 py-2">{offer.start_date ? `Inicio: ${formatDate(offer.start_date)}` : ""}{offer.start_date && offer.end_date ? " · " : ""}{offer.end_date ? `Fin: ${formatDate(offer.end_date)}` : ""}</p>}
               </div>
               {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
@@ -405,6 +417,10 @@
         const [editingPlanId, setEditingPlanId] = React.useState("");
         const [tickets, setTickets] = React.useState([]);
         const [selectedTicketId, setSelectedTicketId] = React.useState("");
+        const [planType, setPlanType] = React.useState("ticket");
+        const [freeCategory, setFreeCategory] = React.useState("Estudiar");
+        const [freeLocation, setFreeLocation] = React.useState("");
+        const [freeEventDate, setFreeEventDate] = React.useState(new Date().toISOString().slice(0, 10));
         const [ticketPickerOpen, setTicketPickerOpen] = React.useState(false);
         const [ticketQuery, setTicketQuery] = React.useState("");
         const [title, setTitle] = React.useState("");
@@ -750,9 +766,20 @@
         }
 
         async function createPlan() {
-          if (!selectedTicketId) {
+          const today = new Date().toISOString().slice(0, 10);
+          if (planType === "ticket" && !selectedTicketId) {
             setStatus("Elige un billete para crear el plan.");
             return;
+          }
+          if (planType === "free") {
+            if (!freeLocation.trim()) {
+              setStatus("Indica dónde será el plan libre.");
+              return;
+            }
+            if (!freeEventDate || freeEventDate < today) {
+              setStatus("Elige una fecha de hoy o posterior para el plan libre.");
+              return;
+            }
           }
           if (photoDataUrls.length < 2) {
             setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
@@ -777,7 +804,11 @@
             await api(editingPlanId ? `/api/social-plans/${editingPlanId}` : "/api/social-plans", {
               method: editingPlanId ? "PATCH" : "POST",
               body: JSON.stringify({
-                purchaseId: selectedTicketId,
+                planType,
+                purchaseId: planType === "ticket" ? selectedTicketId : "",
+                freeCategory,
+                location: freeLocation,
+                eventDate: freeEventDate,
                 title,
                 message,
                 photoDataUrls: savedPhotos,
@@ -790,6 +821,10 @@
             setMode("mine");
             setEditingPlanId("");
             setSelectedTicketId("");
+            setPlanType("ticket");
+            setFreeCategory("Estudiar");
+            setFreeLocation("");
+            setFreeEventDate(new Date().toISOString().slice(0, 10));
             setTitle("");
             setMessage("");
             setPhotoDataUrls([]);
@@ -847,6 +882,7 @@
         }
 
         function hasPurchasedOffer(plan) {
+          if (isFreePlan(plan)) return true;
           const offerId = plan?.purchase?.offer_id || plan?.purchase?.offer?.id;
           if (!offerId) return false;
           return tickets.some((ticket) => ticket.offer_id === offerId || ticket.offer?.id === offerId);
@@ -873,8 +909,13 @@
           const men = Number(plan.wanted_men || 0);
           const open = Number(plan.wanted_open || 0);
           const total = women + men + open;
+          const free = isFreePlan(plan);
           setEditingPlanId(plan.id);
-          setSelectedTicketId(plan.purchase_id || plan.purchase?.id || "");
+          setPlanType(free ? "free" : "ticket");
+          setSelectedTicketId(free ? "" : (plan.purchase_id || plan.purchase?.id || ""));
+          setFreeCategory(plan.free_category || "Estudiar");
+          setFreeLocation(plan.location || "");
+          setFreeEventDate((plan.event_date || new Date().toISOString()).slice(0, 10));
           setTitle(plan.title || "");
           setMessage(plan.message || "");
           setPhotoDataUrls(planPhotos(plan));
@@ -891,6 +932,10 @@
         function cancelEdit() {
           setEditingPlanId("");
           setSelectedTicketId("");
+          setPlanType("ticket");
+          setFreeCategory("Estudiar");
+          setFreeLocation("");
+          setFreeEventDate(new Date().toISOString().slice(0, 10));
           setTitle("");
           setMessage("");
           setPhotoDataUrls([]);
@@ -1096,31 +1141,83 @@
             )}
 
             {mode === "create" && (
-              <section className="mt-4 grid gap-4 lg:grid-cols-[.9fr_1.1fr]">
-                <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Billete prueba</p>
-                      <p className="mt-1 text-sm font-bold text-slate-400">El QR y los códigos quedan ocultos.</p>
-                    </div>
-                    <button className="h-11 shrink-0 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow" onClick={() => setTicketPickerOpen(true)}>Añadir</button>
-                  </div>
-                  {selectedTicket ? (
-                    <div className="mt-4">
-                      <TicketCard ticket={selectedTicket} selected={true} onClick={() => setTicketPickerOpen(true)} />
-                    </div>
-                  ) : (
-                    <button className="mt-4 grid min-h-[150px] w-full place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 p-5 text-center" onClick={() => setTicketPickerOpen(true)}>
-                      <span>
-                        <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="ticket" /></span>
-                        <span className="mt-3 block text-lg font-black text-white">Elegir billete</span>
-                        <span className="mt-1 block text-sm font-bold text-slate-400">Abre tu galería con buscador.</span>
-                      </span>
+              <section className="mt-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { value: "ticket", title: "Publicar un billete", hint: "Para ir con gente a un evento que ya compraste.", icon: "ticket" },
+                    { value: "free", title: "Crear plan libre", hint: "Estudiar, pasear, meditar, tomar algo o quedar sin billete.", icon: "users" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={`min-h-[126px] rounded-[30px] border p-5 text-left transition ${planType === item.value ? "border-mint/70 bg-mint/15 shadow-glow" : "border-white/10 bg-white/[0.055] hover:bg-white/[0.08]"}`}
+                      onClick={() => {
+                        setPlanType(item.value);
+                        setStatus("");
+                      }}
+                    >
+                      <span className={`grid h-12 w-12 place-items-center rounded-2xl ${planType === item.value ? "bg-mint text-ink" : "bg-white/10 text-mint"}`}><NavIcon name={item.icon} /></span>
+                      <span className="mt-4 block text-xl font-black text-white">{item.title}</span>
+                      <span className="mt-2 block text-sm font-bold leading-5 text-slate-400">{item.hint}</span>
                     </button>
-                  )}
+                  ))}
                 </div>
 
-                <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
+                <div className="mt-4 grid gap-4 lg:grid-cols-[.9fr_1.1fr]">
+                  <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-4 sm:p-5">
+                    {planType === "ticket" ? (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Billete prueba</p>
+                            <p className="mt-1 text-sm font-bold text-slate-400">El QR y los códigos quedan ocultos.</p>
+                          </div>
+                          <button className="h-11 shrink-0 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow" onClick={() => setTicketPickerOpen(true)}>Añadir</button>
+                        </div>
+                        {selectedTicket ? (
+                          <div className="mt-4">
+                            <TicketCard ticket={selectedTicket} selected={true} onClick={() => setTicketPickerOpen(true)} />
+                          </div>
+                        ) : (
+                          <button className="mt-4 grid min-h-[150px] w-full place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 p-5 text-center" onClick={() => setTicketPickerOpen(true)}>
+                            <span>
+                              <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="ticket" /></span>
+                              <span className="mt-3 block text-lg font-black text-white">Elegir billete</span>
+                              <span className="mt-1 block text-sm font-bold text-slate-400">Abre tu galería con buscador.</span>
+                            </span>
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Plan libre</p>
+                        <h2 className="mt-2 text-2xl font-black text-white">Quedar sin comprar billete</h2>
+                        <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Perfecto para estudiar, caminar, hacer fotos, hablar idiomas o montar algo tranquilo en Donostia.</p>
+                        <div className="mt-4 grid grid-cols-2 gap-2">
+                          {FREE_PLAN_CATEGORIES.map((category) => (
+                            <button
+                              key={category}
+                              type="button"
+                              className={`rounded-2xl border px-3 py-3 text-sm font-black ${freeCategory === category ? "border-mint/70 bg-mint/15 text-mint" : "border-white/10 bg-black/20 text-slate-300"}`}
+                              onClick={() => setFreeCategory(category)}
+                            >
+                              {category}
+                            </button>
+                          ))}
+                        </div>
+                        <label className="mt-4 block">
+                          <span className="text-sm font-black text-white">Lugar</span>
+                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={freeLocation} onChange={(event) => setFreeLocation(event.target.value)} placeholder="Ej. Biblioteca, Parque Cristina Enea..." />
+                        </label>
+                        <label className="mt-3 block">
+                          <span className="text-sm font-black text-white">Fecha</span>
+                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" min={new Date().toISOString().slice(0, 10)} value={freeEventDate} onChange={(event) => setFreeEventDate(event.target.value)} />
+                        </label>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{editingPlanId ? "Editar plan" : "Crear plan"}</p>
@@ -1128,8 +1225,8 @@
                     </div>
                     {editingPlanId && <button className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-300" onClick={cancelEdit}>Cancelar</button>}
                   </div>
-                  <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Título: Vamos al concierto..." />
-                  <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Texto: quién eres, qué plan quieres, punto de encuentro..." />
+                  <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={planType === "free" ? "Título: Estudiar en la biblio..." : "Título: Vamos al concierto..."} />
+                  <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={planType === "free" ? "Texto: qué quieres hacer, hora aproximada, ambiente del plan..." : "Texto: quién eres, qué plan quieres, punto de encuentro..."} />
                   <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1202,7 +1299,8 @@
                       {status}
                     </p>
                   )}
-                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Guardando..." : editingPlanId ? "Guardar cambios" : "Publicar plan"}</button>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Guardando..." : editingPlanId ? "Guardar cambios" : planType === "free" ? "Publicar plan libre" : "Publicar plan"}</button>
+                  </div>
                 </div>
               </section>
             )}
@@ -1369,13 +1467,15 @@
                 <section className="mx-auto mb-24 max-w-3xl rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   {(() => {
                     const photos = planPhotos(detailPlan);
+                    const free = isFreePlan(detailPlan);
                     const ticket = detailPlan.purchase;
                     const offer = ticket?.offer || {};
-                    const merchant = offerMerchant(ticket);
-                    const categories = offerCategories(ticket);
-                    const dateRange = offerDateRange(ticket);
-                    const images = offerImages(ticket);
-                    const mapUrl = offer.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(offer.address)}` : "";
+                    const merchant = free ? (detailPlan.free_category || "Plan libre") : offerMerchant(ticket);
+                    const categories = free ? (detailPlan.free_category || "Plan libre") : offerCategories(ticket);
+                    const dateRange = free ? (detailPlan.event_date ? formatDate(detailPlan.event_date) : "") : offerDateRange(ticket);
+                    const images = free ? [] : offerImages(ticket);
+                    const mapAddress = free ? detailPlan.location : offer.address;
+                    const mapUrl = mapAddress ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapAddress)}` : "";
                     const requiredPoints = Number(offer.required_points || ticket?.offer_points || ticket?.total_points || 0);
                     return (
                       <>
@@ -1383,7 +1483,7 @@
                     <div>
                       <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Grupo</p>
                       <h2 className="mt-2 text-3xl font-black text-white">{planTitle(detailPlan)}</h2>
-                      <p className="mt-2 text-sm font-bold text-slate-400">{merchant} · {statusLabel(detailPlan.status)}</p>
+                      <p className="mt-2 text-sm font-bold text-slate-400">{free ? "Plan libre" : merchant} · {statusLabel(detailPlan.status)}</p>
                     </div>
                     <button className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-2xl font-black" onClick={() => setDetailPlan(null)}>×</button>
                   </div>
@@ -1410,53 +1510,54 @@
 
                   <div className="mt-5 overflow-hidden rounded-[30px] border border-white/10 bg-white/[0.055]">
                     <div className="relative min-h-[230px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
-                      {images[0] ? <img className="absolute inset-0 h-full w-full object-cover" src={images[0]} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">🎟️</span>}
+                      {images[0] ? <img className="absolute inset-0 h-full w-full object-cover" src={images[0]} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">{free ? "✨" : "🎟️"}</span>}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div>
                       <div className="absolute bottom-4 left-4 right-4">
                         <div className="flex flex-wrap items-center gap-2">
                           {categories && <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{categories}</span>}
-                          <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">Billete verificado</span>
+                          <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">{free ? "Sin billete" : "Billete verificado"}</span>
                         </div>
-                        <h3 className="mt-3 text-2xl font-black text-white">{offer.title || "Billete Donoss"}</h3>
+                        <h3 className="mt-3 text-2xl font-black text-white">{free ? (detailPlan.title || "Plan libre") : (offer.title || "Billete Donoss")}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-200">
-                          <span>{merchant}</span>
-                          {offer.business_is_verified && <VerifiedBadge />}
+                          <span>{free ? (detailPlan.location || "Lugar por confirmar") : merchant}</span>
+                          {!free && offer.business_is_verified && <VerifiedBadge />}
                         </div>
                       </div>
                     </div>
                     <div className="grid gap-3 p-4 sm:grid-cols-2">
-                      {offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de inicio</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
-                      {offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de fin</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
-                      {!offer.start_date && !offer.end_date && dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
-                      <div className="rounded-2xl bg-black/20 p-3">
+                      {free && detailPlan.event_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Día del plan</p><p className="mt-1 text-sm font-black text-white">{formatDate(detailPlan.event_date)}</p></div>}
+                      {!free && offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de inicio</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
+                      {!free && offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de fin</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
+                      {!free && !offer.start_date && !offer.end_date && dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
+                      {!free && <div className="rounded-2xl bg-black/20 p-3">
                         <p className="text-xs font-bold text-slate-500">Comercio</p>
                         <p className="mt-1 inline-flex items-center gap-2 text-sm font-black text-white">
                           <span>{merchant}</span>
                           {offer.business_is_verified && <VerifiedBadge />}
                         </p>
-                      </div>
-                      {offer.hours && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Horarios</p><p className="mt-1 text-sm font-black text-white">{offer.hours}</p></div>}
-                      {requiredPoints > 0 && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Puntos necesarios</p><p className="mt-1 text-sm font-black text-white">{requiredPoints} puntos</p></div>}
-                      {offer.age && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Edad</p><p className="mt-1 text-sm font-black text-white">{offer.age}</p></div>}
-                      {offer.author && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Autor/a</p><p className="mt-1 text-sm font-black text-white">{offer.author}</p></div>}
+                      </div>}
+                      {!free && offer.hours && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Horarios</p><p className="mt-1 text-sm font-black text-white">{offer.hours}</p></div>}
+                      {!free && requiredPoints > 0 && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Puntos necesarios</p><p className="mt-1 text-sm font-black text-white">{requiredPoints} puntos</p></div>}
+                      {!free && offer.age && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Edad</p><p className="mt-1 text-sm font-black text-white">{offer.age}</p></div>}
+                      {!free && offer.author && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Autor/a</p><p className="mt-1 text-sm font-black text-white">{offer.author}</p></div>}
                       {categories && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Categorías</p><p className="mt-1 text-sm font-black text-white">{categories}</p></div>}
-                      {offer.address && (
+                      {mapAddress && (
                         <a className="rounded-2xl bg-black/20 p-3 transition hover:bg-mint/10 sm:col-span-2" href={mapUrl} target="_blank" rel="noreferrer">
                           <p className="text-xs font-bold text-slate-500">Lugar</p>
-                          <p className="mt-1 text-sm font-black text-white">{offer.address}</p>
+                          <p className="mt-1 text-sm font-black text-white">{mapAddress}</p>
                           <p className="mt-2 text-xs font-black text-mint">Abrir en Google Maps</p>
                         </a>
                       )}
-                      {offer.description && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Descripción del evento</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{offer.description}</p></div>}
+                      {!free && offer.description && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Descripción del evento</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{offer.description}</p></div>}
                       {detailPlan.message && photos.length === 0 && <div className="rounded-2xl bg-black/20 p-3 sm:col-span-2"><p className="text-xs font-bold text-slate-500">Mensaje de {detailPlan.creator?.display_name || "la persona"}</p><p className="mt-2 text-sm font-semibold leading-6 text-slate-200">{detailPlan.message}</p></div>}
-                      <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)} onClick={(event) => openOfferDetailInApp(event, ticket)}>Ver el billete en detalle</a>
+                      {!free && <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow sm:col-span-2" href={offerDetailUrl(ticket)} onClick={(event) => openOfferDetailInApp(event, ticket)}>Ver el billete en detalle</a>}
                     </div>
                   </div>
 
-                  <div className="mt-5 rounded-[28px] border border-white/10 bg-mint/10 p-4">
+                  {!free && <div className="mt-5 rounded-[28px] border border-white/10 bg-mint/10 p-4">
                     <p className="text-sm font-black text-white">Compra usada como prueba</p>
                     <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Aquí solo aparecen datos públicos del evento. El QR, código de validación y código de seguridad nunca se muestran en Quedar.</p>
-                  </div>
+                  </div>}
                       </>
                     );
                   })()}
