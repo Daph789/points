@@ -67,6 +67,15 @@ function publicOriginForRequest(request) {
   return `${protocol}://${host}`;
 }
 
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || "").trim());
+    return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+  } catch (_error) {
+    return "";
+  }
+}
+
 function enrichRechargeAccounting(recharge) {
   const pack = pointPackFor(recharge?.points);
   const amountTotal = Number(recharge?.amount_total || pack?.amount || 0);
@@ -2266,6 +2275,180 @@ app.post("/api/me/offer-transfer", async (request, response) => {
   }
 });
 
+app.get("/api/me/offer-automation-requests", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    if (profile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("offer_automation_requests")
+      .select("id, source_url, prefers_external_checkout, status, result_offer_url, admin_note, completed_at, created_at, updated_at")
+      .eq("business_id", profile.id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return response.status(500).json({
+        error: error.code === "42P01" ? "offer_automation_sql_missing" : "automation_requests_failed",
+      });
+    }
+
+    response.json({ requests: data || [] });
+  } catch (error) {
+    console.error("My offer automation requests error:", error);
+    response.status(500).json({ error: "automation_requests_failed" });
+  }
+});
+
+app.post("/api/me/offer-automation-requests", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const sourceUrl = String(request.body?.sourceUrl || "").trim();
+  const prefersExternalCheckout = request.body?.prefersExternalCheckout === true;
+
+  try {
+    new URL(sourceUrl);
+  } catch (_error) {
+    return response.status(400).json({ error: "invalid_source_url" });
+  }
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    if (profile?.account_type !== "business") {
+      return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("offer_automation_requests")
+      .insert({
+        business_id: profile.id,
+        source_url: sourceUrl,
+        prefers_external_checkout: prefersExternalCheckout,
+        status: "pending",
+        updated_at: new Date().toISOString(),
+      })
+      .select("id, source_url, prefers_external_checkout, status, result_offer_url, admin_note, completed_at, created_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      return response.status(500).json({
+        error: error.code === "42P01" ? "offer_automation_sql_missing" : "automation_request_create_failed",
+      });
+    }
+
+    response.json({ request: data });
+  } catch (error) {
+    console.error("Create offer automation request error:", error);
+    response.status(500).json({ error: "automation_request_create_failed" });
+  }
+});
+
+app.post("/api/admin/offer-automation-requests", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("offer_automation_requests")
+      .select("id, business_id, source_url, prefers_external_checkout, status, result_offer_url, admin_note, completed_at, created_at, updated_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+
+    if (error) {
+      return response.status(500).json({
+        error: error.code === "42P01" ? "offer_automation_sql_missing" : "automation_requests_failed",
+      });
+    }
+
+    const businessIds = [...new Set((data || []).map((item) => item.business_id).filter(Boolean))];
+    let businessesById = {};
+    if (businessIds.length > 0) {
+      const { data: businesses, error: businessesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, transaction_id, account_type, is_verified")
+        .in("id", businessIds);
+      if (businessesError) console.error("Automation request businesses error:", businessesError);
+      businessesById = Object.fromEntries((businesses || []).map((business) => [business.id, business]));
+    }
+
+    response.json({
+      requests: (data || []).map((item) => ({
+        ...item,
+        business: businessesById[item.business_id] || null,
+      })),
+    });
+  } catch (error) {
+    console.error("Admin offer automation requests error:", error);
+    response.status(500).json({ error: "automation_requests_failed" });
+  }
+});
+
+app.post("/api/admin/offer-automation-requests/:id/complete", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const requestId = String(request.params.id || "").trim();
+  const resultOfferUrl = String(request.body?.resultOfferUrl || "").trim();
+  const adminNote = String(request.body?.adminNote || "").trim().slice(0, 500);
+
+  try {
+    new URL(resultOfferUrl);
+  } catch (_error) {
+    return response.status(400).json({ error: "invalid_result_offer_url" });
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("offer_automation_requests")
+      .update({
+        status: "completed",
+        result_offer_url: resultOfferUrl,
+        admin_note: adminNote || null,
+        completed_at: now,
+        updated_at: now,
+      })
+      .eq("id", requestId)
+      .select("id, business_id, source_url, prefers_external_checkout, status, result_offer_url, admin_note, completed_at, created_at, updated_at")
+      .maybeSingle();
+
+    if (error) {
+      return response.status(500).json({
+        error: error.code === "42P01" ? "offer_automation_sql_missing" : "automation_request_complete_failed",
+      });
+    }
+    if (!data) return response.status(404).json({ error: "automation_request_not_found" });
+
+    response.json({ request: data });
+  } catch (error) {
+    console.error("Complete offer automation request error:", error);
+    response.status(500).json({ error: "automation_request_complete_failed" });
+  }
+});
+
 app.put("/api/me/premium/identity", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -2908,6 +3091,33 @@ async function buildNotificationsForProfile(profile) {
       }
     } catch (error) {
       console.error("Notification payouts error:", error);
+    }
+
+    try {
+      const { data: automationRequests, error } = await supabaseAdmin
+        .from("offer_automation_requests")
+        .select("id, source_url, status, result_offer_url, completed_at, updated_at, created_at")
+        .eq("business_id", profile.id)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(80);
+
+      if (error && error.code !== "42P01") console.error("Notification automation requests error:", error);
+      if (!error) {
+        for (const item of automationRequests || []) {
+          pushNotification(events, {
+            key: `automation:${item.id}:completed`,
+            subsection: "automation",
+            kind: "offer_automation",
+            title: "Publicación copiada lista",
+            detail: "Donoss terminó de preparar tu oferta.",
+            href: item.result_offer_url || "historial.html?tab=automation",
+            created_at: item.completed_at || item.updated_at || item.created_at,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Notification automation fatal error:", error);
     }
   }
 
@@ -5516,6 +5726,7 @@ app.post("/api/purchases/offer", async (request, response) => {
       total_points: totalPoints,
       buyer_points: Number(updatedBuyer?.points || 0),
       receiver_display_name: receiverProfile.display_name,
+      external_checkout_url: offer.external_checkout_enabled ? safeHttpUrl(offer.external_checkout_url) : "",
     });
   } catch (error) {
     console.error("Purchase error:", error);

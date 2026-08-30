@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss Admin | Automatización</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 10%, rgba(255, 107, 107, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function formatDate(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+      }
+
+      function RequestCard({ item, onComplete, isSaving }) {
+        const [resultUrl, setResultUrl] = React.useState(item.result_offer_url || "");
+        const [note, setNote] = React.useState(item.admin_note || "");
+        const completed = item.status === "completed";
+        const business = item.business || {};
+
+        return (
+          <article className={`rounded-[30px] border p-4 shadow-2xl shadow-black/20 sm:p-5 ${completed ? "border-mint/25 bg-mint/10" : "border-white/10 bg-white/[0.055]"}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className={`text-xs font-black uppercase tracking-[0.16em] ${completed ? "text-mint" : "text-sun"}`}>
+                  {completed ? "Terminada" : "Pendiente"}
+                </p>
+                <h2 className="mt-2 text-xl font-black text-white">{business.display_name || "Empresa Donoss"}</h2>
+                <p className="mt-1 text-sm font-bold text-slate-400">{business.email || "Sin email"} · {business.transaction_id || "Sin ID"}</p>
+                <p className="mt-2 text-xs font-bold text-slate-500">Solicitada: {formatDate(item.created_at)}</p>
+              </div>
+              <a className="rounded-full border border-sky-400/25 bg-sky-400/10 px-4 py-2 text-sm font-black text-sky-200" href={item.source_url} target="_blank" rel="noreferrer">
+                Abrir enlace
+              </a>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Link original</p>
+              <p className="mt-2 break-all text-sm font-bold text-slate-300">{item.source_url}</p>
+            </div>
+            {item.prefers_external_checkout && (
+              <div className="mt-4 rounded-2xl border border-sun/25 bg-sun/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-sun">Compra externa solicitada</p>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-200">
+                  Esta empresa prefiere que el cliente termine la compra en su web. Al crear la oferta con donoss.red@gmail.com, activa “Pagar con enlace externo” y pega su link de pago.
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 grid gap-3">
+              <label>
+                <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Link final de la publicación Donoss</span>
+                <input
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70"
+                  value={resultUrl}
+                  onChange={(event) => setResultUrl(event.target.value)}
+                  placeholder="https://donoss.es/offer-detail.html?id=..."
+                />
+              </label>
+              <label>
+                <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Nota interna opcional</span>
+                <textarea
+                  className="min-h-20 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70"
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="Oferta publicada y transferida a la empresa."
+                />
+              </label>
+              <button
+                className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-45"
+                onClick={() => onComplete(item, resultUrl, note)}
+                disabled={isSaving || !resultUrl.trim()}
+              >
+                {isSaving ? "Guardando..." : completed ? "Actualizar terminado" : "Marcar terminado"}
+              </button>
+            </div>
+          </article>
+        );
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(localStorage.getItem("donosAdminPassword") || "");
+        const [requests, setRequests] = React.useState([]);
+        const [status, setStatus] = React.useState("");
+        const [search, setSearch] = React.useState("");
+        const [savingId, setSavingId] = React.useState("");
+
+        const filteredRequests = requests.filter((item) => {
+          const query = search.trim().toLowerCase();
+          if (!query) return true;
+          return [
+            item.source_url,
+            item.result_offer_url,
+            item.status,
+            item.business?.display_name,
+            item.business?.email,
+            item.business?.transaction_id,
+          ].filter(Boolean).join(" ").toLowerCase().includes(query);
+        });
+
+        async function loadRequests(event) {
+          event?.preventDefault();
+          setStatus("Cargando solicitudes...");
+          try {
+            const response = await fetch("/api/admin/offer-automation-requests", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "requests_failed");
+            localStorage.setItem("donosAdminPassword", password);
+            setRequests(data.requests || []);
+            setStatus("");
+          } catch (error) {
+            setStatus(error.message === "offer_automation_sql_missing"
+              ? "Falta ejecutar el SQL de automatización en Supabase."
+              : "No se han podido cargar las solicitudes.");
+          }
+        }
+
+        async function completeRequest(item, resultOfferUrl, adminNote) {
+          const confirmed = window.confirm("¿Marcar esta automatización como terminada? La empresa recibirá la notificación.");
+          if (!confirmed) return;
+
+          setSavingId(item.id);
+          setStatus("");
+          try {
+            const response = await fetch(`/api/admin/offer-automation-requests/${item.id}/complete`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, resultOfferUrl, adminNote }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "complete_failed");
+            setRequests((current) => current.map((row) => row.id === item.id ? { ...row, ...data.request } : row));
+            setStatus("Solicitud marcada como terminada.");
+          } catch (error) {
+            setStatus(error.message === "invalid_result_offer_url" ? "El link final no es válido." : "No se ha podido terminar la solicitud.");
+          } finally {
+            setSavingId("");
+          }
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <a href="donos-admin-accounts.html" className="flex min-w-0 items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
+                <div>
+                  <p className="text-lg font-black leading-tight">Admin Donoss</p>
+                  <p className="text-xs font-semibold text-slate-400">Automatización</p>
+                </div>
+              </a>
+              <nav className="flex flex-wrap gap-2">
+                <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="donos-admin-accounts.html">Cuentas</a>
+                <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="donos-admin-business-settlements.html">Empresas</a>
+                <a className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" href="donos-admin-automation.html">Automatización</a>
+              </nav>
+            </header>
+
+            <section className="mt-8 rounded-[34px] border border-white/10 bg-white/[0.055] p-5 shadow-glow sm:p-8">
+              <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Copias de publicaciones</p>
+              <h1 className="mt-2 text-4xl font-black text-white">Solicitudes de automatización</h1>
+              <p className="mt-3 max-w-3xl text-sm font-semibold leading-6 text-slate-400">
+                Cuando una empresa pega un link, aparece aquí. Tú publicas desde donoss.red@gmail.com, transfieres la oferta a esa empresa y pegas el link final para avisarle.
+              </p>
+
+              <form className="mt-6 grid gap-3 md:grid-cols-[1fr_auto]" onSubmit={loadRequests}>
+                <input
+                  className="h-12 rounded-2xl border border-white/10 bg-black/20 px-4 text-sm font-bold text-white outline-none placeholder:text-slate-500"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Contraseña admin"
+                />
+                <button className="h-12 rounded-2xl bg-mint px-6 text-sm font-black text-ink shadow-glow">Cargar</button>
+              </form>
+            </section>
+
+            <section className="mt-6">
+              <label className="flex items-center gap-3 rounded-[26px] border border-white/10 bg-white/[0.055] p-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg text-mint ring-1 ring-mint/20">⌕</span>
+                <input
+                  className="h-11 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar empresa, link, estado..."
+                />
+              </label>
+
+              {status && <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-sm font-bold text-slate-300">{status}</p>}
+
+              <div className="mt-5 grid gap-4">
+                {filteredRequests.length > 0 ? (
+                  filteredRequests.map((item) => (
+                    <RequestCard key={item.id} item={item} onComplete={completeRequest} isSaving={savingId === item.id} />
+                  ))
+                ) : (
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">
+                    No hay solicitudes cargadas.
+                  </div>
+                )}
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

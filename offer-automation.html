@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Automatización</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 18% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 10%, rgba(56, 189, 248, 0.14), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      @keyframes blink { 0%, 45% { opacity: 1; } 46%, 100% { opacity: .25; } }
+      .blink { animation: blink 1s infinite; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+      const supabaseAnonKey =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+      const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+      function redirectToLogin() {
+        const next = window.location.pathname + window.location.search;
+        window.location.href = `login.html?next=${encodeURIComponent(next)}`;
+      }
+
+      function formatDate(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
+      }
+
+      function RequestCard({ item }) {
+        const completed = item.status === "completed";
+        return (
+          <article className={`rounded-[28px] border p-4 sm:p-5 ${completed ? "border-mint/25 bg-mint/10" : "border-sun/25 bg-sun/10"}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className={`text-xs font-black uppercase tracking-[0.16em] ${completed ? "text-mint" : "text-sun"}`}>
+                  {completed ? "Completada" : "En preparación"}
+                </p>
+                <p className="mt-2 break-all text-sm font-bold text-slate-300">{item.source_url}</p>
+                <p className="mt-2 text-xs font-bold text-slate-500">Solicitada: {formatDate(item.created_at)}</p>
+              </div>
+              {completed && item.result_offer_url && (
+                <a className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" href={item.result_offer_url}>
+                  Ver oferta
+                </a>
+              )}
+            </div>
+            {item.admin_note && <p className="mt-3 rounded-2xl bg-black/20 p-3 text-sm font-semibold text-slate-300">{item.admin_note}</p>}
+          </article>
+        );
+      }
+
+      function App() {
+        const [sourceUrl, setSourceUrl] = React.useState("");
+        const [prefersExternalCheckout, setPrefersExternalCheckout] = React.useState(false);
+        const [requests, setRequests] = React.useState([]);
+        const [status, setStatus] = React.useState("Cargando automatización...");
+        const [formStatus, setFormStatus] = React.useState({ type: "", message: "" });
+        const [isSending, setIsSending] = React.useState(false);
+        const [token, setToken] = React.useState("");
+
+        const consoleLines = sourceUrl.trim()
+          ? [
+              "donoss.scan.start --source web",
+              "reading: título, precio, imagen, fecha",
+              "checking: formato compatible",
+              "queue: solicitud enviada a Donoss",
+              "waiting: revisión y publicación manual",
+            ]
+          : [
+              "waiting for source_url...",
+              "paste ticket page link",
+              "ready to prepare request",
+            ];
+
+        React.useEffect(() => {
+          loadRequests();
+        }, []);
+
+        async function loadRequests() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const accessToken = sessionData.session?.access_token;
+          if (!accessToken) {
+            redirectToLogin();
+            return;
+          }
+          setToken(accessToken);
+
+          try {
+            const response = await fetch("/api/me/offer-automation-requests", {
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "requests_failed");
+            setRequests(data.requests || []);
+            setStatus("");
+          } catch (error) {
+            setStatus(error.message === "offer_automation_sql_missing"
+              ? "Falta ejecutar el SQL de automatización en Supabase."
+              : "No se han podido cargar tus solicitudes.");
+          }
+        }
+
+        async function submitRequest(event) {
+          event.preventDefault();
+          setFormStatus({ type: "", message: "" });
+          setIsSending(true);
+
+          try {
+            new URL(sourceUrl.trim());
+            const response = await fetch("/api/me/offer-automation-requests", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ sourceUrl: sourceUrl.trim(), prefersExternalCheckout }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "create_failed");
+            setRequests((current) => [data.request, ...current]);
+            setSourceUrl("");
+            setPrefersExternalCheckout(false);
+            setFormStatus({ type: "success", message: "Solicitud enviada. Donoss preparará tu publicación y te avisará cuando esté lista." });
+          } catch (error) {
+            setFormStatus({
+              type: "error",
+              message: error.message === "offer_automation_sql_missing"
+                ? "Falta ejecutar el SQL de automatización en Supabase."
+                : "Pega un enlace válido para enviar la solicitud.",
+            });
+          } finally {
+            setIsSending(false);
+          }
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+            <header className="flex items-center justify-between gap-3">
+              <a href="create-offer.html" className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">Volver</a>
+              <a href="my-offers.html" className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow">Mis publicaciones</a>
+            </header>
+
+            <section className="mt-8 grid gap-5 lg:grid-cols-[1fr_460px]">
+              <div className="rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow sm:p-8">
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-sky-300">Automatización</p>
+                <h1 className="mt-3 text-4xl font-black leading-tight text-white sm:text-5xl">Copiar una publicación desde tu web</h1>
+                <p className="mt-4 text-base font-semibold leading-7 text-slate-400">
+                  Pega el enlace directo de la página del billete u oferta. Donoss recibirá la solicitud, preparará la publicación y te avisará cuando esté lista.
+                </p>
+
+                <form className="mt-7 grid gap-4" onSubmit={submitRequest}>
+                  <label>
+                    <span className="mb-2 block text-sm font-bold text-slate-300">Enlace de la página a copiar</span>
+                    <input
+                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                      value={sourceUrl}
+                      onChange={(event) => setSourceUrl(event.target.value)}
+                      placeholder="https://tuweb.com/evento/billete..."
+                    />
+                  </label>
+                  <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${prefersExternalCheckout ? "border-mint/40 bg-mint/10" : "border-white/10 bg-black/20"}`}>
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-5 w-5 rounded border-line bg-panel accent-mint"
+                      checked={prefersExternalCheckout}
+                      onChange={(event) => setPrefersExternalCheckout(event.target.checked)}
+                    />
+                    <span>
+                      <span className="block text-sm font-black text-white">Prefiero que el cliente compre finalmente en mi web</span>
+                      <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">
+                        Donoss preparará la publicación igual, pero después de validar el pago con puntos enviaremos al cliente al enlace externo de compra.
+                      </span>
+                    </span>
+                  </label>
+                  <button className="h-14 rounded-2xl bg-mint text-base font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || !sourceUrl.trim()}>
+                    {isSending ? "Enviando..." : "Enviar solicitud"}
+                  </button>
+                </form>
+
+                {formStatus.message && (
+                  <p className={`mt-4 rounded-2xl border p-4 text-sm font-bold ${formStatus.type === "success" ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/25 bg-coral/10 text-coral"}`}>
+                    {formStatus.message}
+                  </p>
+                )}
+              </div>
+
+              <aside className="rounded-[34px] border border-white/10 bg-[#080c17] p-5 shadow-2xl shadow-black/30">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Estamos copiando su publicación</p>
+                <p className="mt-3 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black text-coral">
+                  Está cargando<span className="blink">...</span>
+                </p>
+                <p className="mt-4 text-sm font-semibold leading-6 text-slate-400">
+                  Si quieres que vaya más rápido o si quieres publicar varias a la vez, pasa al modo premium.
+                </p>
+                <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-xs text-slate-300">
+                  {consoleLines.map((line, index) => (
+                    <p key={line} className={index === consoleLines.length - 1 ? "text-mint" : ""}>$ {line}</p>
+                  ))}
+                </div>
+              </aside>
+            </section>
+
+            <section className="mt-6">
+              <div className="mb-4 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Seguimiento</p>
+                  <h2 className="mt-2 text-2xl font-black text-white">Tus solicitudes</h2>
+                </div>
+                <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" onClick={loadRequests}>Actualizar</button>
+              </div>
+              <div className="grid gap-3">
+                {status ? (
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">{status}</div>
+                ) : requests.length ? (
+                  requests.map((item) => <RequestCard key={item.id} item={item} />)
+                ) : (
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">
+                    Todavía no has enviado ninguna solicitud.
+                  </div>
+                )}
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

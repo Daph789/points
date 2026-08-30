@@ -75,6 +75,7 @@
 
       const categories = ["Cine", "Libros", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
       const draftKey = "donosBusinessOfferDraft";
+      const offerTransferAdminEmail = "donoss.red@gmail.com";
       const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
       const reservationWeekdays = [
         { value: 1, label: "Lun" },
@@ -231,6 +232,9 @@
         const [additionalLinks, setAdditionalLinks] = React.useState([emptyAdditionalLink()]);
         const [additionalDetails, setAdditionalDetails] = React.useState([emptyAdditionalDetail()]);
         const [cartButtonText, setCartButtonText] = React.useState("Comprar");
+        const [externalCheckoutEnabled, setExternalCheckoutEnabled] = React.useState(false);
+        const [externalCheckoutUrl, setExternalCheckoutUrl] = React.useState("");
+        const [canUseExternalCheckout, setCanUseExternalCheckout] = React.useState(false);
         const [receiverMode, setReceiverMode] = React.useState("business");
         const [businessProfile, setBusinessProfile] = React.useState(null);
         const [soldCount, setSoldCount] = React.useState(0);
@@ -304,6 +308,8 @@
             setAdditionalLinks(Array.isArray(draft.additionalLinks) && draft.additionalLinks.length ? draft.additionalLinks : [emptyAdditionalLink()]);
             setAdditionalDetails(Array.isArray(draft.additionalDetails) && draft.additionalDetails.length ? draft.additionalDetails : [emptyAdditionalDetail()]);
             setCartButtonText(draft.cartButtonText || "Comprar");
+            setExternalCheckoutEnabled(Boolean(draft.externalCheckoutEnabled));
+            setExternalCheckoutUrl(draft.externalCheckoutUrl || "");
             setReceiverMode(draft.receiverMode || "business");
             setReceiverId(draft.receiverId || "");
             setReceiverName(draft.receiverName || "");
@@ -364,6 +370,8 @@
             setAdditionalLinks(Array.isArray(data.additional_links) && data.additional_links.length ? data.additional_links : [emptyAdditionalLink()]);
             setAdditionalDetails(Array.isArray(data.additional_details) && data.additional_details.length ? data.additional_details : [emptyAdditionalDetail()]);
             setCartButtonText(data.cart_button_text || "Comprar");
+            setExternalCheckoutEnabled(Boolean(data.external_checkout_enabled));
+            setExternalCheckoutUrl(data.external_checkout_url || "");
             setReceiverId(data.receiver_transaction_id || "");
             setReceiverName(data.receiver_display_name || "");
             setReceiverMode("custom");
@@ -394,6 +402,8 @@
             const { data: userData } = await supabaseClient.auth.getUser();
             const userId = userData.user?.id;
             const metadata = userData.user?.user_metadata || {};
+            const userEmail = String(userData.user?.email || "").trim().toLowerCase();
+            setCanUseExternalCheckout(userEmail === offerTransferAdminEmail);
             let profile = {
               display_name: localName || metadata.display_name || "",
               transaction_id: localTransactionId || metadata.transaction_id || "",
@@ -469,6 +479,8 @@
             additionalLinks,
             additionalDetails,
             cartButtonText,
+            externalCheckoutEnabled,
+            externalCheckoutUrl,
             receiverMode,
             receiverId,
             receiverName,
@@ -508,6 +520,8 @@
           additionalLinks,
           additionalDetails,
           cartButtonText,
+          externalCheckoutEnabled,
+          externalCheckoutUrl,
           receiverMode,
           receiverId,
           receiverName,
@@ -622,6 +636,8 @@
           setAdditionalLinks([emptyAdditionalLink()]);
           setAdditionalDetails([emptyAdditionalDetail()]);
           setCartButtonText("Comprar");
+          setExternalCheckoutEnabled(false);
+          setExternalCheckoutUrl("");
           setReceiverMode("business");
           setReceiverId(businessProfile?.transaction_id || "");
           setReceiverName(businessProfile?.display_name || "");
@@ -693,6 +709,14 @@
               setStatus({ type: "error", message: "Elige al menos un día de la semana para aceptar reservas." });
               return;
             }
+            if (canUseExternalCheckout && externalCheckoutEnabled) {
+              try {
+                new URL(externalCheckoutUrl.trim());
+              } catch (_error) {
+                setStatus({ type: "error", message: "Añade un enlace externo válido para el pago." });
+                return;
+              }
+            }
 
             const payload = {
               business_id: userId,
@@ -737,6 +761,10 @@
               out_of_stock_since: stockQuantity !== "" && Math.max(Number.parseInt(stockQuantity, 10) || 0, 0) <= 0 ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
             };
+            if (canUseExternalCheckout) {
+              payload.external_checkout_enabled = externalCheckoutEnabled;
+              payload.external_checkout_url = externalCheckoutEnabled ? externalCheckoutUrl.trim() : null;
+            }
 
             const request = editId
               ? supabaseClient.from("business_offers").update(payload).eq("id", editId).eq("business_id", userId).select("id").maybeSingle()
@@ -1170,6 +1198,44 @@
                 <Field label="Botón de acción">
                   <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Comprar, reservar, apuntarme..." />
                 </Field>
+
+                {canUseExternalCheckout && (
+                  <div className="rounded-[24px] border border-sun/20 bg-sun/10 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-black text-white">Pagar con enlace externo</p>
+                        <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+                          Solo aparece en tu cuenta Donoss admin. El cliente paga sus puntos en Donoss y después se le abre el enlace de pago de la empresa.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`relative h-8 w-14 shrink-0 rounded-full p-1 transition ${
+                          externalCheckoutEnabled ? "bg-mint" : "bg-white/10 ring-1 ring-white/10"
+                        }`}
+                        onClick={() => setExternalCheckoutEnabled((current) => !current)}
+                        aria-pressed={externalCheckoutEnabled}
+                      >
+                        <span className={`block h-6 w-6 rounded-full bg-white shadow-lg transition ${externalCheckoutEnabled ? "translate-x-6" : "translate-x-0"}`}></span>
+                      </button>
+                    </div>
+                    {externalCheckoutEnabled && (
+                      <div className="mt-4">
+                        <Field label="Enlace de pago externo">
+                          <input
+                            className={inputClass}
+                            value={externalCheckoutUrl}
+                            onChange={(event) => setExternalCheckoutUrl(event.target.value)}
+                            placeholder="https://web-del-comercio.com/pagar..."
+                          />
+                        </Field>
+                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                          Úsalo solo cuando la empresa quiere terminar la compra en su propia web.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
                   <div className="flex items-start justify-between gap-4">

@@ -18,6 +18,8 @@ create table if not exists public.business_offers (
   author text,
   description text,
   cart_button_text text,
+  external_checkout_enabled boolean not null default false,
+  external_checkout_url text,
   receiver_transaction_id text,
   receiver_display_name text,
   delivery_home_enabled boolean not null default false,
@@ -87,6 +89,12 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists cart_button_text text;
+
+alter table public.business_offers
+  add column if not exists external_checkout_enabled boolean not null default false;
+
+alter table public.business_offers
+  add column if not exists external_checkout_url text;
 
 alter table public.business_offers
   add column if not exists receiver_transaction_id text;

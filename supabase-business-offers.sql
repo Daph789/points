@@ -20,6 +20,8 @@ create table if not exists public.business_offers (
   additional_links jsonb not null default '[]'::jsonb,
   additional_details jsonb not null default '[]'::jsonb,
   cart_button_text text,
+  external_checkout_enabled boolean not null default false,
+  external_checkout_url text,
   receiver_transaction_id text,
   receiver_display_name text,
   business_display_name text,
@@ -105,6 +107,12 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists cart_button_text text;
+
+alter table public.business_offers
+  add column if not exists external_checkout_enabled boolean not null default false;
+
+alter table public.business_offers
+  add column if not exists external_checkout_url text;
 
 alter table public.business_offers
   add column if not exists receiver_transaction_id text;
@@ -225,6 +233,8 @@ begin
     author,
     description,
     cart_button_text,
+    external_checkout_enabled,
+    external_checkout_url,
     receiver_transaction_id,
     receiver_display_name,
     delivery_home_enabled,
@@ -257,6 +267,8 @@ begin
     nullif(offer ->> 'author', ''),
     nullif(offer ->> 'description', ''),
     coalesce(nullif(offer ->> 'cart_button_text', ''), 'Comprar'),
+    coalesce((offer ->> 'external_checkout_enabled')::boolean, false),
+    nullif(offer ->> 'external_checkout_url', ''),
     nullif(offer ->> 'receiver_transaction_id', ''),
     nullif(offer ->> 'receiver_display_name', ''),
     coalesce((offer ->> 'delivery_home_enabled')::boolean, false),

@@ -161,6 +161,15 @@
           window.location.href = "transfer.html";
         }
 
+        function safeExternalUrl(value) {
+          try {
+            const url = new URL(String(value || "").trim());
+            return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+          } catch (_error) {
+            return "";
+          }
+        }
+
         React.useEffect(() => {
           async function loadCheckout() {
             const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -208,6 +217,14 @@
 
           loadCheckout();
         }, [offerId]);
+
+        React.useEffect(() => {
+          if (!successPurchase?.externalCheckoutUrl) return;
+          const timer = setTimeout(() => {
+            window.location.href = successPurchase.externalCheckoutUrl;
+          }, 1800);
+          return () => clearTimeout(timer);
+        }, [successPurchase?.externalCheckoutUrl]);
 
         if (status) {
           return (
@@ -346,6 +363,7 @@
               deliveryLabel,
               reservationLabel: wantsReservation ? `${reservationDate} · ${reservationTime} · ${reservationPeopleNumber} persona${reservationPeopleNumber === 1 ? "" : "s"}` : "",
               receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donoss",
+              externalCheckoutUrl: safeExternalUrl(data?.external_checkout_url) || (offer.external_checkout_enabled ? safeExternalUrl(offer.external_checkout_url) : ""),
             });
             setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
             setProfile((current) => ({ ...current, points: updatedPoints, address: deliveryAddress.trim() || current?.address }));
@@ -662,7 +680,9 @@
                     <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Pago realizado</p>
                     <h2 className="mt-2 text-3xl font-black leading-tight text-white">Compra completada</h2>
                     <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
-                      Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura.
+                      {successPurchase.externalCheckoutUrl
+                        ? "Donoss ya ha validado tus puntos. Ahora te enviamos al pago final del comercio."
+                        : "Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura."}
                     </p>
 
                     <div className="mt-5 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 text-left">
@@ -693,6 +713,15 @@
                         <span className="text-base font-black text-white">{successPurchase.remainingPoints} ptos.</span>
                       </div>
                     </div>
+
+                    {successPurchase.externalCheckoutUrl && (
+                      <a
+                        className="mt-5 grid h-12 place-items-center rounded-2xl bg-sun text-sm font-black text-ink shadow-2xl shadow-sun/10 transition hover:brightness-110"
+                        href={successPurchase.externalCheckoutUrl}
+                      >
+                        Continuar al pago externo
+                      </a>
+                    )}
 
                     <div className="mt-5 grid gap-3 min-[380px]:grid-cols-2">
                       <button className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white transition hover:bg-white/[0.11]" onClick={() => goToAppRoute("inicio")}>
