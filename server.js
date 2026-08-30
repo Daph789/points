@@ -2289,22 +2289,6 @@ app.get("/api/me/offer-automation-requests", async (request, response) => {
       return response.status(403).json({ error: "business_account_required" });
     }
 
-    const { data: pendingRequest, error: pendingError } = await supabaseAdmin
-      .from("offer_automation_requests")
-      .select("id")
-      .eq("business_id", profile.id)
-      .eq("status", "pending")
-      .maybeSingle();
-
-    if (pendingError && pendingError.code !== "42P01") {
-      console.error("Check pending automation request error:", pendingError);
-      return response.status(500).json({ error: "automation_request_create_failed" });
-    }
-
-    if (pendingRequest?.id) {
-      return response.status(409).json({ error: "automation_request_already_pending" });
-    }
-
     const { data, error } = await supabaseAdmin
       .from("offer_automation_requests")
       .select("id, source_url, prefers_external_checkout, status, result_offer_url, admin_note, completed_at, created_at, updated_at")
@@ -2345,6 +2329,22 @@ app.post("/api/me/offer-automation-requests", async (request, response) => {
     const profile = await ensureProfileForUser(auth.user);
     if (profile?.account_type !== "business") {
       return response.status(403).json({ error: "business_account_required" });
+    }
+
+    const { data: pendingRequest, error: pendingError } = await supabaseAdmin
+      .from("offer_automation_requests")
+      .select("id")
+      .eq("business_id", profile.id)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    if (pendingError && pendingError.code !== "42P01") {
+      console.error("Check pending automation request error:", pendingError);
+      return response.status(500).json({ error: "automation_request_create_failed" });
+    }
+
+    if (pendingRequest?.id) {
+      return response.status(409).json({ error: "automation_request_already_pending" });
     }
 
     const { data, error } = await supabaseAdmin

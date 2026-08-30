@@ -112,6 +112,7 @@
         const [status, setStatus] = React.useState("");
         const [search, setSearch] = React.useState("");
         const [savingId, setSavingId] = React.useState("");
+        const [hasLoaded, setHasLoaded] = React.useState(false);
 
         const filteredRequests = requests.filter((item) => {
           const query = search.trim().toLowerCase();
@@ -139,6 +140,7 @@
             if (!response.ok) throw new Error(data.error || "requests_failed");
             localStorage.setItem("donosAdminPassword", password);
             setRequests(data.requests || []);
+            setHasLoaded(true);
             setStatus("");
           } catch (error) {
             setStatus(error.message === "offer_automation_sql_missing"
@@ -226,7 +228,7 @@
                   ))
                 ) : (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-5 text-sm font-bold text-slate-300">
-                    No hay solicitudes cargadas.
+                    {hasLoaded ? "No hay solicitudes para esta búsqueda." : "Introduce la contraseña admin y pulsa Cargar para ver las solicitudes."}
                   </div>
                 )}
               </div>

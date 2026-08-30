@@ -62,6 +62,42 @@
         return new Date(value).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
       }
 
+      const pendingAutomationKey = "donossPendingOfferAutomation";
+
+      function normalizeRequestStatus(value) {
+        return String(value || "").trim().toLowerCase();
+      }
+
+      function readPendingAutomationDraft() {
+        try {
+          const draft = JSON.parse(localStorage.getItem(pendingAutomationKey) || "null");
+          if (!draft?.source_url) return null;
+          return {
+            id: draft.id || "local-pending",
+            source_url: draft.source_url,
+            prefers_external_checkout: Boolean(draft.prefers_external_checkout),
+            status: "pending",
+            created_at: draft.created_at || new Date().toISOString(),
+            updated_at: draft.updated_at || new Date().toISOString(),
+            is_local_pending: true,
+          };
+        } catch (_error) {
+          localStorage.removeItem(pendingAutomationKey);
+          return null;
+        }
+      }
+
+      function savePendingAutomationDraft(item) {
+        if (!item?.source_url) return;
+        localStorage.setItem(pendingAutomationKey, JSON.stringify({
+          id: item.id || "",
+          source_url: item.source_url,
+          prefers_external_checkout: Boolean(item.prefers_external_checkout),
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString(),
+        }));
+      }
+
       function RequestCard({ item }) {
         const completed = item.status === "completed";
         return (
@@ -86,16 +122,17 @@
       }
 
       function App() {
-        const [sourceUrl, setSourceUrl] = React.useState("");
-        const [prefersExternalCheckout, setPrefersExternalCheckout] = React.useState(false);
-        const [requests, setRequests] = React.useState([]);
+        const initialPendingDraft = readPendingAutomationDraft();
+        const [sourceUrl, setSourceUrl] = React.useState(initialPendingDraft?.source_url || "");
+        const [prefersExternalCheckout, setPrefersExternalCheckout] = React.useState(Boolean(initialPendingDraft?.prefers_external_checkout));
+        const [requests, setRequests] = React.useState(initialPendingDraft ? [initialPendingDraft] : []);
         const [status, setStatus] = React.useState("Cargando automatización...");
         const [formStatus, setFormStatus] = React.useState({ type: "", message: "" });
         const [isSending, setIsSending] = React.useState(false);
         const [token, setToken] = React.useState("");
         const [activeLine, setActiveLine] = React.useState(0);
 
-        const pendingRequest = requests.find((item) => item.status === "pending");
+        const pendingRequest = requests.find((item) => normalizeRequestStatus(item.status) === "pending");
         const formLocked = Boolean(pendingRequest) || isSending;
         const visibleSourceUrl = pendingRequest?.source_url || sourceUrl;
         const processStarted = Boolean(pendingRequest) || isSending;
@@ -140,11 +177,16 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "requests_failed");
-            setRequests(data.requests || []);
-            const pending = (data.requests || []).find((item) => item.status === "pending");
+            const remoteRequests = data.requests || [];
+            const pending = remoteRequests.find((item) => normalizeRequestStatus(item.status) === "pending");
             if (pending) {
+              savePendingAutomationDraft(pending);
+              setRequests(remoteRequests);
               setSourceUrl(pending.source_url || "");
               setPrefersExternalCheckout(Boolean(pending.prefers_external_checkout));
+            } else {
+              localStorage.removeItem(pendingAutomationKey);
+              setRequests(remoteRequests);
             }
             setStatus("");
           } catch (error) {
@@ -175,11 +217,15 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "create_failed");
+            savePendingAutomationDraft(data.request);
             setRequests((current) => [data.request, ...current]);
             setSourceUrl(data.request?.source_url || sourceUrl.trim());
             setPrefersExternalCheckout(Boolean(data.request?.prefers_external_checkout));
             setFormStatus({ type: "success", message: "Enlace recibido. La verificación de cuenta y la copia de datos ya están en curso." });
           } catch (error) {
+            if (error.message === "automation_request_already_pending") {
+              await loadRequests();
+            }
             setFormStatus({
               type: "error",
               message: error.message === "offer_automation_sql_missing"
