@@ -67,6 +67,52 @@
         return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
       }
 
+      const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
+      const reservationWeekdayLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+      function localDateString(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function parseLocalDate(dateString) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateString || ""))) return null;
+        const [year, month, day] = dateString.split("-").map(Number);
+        return new Date(year, month - 1, day, 12, 0, 0);
+      }
+
+      function normalizeReservationWeekdays(value) {
+        const source = Array.isArray(value) ? value : defaultReservationWeekdays;
+        const normalized = [...new Set(source.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+        return normalized.length ? normalized : [...defaultReservationWeekdays];
+      }
+
+      function isReservationDateAllowed(dateString, weekdays) {
+        const date = parseLocalDate(dateString);
+        return Boolean(date && weekdays.includes(date.getDay()));
+      }
+
+      function buildReservableDates(daysAhead, weekdays) {
+        const dates = [];
+        const today = new Date();
+        today.setHours(12, 0, 0, 0);
+        for (let index = 0; index <= daysAhead; index += 1) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + index);
+          if (weekdays.includes(date.getDay())) {
+            dates.push({
+              value: localDateString(date),
+              weekday: reservationWeekdayLabels[date.getDay()],
+              day: date.getDate(),
+              month: date.toLocaleDateString("es-ES", { month: "short" }).replace(".", ""),
+            });
+          }
+        }
+        return dates;
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const offerId = params.get("id");
@@ -150,8 +196,9 @@
             setProfile(profileData);
             setDeliveryAddress(profileData?.address || "");
             if (offerData.reservation_enabled) {
-              const today = new Date().toISOString().slice(0, 10);
-              setReservationDate(today);
+              const allowedWeekdays = normalizeReservationWeekdays(offerData.reservation_available_weekdays);
+              const availableDates = buildReservableDates(Math.max(Number(offerData.reservation_days_ahead || 0), 0), allowedWeekdays);
+              setReservationDate(availableDates[0]?.value || "");
               const slots = Array.isArray(offerData.reservation_time_slots) ? offerData.reservation_time_slots.filter(Boolean) : [];
               setReservationTime(slots[0] || "");
               setReservationPeople("1");
@@ -192,15 +239,18 @@
         const reservationSlots = Array.isArray(offer.reservation_time_slots) ? offer.reservation_time_slots.filter(Boolean) : [];
         const reservationMaxPeople = Math.max(Number(offer.reservation_max_people || 0), 0);
         const reservationDaysAhead = Math.max(Number(offer.reservation_days_ahead || 0), 0);
-        const todayString = new Date().toISOString().slice(0, 10);
+        const reservationAvailableWeekdays = normalizeReservationWeekdays(offer.reservation_available_weekdays);
+        const reservableDates = buildReservableDates(reservationDaysAhead, reservationAvailableWeekdays);
+        const todayString = localDateString(new Date());
         const maxReservationDate = new Date();
         maxReservationDate.setDate(maxReservationDate.getDate() + reservationDaysAhead);
-        const maxReservationDateString = maxReservationDate.toISOString().slice(0, 10);
+        const maxReservationDateString = localDateString(maxReservationDate);
         const reservationPeopleNumber = Math.max(Number.parseInt(reservationPeople, 10) || 0, 0);
         const hasValidReservation = !wantsReservation || (
           offer.reservation_enabled &&
           reservationDate >= todayString &&
           reservationDate <= maxReservationDateString &&
+          isReservationDateAllowed(reservationDate, reservationAvailableWeekdays) &&
           reservationSlots.includes(reservationTime) &&
           reservationPeopleNumber >= 1 &&
           (!reservationMaxPeople || reservationPeopleNumber <= reservationMaxPeople)
@@ -315,6 +365,8 @@
                     ? "Esta oferta está agotada."
                   : message.includes("offer_expired")
                     ? "Esta oferta ha caducado."
+                  : message.includes("reservation_day_unavailable")
+                    ? "Este día no está disponible para reservas."
                   : message.includes("reservation")
                     ? "Revisa la reserva: fecha, hora o personas no válidas."
                   : message.includes("receiver")
@@ -453,9 +505,36 @@
 
                     {wantsReservation && (
                       <div className="mt-4 grid gap-3">
+                        {reservableDates.length > 0 ? (
+                          <div>
+                            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Día</span>
+                            <div className="flex gap-2 overflow-x-auto pb-2">
+                              {reservableDates.map((date) => (
+                                <button
+                                  key={date.value}
+                                  type="button"
+                                  className={`min-w-[84px] rounded-2xl px-3 py-3 text-left transition ${
+                                    reservationDate === date.value
+                                      ? "bg-mint text-ink shadow-glow"
+                                      : "bg-[#060914]/70 text-white ring-1 ring-white/10"
+                                  }`}
+                                  onClick={() => setReservationDate(date.value)}
+                                >
+                                  <span className="block text-xs font-black uppercase opacity-70">{date.weekday}</span>
+                                  <span className="mt-1 block text-xl font-black leading-none">{date.day}</span>
+                                  <span className="mt-1 block text-xs font-bold uppercase opacity-70">{date.month}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="rounded-2xl border border-coral/20 bg-coral/10 p-3 text-xs font-bold leading-5 text-coral">
+                            Este comercio no tiene días disponibles dentro del periodo de reserva.
+                          </p>
+                        )}
                         <div className="grid gap-3 min-[430px]:grid-cols-2">
                           <label>
-                            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Fecha</span>
+                            <span className="mb-2 block text-xs font-black uppercase tracking-[0.12em] text-slate-500">Fecha manual</span>
                             <input
                               className="h-12 w-full rounded-2xl border border-white/10 bg-[#060914]/70 px-4 text-sm font-bold text-white outline-none focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
                               type="date"
@@ -490,6 +569,11 @@
                         <p className="rounded-2xl border border-mint/20 bg-mint/10 p-3 text-xs font-bold leading-5 text-mint">
                           Máximo {reservationMaxPeople || 1} persona{reservationMaxPeople === 1 ? "" : "s"} por reserva. {reservationDaysAhead === 0 ? "Solo disponible para hoy." : `Disponible hasta ${reservationDaysAhead} día${reservationDaysAhead === 1 ? "" : "s"} de antelación.`}
                         </p>
+                        {reservationDate && !isReservationDateAllowed(reservationDate, reservationAvailableWeekdays) && (
+                          <p className="rounded-2xl border border-coral/20 bg-coral/10 p-3 text-xs font-bold leading-5 text-coral">
+                            Este día está cerrado para reservas. Elige uno de los días disponibles.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

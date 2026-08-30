@@ -75,6 +75,16 @@
 
       const categories = ["Cine", "Libros", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
       const draftKey = "donosBusinessOfferDraft";
+      const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
+      const reservationWeekdays = [
+        { value: 1, label: "Lun" },
+        { value: 2, label: "Mar" },
+        { value: 3, label: "Mié" },
+        { value: 4, label: "Jue" },
+        { value: 5, label: "Vie" },
+        { value: 6, label: "Sáb" },
+        { value: 0, label: "Dom" },
+      ];
 
       const inputClass =
         "h-12 w-full max-w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-mint/70 focus:bg-white/[0.08] focus:ring-4 focus:ring-mint/10";
@@ -102,6 +112,12 @@
 
       function todayDateString() {
         return new Date().toISOString().slice(0, 10);
+      }
+
+      function normalizeReservationWeekdays(value, fallback = defaultReservationWeekdays) {
+        const source = Array.isArray(value) ? value : defaultReservationWeekdays;
+        const normalized = [...new Set(source.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+        return normalized.length ? normalized : [...fallback];
       }
 
       function redirectToLogin() {
@@ -230,6 +246,7 @@
         const [reservationTimeSlots, setReservationTimeSlots] = React.useState("");
         const [reservationMaxPeople, setReservationMaxPeople] = React.useState("");
         const [reservationDaysAhead, setReservationDaysAhead] = React.useState("0");
+        const [reservationAvailableWeekdays, setReservationAvailableWeekdays] = React.useState(defaultReservationWeekdays);
         const [stockQuantity, setStockQuantity] = React.useState("");
         const [status, setStatus] = React.useState({ type: "", message: "" });
         const [isSaving, setIsSaving] = React.useState(false);
@@ -299,6 +316,7 @@
             setReservationTimeSlots(draft.reservationTimeSlots || "");
             setReservationMaxPeople(draft.reservationMaxPeople || "");
             setReservationDaysAhead(draft.reservationDaysAhead || "0");
+            setReservationAvailableWeekdays(normalizeReservationWeekdays(draft.reservationAvailableWeekdays));
             setStockQuantity(draft.stockQuantity || "");
             setLastDraftSavedAt(draft.savedAt || "");
           } catch (error) {
@@ -358,6 +376,7 @@
             setReservationTimeSlots(Array.isArray(data.reservation_time_slots) ? data.reservation_time_slots.join(", ") : "");
             setReservationMaxPeople(data.reservation_max_people === null || data.reservation_max_people === undefined ? "" : String(data.reservation_max_people));
             setReservationDaysAhead(data.reservation_days_ahead === null || data.reservation_days_ahead === undefined ? "0" : String(data.reservation_days_ahead));
+            setReservationAvailableWeekdays(normalizeReservationWeekdays(data.reservation_available_weekdays));
             setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(Math.max(Number(data.stock_quantity || 0) - Number(data.sold_count || 0), 0)));
             setSoldCount(Number(data.sold_count || 0));
             setIsOfferLoading(false);
@@ -462,6 +481,7 @@
             reservationTimeSlots,
             reservationMaxPeople,
             reservationDaysAhead,
+            reservationAvailableWeekdays,
             stockQuantity,
             savedAt,
           };
@@ -500,6 +520,7 @@
           reservationTimeSlots,
           reservationMaxPeople,
           reservationDaysAhead,
+          reservationAvailableWeekdays,
           stockQuantity,
         ]);
 
@@ -613,6 +634,7 @@
           setReservationTimeSlots("");
           setReservationMaxPeople("");
           setReservationDaysAhead("0");
+          setReservationAvailableWeekdays(defaultReservationWeekdays);
           setStockQuantity("");
           setStatus({ type: "", message: "Borrador limpiado." });
         }
@@ -666,6 +688,11 @@
               setStatus({ type: "error", message: "Indica cuántas personas máximo puede reservar el cliente." });
               return;
             }
+            const availableReservationWeekdays = normalizeReservationWeekdays(reservationAvailableWeekdays, []);
+            if (reservationEnabled && availableReservationWeekdays.length === 0) {
+              setStatus({ type: "error", message: "Elige al menos un día de la semana para aceptar reservas." });
+              return;
+            }
 
             const payload = {
               business_id: userId,
@@ -705,6 +732,7 @@
               reservation_time_slots: reservationEnabled ? reservationSlots : [],
               reservation_max_people: reservationEnabled ? parsedReservationMaxPeople : null,
               reservation_days_ahead: reservationEnabled ? parsedReservationDaysAhead : 0,
+              reservation_available_weekdays: reservationEnabled ? availableReservationWeekdays : defaultReservationWeekdays,
               stock_quantity: stockQuantity === "" ? null : soldItemsCount + Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
               out_of_stock_since: stockQuantity !== "" && Math.max(Number.parseInt(stockQuantity, 10) || 0, 0) <= 0 ? new Date().toISOString() : null,
               updated_at: new Date().toISOString(),
@@ -1196,6 +1224,36 @@
                             placeholder="0 = solo hoy"
                           />
                         </Field>
+                      </div>
+                      <div>
+                        <p className="mb-2 text-sm font-medium text-slate-300">Días disponibles para reservar</p>
+                        <div className="flex flex-wrap gap-2">
+                          {reservationWeekdays.map((day) => {
+                            const isActive = reservationAvailableWeekdays.includes(day.value);
+                            return (
+                              <button
+                                key={day.value}
+                                type="button"
+                                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                                  isActive
+                                    ? "bg-mint text-ink shadow-glow"
+                                    : "bg-white/[0.055] text-slate-400 ring-1 ring-white/10"
+                                }`}
+                                onClick={() => setReservationAvailableWeekdays((current) =>
+                                  current.includes(day.value)
+                                    ? current.filter((item) => item !== day.value)
+                                    : [...current, day.value]
+                                )}
+                                aria-pressed={isActive}
+                              >
+                                {day.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                          Si el restaurante no trabaja el viernes, desactiva “Vie”. El cliente no podrá reservar ese día.
+                        </p>
                       </div>
                       <div className="rounded-2xl border border-mint/20 bg-mint/10 p-3">
                         <p className="text-sm font-black text-mint">

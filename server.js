@@ -460,6 +460,20 @@ function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
+
+function normalizeReservationWeekdays(value) {
+  const source = Array.isArray(value) ? value : defaultReservationWeekdays;
+  const normalized = [...new Set(source.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+  return normalized.length ? normalized : [...defaultReservationWeekdays];
+}
+
+function isReservationWeekdayAllowed(dateString, weekdays) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateString || ""))) return false;
+  const date = new Date(`${dateString}T12:00:00`);
+  return weekdays.includes(date.getDay());
+}
+
 function metadataText(metadata, key) {
   const value = metadata?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : "";
@@ -2878,7 +2892,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -2923,7 +2937,7 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -5243,6 +5257,10 @@ app.post("/api/purchases/offer", async (request, response) => {
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(reservationDate) || reservationDate < today || reservationDate > maxDateString) {
         return response.status(400).json({ error: "reservation_date_not_allowed" });
+      }
+
+      if (!isReservationWeekdayAllowed(reservationDate, normalizeReservationWeekdays(offer.reservation_available_weekdays))) {
+        return response.status(400).json({ error: "reservation_day_unavailable" });
       }
 
       if (!reservationSlots.includes(reservationTime)) {

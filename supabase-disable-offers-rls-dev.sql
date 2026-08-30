@@ -28,6 +28,7 @@ create table if not exists public.business_offers (
   reservation_time_slots text[] not null default '{}'::text[],
   reservation_max_people integer,
   reservation_days_ahead integer not null default 0,
+  reservation_available_weekdays jsonb not null default '[1,2,3,4,5,6,0]'::jsonb,
   is_hidden boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -116,6 +117,9 @@ alter table public.business_offers
 
 alter table public.business_offers
   add column if not exists reservation_days_ahead integer not null default 0;
+
+alter table public.business_offers
+  add column if not exists reservation_available_weekdays jsonb not null default '[1,2,3,4,5,6,0]'::jsonb;
 
 alter table public.business_offers
   add column if not exists is_hidden boolean not null default false;

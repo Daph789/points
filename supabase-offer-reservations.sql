@@ -10,6 +10,9 @@ alter table public.business_offers
 alter table public.business_offers
   add column if not exists reservation_days_ahead integer not null default 0;
 
+alter table public.business_offers
+  add column if not exists reservation_available_weekdays jsonb not null default '[1,2,3,4,5,6,0]'::jsonb;
+
 alter table public.purchases
   add column if not exists reservation_requested boolean not null default false;
 

@@ -141,6 +141,15 @@
         );
       }
 
+      const reservationWeekdayNames = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+      const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
+
+      function reservationDaysLabel(value) {
+        const source = Array.isArray(value) ? value : defaultReservationWeekdays;
+        const days = [...new Set(source.map((day) => Number(day)).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+        return (days.length ? days : defaultReservationWeekdays).map((day) => reservationWeekdayNames[day]).join(", ");
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const id = params.get("id");
@@ -576,6 +585,9 @@
                             Horarios: {offer.reservation_time_slots.slice(0, 5).join(", ")}{offer.reservation_time_slots.length > 5 ? "..." : ""}
                           </p>
                         )}
+                        <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">
+                          Días: {reservationDaysLabel(offer.reservation_available_weekdays)}
+                        </p>
                         <p className="mt-1 text-xs font-bold text-slate-400">
                           Podrás elegir fecha, hora y personas en el pago.
                         </p>
