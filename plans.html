@@ -196,6 +196,7 @@
           group_size_below_accepted: "No puedes poner menos plazas que personas ya aceptadas.",
           plan_confirmed: "Este grupo ya está confirmado y no se puede editar.",
           plan_cancelled: "Este plan está cancelado.",
+          not_enough_members_to_confirm: "Necesitas aceptar al menos a 1 persona antes de confirmar el grupo.",
           update_plan_failed: "No se ha podido guardar la modificación.",
           ticket_required: "Para apuntarte tienes que comprar primero este mismo billete.",
           plan_photos_required: "Para apuntarte necesitas mínimo 2 fotos tuyas.",
@@ -1049,6 +1050,11 @@
         }
 
         async function confirmPlan(plan) {
+          const acceptedCount = Number(plan?.counts?.accepted || 0);
+          if (acceptedCount < 1) {
+            setStatus("Necesitas aceptar al menos a 1 persona antes de confirmar el grupo.");
+            return;
+          }
           if (!window.confirm("Al confirmar, el grupo queda cerrado y no se podrá modificar más.")) return;
           setIsSaving(true);
           try {
@@ -1057,7 +1063,7 @@
             setDetailPlan(null);
             await reloadAll();
           } catch (error) {
-            setStatus("No se ha podido confirmar el grupo.");
+            setStatus(friendlyError(error.message, "No se ha podido confirmar el grupo."));
           } finally {
             setIsSaving(false);
           }
@@ -1738,7 +1744,13 @@
                       <button className="h-12 rounded-2xl border border-coral/25 bg-coral/10 text-sm font-black text-coral" disabled={isSaving} onClick={() => cancelPlan(detailPlan)}>
                         {Number(detailPlan.counts?.accepted || 0) > 0 ? "Dejar admin" : "Cancelar plan"}
                       </button>
-                      <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={() => confirmPlan(detailPlan)}>Confirmar grupo</button>
+                      <button
+                        className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:bg-white/10 disabled:text-slate-500 disabled:shadow-none"
+                        disabled={isSaving || Number(detailPlan.counts?.accepted || 0) < 1}
+                        onClick={() => confirmPlan(detailPlan)}
+                      >
+                        {Number(detailPlan.counts?.accepted || 0) < 1 ? "Falta 1 persona" : "Confirmar grupo"}
+                      </button>
                     </div>
                   )}
                 </section>

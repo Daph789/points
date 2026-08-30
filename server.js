@@ -4643,6 +4643,16 @@ app.post("/api/social-plans/:id/confirm", async (request, response) => {
 
   try {
     const owner = await ensureProfileForUser(auth.user);
+    const { count: acceptedCount, error: acceptedCountError } = await supabaseAdmin
+      .from("social_plan_members")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", request.params.id)
+      .eq("status", "accepted");
+    if (acceptedCountError) throw acceptedCountError;
+    if (Number(acceptedCount || 0) < 1) {
+      return response.status(400).json({ error: "not_enough_members_to_confirm" });
+    }
+
     const { data: plan, error } = await supabaseAdmin
       .from("social_plans")
       .update({ status: "confirmed", confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
