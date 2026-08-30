@@ -6,6 +6,7 @@ create table if not exists public.social_plans (
   free_category text,
   location text,
   event_date date,
+  free_cover_data_url text,
   title text,
   message text,
   photo_data_url text,
@@ -30,6 +31,7 @@ alter table public.social_plans add column if not exists plan_type text not null
 alter table public.social_plans add column if not exists free_category text;
 alter table public.social_plans add column if not exists location text;
 alter table public.social_plans add column if not exists event_date date;
+alter table public.social_plans add column if not exists free_cover_data_url text;
 alter table public.social_plans drop constraint if exists social_plans_type_check;
 alter table public.social_plans add constraint social_plans_type_check check (plan_type in ('ticket', 'free'));
 alter table public.social_plans drop constraint if exists social_plans_ticket_or_free_check;

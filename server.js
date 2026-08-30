@@ -722,7 +722,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
   response.json({ received: true });
 });
 
-app.use(express.json({ limit: "6mb" }));
+app.use(express.json({ limit: "9mb" }));
 
 app.get("/api/me/referral-program", async (request, response) => {
   if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -3056,6 +3056,18 @@ function normalizedSocialPlanPhotos(values) {
   return encoded;
 }
 
+function normalizedSocialPlanCover(value) {
+  const photo = String(value || "");
+  if (!photo) return null;
+  if (!photo.startsWith("data:image/")) return null;
+  if (photo.length > 1600000) {
+    const error = new Error("photo_too_large");
+    error.code = "photo_too_large";
+    throw error;
+  }
+  return photo;
+}
+
 async function enrichSocialPlans(plans, viewerId = "") {
   const planRows = plans || [];
   const creatorIds = [...new Set(planRows.map((plan) => plan.creator_id).filter(Boolean))];
@@ -3165,7 +3177,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
 async function getSocialPlanChatAccess(planId, profileId) {
   const { data: plan, error: planError } = await supabaseAdmin
     .from("social_plans")
-    .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+    .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
     .eq("id", planId)
     .maybeSingle();
   if (planError) throw planError;
@@ -3290,7 +3302,7 @@ async function getSideGroupAccess(planId, profileId, requestedStatus) {
 
   const { data: plan, error: planError } = await supabaseAdmin
     .from("social_plans")
-    .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+    .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
     .eq("id", planId)
     .maybeSingle();
   if (planError) throw planError;
@@ -3847,7 +3859,7 @@ app.get("/api/social-plans", async (request, response) => {
     const viewer = await ensureProfileForUser(auth.user);
     const { data: plans, error } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(120);
@@ -3875,7 +3887,7 @@ app.get("/api/social-plans/me", async (request, response) => {
     const viewer = await ensureProfileForUser(auth.user);
     const { data: owned, error: ownedError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .eq("creator_id", viewer.id)
       .order("created_at", { ascending: false })
       .limit(100);
@@ -3898,7 +3910,7 @@ app.get("/api/social-plans/me", async (request, response) => {
     if (memberPlanIds.length > 0) {
       const { data: joinedPlans, error: joinedError } = await supabaseAdmin
         .from("social_plans")
-        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
         .in("id", memberPlanIds)
         .order("created_at", { ascending: false });
       if (joinedError) console.error("My social plans joined error:", joinedError);
@@ -3930,6 +3942,7 @@ app.post("/api/social-plans", async (request, response) => {
     const location = String(request.body?.location || "").trim().slice(0, 160) || null;
     const eventDate = String(request.body?.eventDate || "").slice(0, 10) || null;
     const freeCategory = String(request.body?.freeCategory || "").trim().slice(0, 60) || null;
+    const freeCoverDataUrl = planType === "free" ? normalizedSocialPlanCover(request.body?.freeCoverDataUrl) : null;
 
     if (planType === "ticket") {
       const { data: purchase, error: purchaseError } = await supabaseAdmin
@@ -3974,6 +3987,7 @@ app.post("/api/social-plans", async (request, response) => {
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,
+        free_cover_data_url: freeCoverDataUrl,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
         photo_data_url: planPhotoDataUrl,
@@ -3981,7 +3995,7 @@ app.post("/api/social-plans", async (request, response) => {
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
       })
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
 
     if (error) {
@@ -4038,6 +4052,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
     const location = String(request.body?.location || "").trim().slice(0, 160) || null;
     const eventDate = String(request.body?.eventDate || "").slice(0, 10) || null;
     const freeCategory = String(request.body?.freeCategory || "").trim().slice(0, 60) || null;
+    const freeCoverDataUrl = planType === "free" ? normalizedSocialPlanCover(request.body?.freeCoverDataUrl) : null;
 
     if (planType === "ticket") {
       const { data: purchase, error: purchaseError } = await supabaseAdmin
@@ -4075,6 +4090,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,
+        free_cover_data_url: freeCoverDataUrl,
         title: String(request.body?.title || "").trim().slice(0, 90) || null,
         message: String(request.body?.message || "").trim().slice(0, 420) || null,
         photo_data_url: planPhotoDataUrl,
@@ -4085,7 +4101,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       })
       .eq("id", existing.id)
       .eq("creator_id", owner.id)
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
 
     if (error) {
@@ -4115,7 +4131,7 @@ app.post("/api/social-plans/:id/join", async (request, response) => {
 
     const { data: plan, error: planError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .eq("id", request.params.id)
       .maybeSingle();
     if (planError) throw planError;
@@ -4216,7 +4232,7 @@ app.patch("/api/social-plans/:id/members/:memberId", async (request, response) =
 
     const { data: updatedPlan, error: updatedPlanError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .eq("id", plan.id)
       .maybeSingle();
     if (updatedPlanError) throw updatedPlanError;
@@ -4633,7 +4649,7 @@ app.post("/api/social-plans/:id/confirm", async (request, response) => {
       .eq("id", request.params.id)
       .eq("creator_id", owner.id)
       .neq("status", "cancelled")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw error;
     if (!plan) return response.status(404).json({ error: "plan_not_found" });
@@ -4654,7 +4670,7 @@ app.post("/api/social-plans/:id/cancel", async (request, response) => {
     const owner = await ensureProfileForUser(auth.user);
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .eq("id", request.params.id)
       .eq("creator_id", owner.id)
       .maybeSingle();
@@ -4678,7 +4694,7 @@ app.post("/api/social-plans/:id/cancel", async (request, response) => {
         .update({ creator_id: nextAdmin.user_id, updated_at: now })
         .eq("id", existing.id)
         .eq("creator_id", owner.id)
-        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
         .maybeSingle();
       if (transferError) throw transferError;
       if (!transferredPlan) return response.status(404).json({ error: "plan_not_found" });
@@ -4706,7 +4722,7 @@ app.post("/api/social-plans/:id/cancel", async (request, response) => {
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("id", existing.id)
       .eq("creator_id", owner.id)
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
     if (error) throw error;
     response.json({ ok: true, transferred: false, plan });
