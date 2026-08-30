@@ -32,6 +32,15 @@
       }
       @keyframes blink { 0%, 45% { opacity: 1; } 46%, 100% { opacity: .25; } }
       .blink { animation: blink 1s infinite; }
+      @keyframes scanline { 0% { transform: translateY(-110%); opacity: 0; } 18%, 72% { opacity: .55; } 100% { transform: translateY(360%); opacity: 0; } }
+      .scanline::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        height: 42px;
+        background: linear-gradient(180deg, transparent, rgba(66, 242, 179, .16), transparent);
+        animation: scanline 2.8s ease-in-out infinite;
+      }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -84,20 +93,33 @@
         const [formStatus, setFormStatus] = React.useState({ type: "", message: "" });
         const [isSending, setIsSending] = React.useState(false);
         const [token, setToken] = React.useState("");
+        const [activeLine, setActiveLine] = React.useState(0);
 
-        const consoleLines = sourceUrl.trim()
+        const pendingRequest = requests.find((item) => item.status === "pending");
+        const formLocked = Boolean(pendingRequest) || isSending;
+        const visibleSourceUrl = pendingRequest?.source_url || sourceUrl;
+        const processStarted = Boolean(pendingRequest) || isSending;
+        const consoleLines = processStarted
           ? [
-              "donoss.scan.start --source web",
-              "reading: título, precio, imagen, fecha",
-              "checking: formato compatible",
-              "queue: solicitud enviada a Donoss",
-              "waiting: revisión y publicación manual",
+              "iniciando lectura del enlace...",
+              "verificando cuenta empresa...",
+              "copiando título, fechas e imágenes...",
+              "comparando datos principales...",
+              "preparando publicación Donoss...",
+              "sincronizando estado de la oferta...",
             ]
           : [
-              "waiting for source_url...",
-              "paste ticket page link",
-              "ready to prepare request",
+              "esperando enlace...",
+              "sistema listo para copiar datos",
+              "estado: disponible",
             ];
+
+        React.useEffect(() => {
+          const timer = setInterval(() => {
+            setActiveLine((current) => (current + 1) % consoleLines.length);
+          }, processStarted ? 1050 : 1600);
+          return () => clearInterval(timer);
+        }, [consoleLines.length, processStarted]);
 
         React.useEffect(() => {
           loadRequests();
@@ -119,6 +141,11 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "requests_failed");
             setRequests(data.requests || []);
+            const pending = (data.requests || []).find((item) => item.status === "pending");
+            if (pending) {
+              setSourceUrl(pending.source_url || "");
+              setPrefersExternalCheckout(Boolean(pending.prefers_external_checkout));
+            }
             setStatus("");
           } catch (error) {
             setStatus(error.message === "offer_automation_sql_missing"
@@ -130,6 +157,10 @@
         async function submitRequest(event) {
           event.preventDefault();
           setFormStatus({ type: "", message: "" });
+          if (pendingRequest) {
+            setFormStatus({ type: "error", message: "Ya tienes una publicación en preparación. Podrás enviar otra cuando esta esté terminada." });
+            return;
+          }
           setIsSending(true);
 
           try {
@@ -145,14 +176,16 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "create_failed");
             setRequests((current) => [data.request, ...current]);
-            setSourceUrl("");
-            setPrefersExternalCheckout(false);
-            setFormStatus({ type: "success", message: "Solicitud enviada. Donoss preparará tu publicación y te avisará cuando esté lista." });
+            setSourceUrl(data.request?.source_url || sourceUrl.trim());
+            setPrefersExternalCheckout(Boolean(data.request?.prefers_external_checkout));
+            setFormStatus({ type: "success", message: "Enlace recibido. La verificación de cuenta y la copia de datos ya están en curso." });
           } catch (error) {
             setFormStatus({
               type: "error",
               message: error.message === "offer_automation_sql_missing"
                 ? "Falta ejecutar el SQL de automatización en Supabase."
+                : error.message === "automation_request_already_pending"
+                  ? "Ya tienes una publicación en preparación. Podrás enviar otra cuando esta esté terminada."
                 : "Pega un enlace válido para enviar la solicitud.",
             });
           } finally {
@@ -172,35 +205,37 @@
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-sky-300">Automatización</p>
                 <h1 className="mt-3 text-4xl font-black leading-tight text-white sm:text-5xl">Copiar una publicación desde tu web</h1>
                 <p className="mt-4 text-base font-semibold leading-7 text-slate-400">
-                  Pega el enlace directo de la página del billete u oferta. Donoss recibirá la solicitud, preparará la publicación y te avisará cuando esté lista.
+                  Pega el enlace directo de tu billete u oferta. Donoss verificará tu cuenta, leerá los datos principales y te avisará cuando la publicación esté lista.
                 </p>
 
                 <form className="mt-7 grid gap-4" onSubmit={submitRequest}>
                   <label>
                     <span className="mb-2 block text-sm font-bold text-slate-300">Enlace de la página a copiar</span>
                     <input
-                      className="h-14 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
-                      value={sourceUrl}
+                      className={`h-14 w-full rounded-2xl border border-white/10 bg-black/20 px-4 text-base font-bold text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10 ${formLocked ? "cursor-not-allowed opacity-70" : ""}`}
+                      value={visibleSourceUrl}
                       onChange={(event) => setSourceUrl(event.target.value)}
+                      disabled={formLocked}
                       placeholder="https://tuweb.com/evento/billete..."
                     />
                   </label>
-                  <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${prefersExternalCheckout ? "border-mint/40 bg-mint/10" : "border-white/10 bg-black/20"}`}>
+                  <label className={`flex items-start gap-3 rounded-2xl border p-4 transition ${formLocked ? "cursor-not-allowed opacity-70" : "cursor-pointer"} ${prefersExternalCheckout ? "border-mint/40 bg-mint/10" : "border-white/10 bg-black/20"}`}>
                     <input
                       type="checkbox"
                       className="mt-1 h-5 w-5 rounded border-line bg-panel accent-mint"
                       checked={prefersExternalCheckout}
+                      disabled={formLocked}
                       onChange={(event) => setPrefersExternalCheckout(event.target.checked)}
                     />
                     <span>
                       <span className="block text-sm font-black text-white">Prefiero que el cliente compre finalmente en mi web</span>
                       <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">
-                        Donoss preparará la publicación igual, pero después de validar el pago con puntos enviaremos al cliente al enlace externo de compra.
+                        Si no marcas esta opción, recibirás el dinero directamente dentro de Donoss cuando los clientes paguen con puntos.
                       </span>
                     </span>
                   </label>
-                  <button className="h-14 rounded-2xl bg-mint text-base font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || !sourceUrl.trim()}>
-                    {isSending ? "Enviando..." : "Enviar solicitud"}
+                  <button className="h-14 rounded-2xl bg-mint text-base font-black text-ink shadow-glow disabled:opacity-50" disabled={formLocked || !sourceUrl.trim()}>
+                    {isSending ? "Enviando..." : pendingRequest ? "Publicación en preparación" : "Enviar solicitud"}
                   </button>
                 </form>
 
@@ -212,16 +247,25 @@
               </div>
 
               <aside className="rounded-[34px] border border-white/10 bg-[#080c17] p-5 shadow-2xl shadow-black/30">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Estamos copiando su publicación</p>
-                <p className="mt-3 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black text-coral">
-                  Está cargando<span className="blink">...</span>
-                </p>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Estado</p>
+                {processStarted && (
+                  <p className="mt-3 rounded-2xl border border-mint/25 bg-mint/10 p-3 text-sm font-black text-mint">
+                    Verificación de cuenta y copia de los datos<span className="blink">...</span>
+                  </p>
+                )}
                 <p className="mt-4 text-sm font-semibold leading-6 text-slate-400">
-                  Si quieres que vaya más rápido o si quieres publicar varias a la vez, pasa al modo premium.
+                  Para publicar varias ofertas a la vez y acelerar la publicación automática, pasa al modo premium desde tu perfil.
                 </p>
-                <div className="mt-5 space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-xs text-slate-300">
+                <div className="scanline relative mt-5 min-h-[168px] overflow-hidden rounded-2xl border border-white/10 bg-black/30 p-4 font-mono text-xs text-slate-300">
                   {consoleLines.map((line, index) => (
-                    <p key={line} className={index === consoleLines.length - 1 ? "text-mint" : ""}>$ {line}</p>
+                    <p
+                      key={line}
+                      className={`relative z-10 py-1 transition-all duration-500 ${
+                        index === activeLine ? "translate-x-1 text-mint" : index < activeLine ? "text-slate-500" : "text-slate-300"
+                      }`}
+                    >
+                      $ {line}
+                    </p>
                   ))}
                 </div>
               </aside>
