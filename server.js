@@ -20,6 +20,7 @@ const supabaseUrl = process.env.SUPABASE_URL || "";
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const adminPassword = process.env.ADMIN_DONOS_PASSWORD || "";
 const publicAppUrl = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+const offerTransferAdminEmail = "donoss.red@gmail.com";
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -2153,6 +2154,115 @@ app.put("/api/me/profile", async (request, response) => {
   } catch (error) {
     console.error("Me profile update error:", error);
     response.status(500).json({ error: "profile_update_failed" });
+  }
+});
+
+app.get("/api/me/offer-transfer/businesses", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  if (String(auth.user.email || "").trim().toLowerCase() !== offerTransferAdminEmail) {
+    return response.status(403).json({ error: "admin_email_required" });
+  }
+
+  const query = String(request.query?.q || "").trim().toLowerCase().replace(/[%,()]/g, " ");
+
+  try {
+    let builder = supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, business_categories, transaction_id, is_verified")
+      .eq("account_type", "business")
+      .order("display_name", { ascending: true })
+      .limit(80);
+
+    if (query) {
+      builder = builder.or(`display_name.ilike.%${query}%,email.ilike.%${query}%,transaction_id.ilike.%${query}%`);
+    }
+
+    const { data, error } = await builder;
+    if (error) throw error;
+
+    response.json({
+      businesses: (data || []).filter((business) => business.id !== auth.user.id),
+    });
+  } catch (error) {
+    console.error("Offer transfer businesses error:", error);
+    response.status(500).json({ error: "businesses_load_failed" });
+  }
+});
+
+app.post("/api/me/offer-transfer", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  if (String(auth.user.email || "").trim().toLowerCase() !== offerTransferAdminEmail) {
+    return response.status(403).json({ error: "admin_email_required" });
+  }
+
+  const offerId = String(request.body?.offerId || "").trim();
+  const targetBusinessId = String(request.body?.targetBusinessId || "").trim();
+
+  if (!offerId || !targetBusinessId) {
+    return response.status(400).json({ error: "missing_transfer_data" });
+  }
+
+  try {
+    const { data: offer, error: offerError } = await supabaseAdmin
+      .from("business_offers")
+      .select("id, business_id, title")
+      .eq("id", offerId)
+      .maybeSingle();
+
+    if (offerError) throw offerError;
+    if (!offer) return response.status(404).json({ error: "offer_not_found" });
+    if (offer.business_id !== auth.user.id) {
+      return response.status(403).json({ error: "only_own_admin_offers" });
+    }
+
+    const { data: target, error: targetError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, account_type, transaction_id, is_verified")
+      .eq("id", targetBusinessId)
+      .maybeSingle();
+
+    if (targetError) throw targetError;
+    if (!target || target.account_type !== "business") {
+      return response.status(404).json({ error: "target_business_not_found" });
+    }
+    if (!cleanValidDonosId(target.transaction_id)) {
+      return response.status(400).json({ error: "target_business_missing_donos_id" });
+    }
+
+    const { data: updatedOffer, error: updateError } = await supabaseAdmin
+      .from("business_offers")
+      .update({
+        business_id: target.id,
+        business_display_name: target.display_name || null,
+        business_is_verified: Boolean(target.is_verified),
+        receiver_transaction_id: cleanValidDonosId(target.transaction_id),
+        receiver_display_name: target.display_name || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", offer.id)
+      .eq("business_id", auth.user.id)
+      .select("id, business_id, title, business_display_name, receiver_transaction_id")
+      .maybeSingle();
+
+    if (updateError) throw updateError;
+    if (!updatedOffer) return response.status(409).json({ error: "offer_transfer_conflict" });
+
+    response.json({ offer: updatedOffer, business: target });
+  } catch (error) {
+    console.error("Offer transfer error:", error);
+    response.status(500).json({ error: "offer_transfer_failed" });
   }
 });
 
