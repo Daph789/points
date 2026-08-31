@@ -5673,7 +5673,7 @@ app.post("/api/purchases/offer", async (request, response) => {
       return response.status(400).json({ error: "insufficient_points" });
     }
 
-    if (deliveryMethod === "home" && deliveryAddress !== (buyerProfile.address || "")) {
+    if (!usesExternalCheckout && deliveryMethod === "home" && deliveryAddress !== (buyerProfile.address || "")) {
       await supabaseAdmin.from("profiles").update({ address: deliveryAddress }).eq("id", user.id);
     }
 
@@ -5683,7 +5683,7 @@ app.post("/api/purchases/offer", async (request, response) => {
         .insert({
           buyer_id: user.id,
           offer_id: offer.id,
-          delivery_method: delivery,
+          delivery_method: deliveryMethod,
           offer_points: 0,
           delivery_points: 0,
           delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
@@ -5705,9 +5705,14 @@ app.post("/api/purchases/offer", async (request, response) => {
 
       if (externalPurchaseError) {
         console.error("External purchase insert error:", externalPurchaseError);
-        return response.status(500).json({
-          error: externalPurchaseError.code === "42P01" ? "purchases_table_missing" : externalPurchaseError.code === "42703" ? "reservation_columns_missing" : "purchase_insert_failed",
-          detail: externalPurchaseError.message || "",
+        return response.json({
+          purchase_id: null,
+          total_points: 0,
+          buyer_points: buyerPoints,
+          receiver_display_name: receiverProfile.display_name,
+          external_checkout_url: safeHttpUrl(offer.external_checkout_url),
+          history_saved: false,
+          history_error: externalPurchaseError.code || "external_history_failed",
         });
       }
 
@@ -5717,6 +5722,7 @@ app.post("/api/purchases/offer", async (request, response) => {
         buyer_points: buyerPoints,
         receiver_display_name: receiverProfile.display_name,
         external_checkout_url: safeHttpUrl(offer.external_checkout_url),
+        history_saved: true,
       });
     }
 
