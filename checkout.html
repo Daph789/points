@@ -220,14 +220,6 @@
           loadCheckout();
         }, [offerId]);
 
-        React.useEffect(() => {
-          if (!successPurchase?.externalCheckoutUrl) return;
-          const timer = setTimeout(() => {
-            window.location.href = successPurchase.externalCheckoutUrl;
-          }, 1800);
-          return () => clearTimeout(timer);
-        }, [successPurchase?.externalCheckoutUrl]);
-
         if (status) {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -688,8 +680,8 @@
             </section>
 
             {successPurchase && (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-2xl">
-                <section className="success-pop w-full max-w-md overflow-hidden rounded-[36px] border border-mint/25 bg-[#0D111D] shadow-2xl shadow-mint/10">
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-[calc(24px+env(safe-area-inset-bottom))] backdrop-blur-2xl">
+                <section className="success-pop mx-auto w-full max-w-md overflow-hidden rounded-[36px] border border-mint/25 bg-[#0D111D] shadow-2xl shadow-mint/10">
                   <div className="relative grid place-items-center px-6 pt-8">
                     <span className="success-ring absolute h-28 w-28 rounded-full border border-mint/50"></span>
                     <span className="success-ring absolute h-28 w-28 rounded-full border border-mint/30 [animation-delay:450ms]"></span>
@@ -701,11 +693,13 @@
                   </div>
 
                   <div className="px-6 pb-6 pt-5 text-center">
-                    <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Pago realizado</p>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{successPurchase.externalCheckoutUrl ? "Redirección preparada" : "Pago realizado"}</p>
                     <h2 className="mt-2 text-3xl font-black leading-tight text-white">{successPurchase.externalCheckoutUrl ? "Enlace externo preparado" : "Compra completada"}</h2>
                     <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
                       {successPurchase.externalCheckoutUrl
-                        ? "Donoss ha guardado esta redirección en tu historial. El pago final y el billete dependen del comercio."
+                        ? successPurchase.historySaved
+                          ? "Donoss ha guardado esta redirección en tu historial. El pago final y el billete dependen del comercio."
+                          : "El enlace externo está listo. El pago final y el billete dependen del comercio."
                         : "Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura."}
                     </p>
                     {successPurchase.externalCheckoutUrl && !successPurchase.historySaved && (

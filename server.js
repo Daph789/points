@@ -5678,30 +5678,108 @@ app.post("/api/purchases/offer", async (request, response) => {
     }
 
     if (usesExternalCheckout) {
-      const { data: externalPurchase, error: externalPurchaseError } = await supabaseAdmin
+      let { data: existingExternalPurchases, error: existingExternalError } = await supabaseAdmin
         .from("purchases")
-        .insert({
-          buyer_id: user.id,
-          offer_id: offer.id,
-          delivery_method: deliveryMethod,
-          offer_points: 0,
-          delivery_points: 0,
-          delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
+        .select("id")
+        .eq("buyer_id", user.id)
+        .eq("offer_id", offer.id)
+        .eq("total_points", 0)
+        .is("qr_token", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (existingExternalError?.code === "42703") {
+        const legacyExistingResult = await supabaseAdmin
+          .from("purchases")
+          .select("id")
+          .eq("buyer_id", user.id)
+          .eq("offer_id", offer.id)
+          .eq("total_points", 0)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        existingExternalPurchases = legacyExistingResult.data;
+        existingExternalError = legacyExistingResult.error;
+      }
+
+      if (!existingExternalError && existingExternalPurchases?.[0]?.id) {
+        return response.json({
+          purchase_id: existingExternalPurchases[0].id,
           total_points: 0,
-          receiver_transaction_id: receiverProfile.transaction_id || "",
-          receiver_profile_id: receiverProfile.id,
-          validation_code: null,
-          security_code: null,
-          qr_token: null,
-          qr_valid_from: null,
-          qr_valid_until: null,
-          reservation_requested: reservationRequested,
-          reservation_date: reservationRequested ? reservationDate : null,
-          reservation_time: reservationRequested ? reservationTime : null,
-          reservation_people: reservationRequested ? reservationPeople : null,
-        })
+          buyer_points: buyerPoints,
+          receiver_display_name: receiverProfile.display_name,
+          external_checkout_url: safeHttpUrl(offer.external_checkout_url),
+          history_saved: true,
+          history_existing: true,
+        });
+      }
+
+      const externalPurchasePayload = {
+        buyer_id: user.id,
+        offer_id: offer.id,
+        delivery_method: deliveryMethod,
+        offer_points: 0,
+        delivery_points: 0,
+        delivery_address: null,
+        total_points: 0,
+        receiver_transaction_id: receiverProfile.transaction_id || "EXTERNAL",
+        receiver_profile_id: receiverProfile.id,
+        validation_code: null,
+        security_code: null,
+        qr_token: null,
+        qr_valid_from: null,
+        qr_valid_until: null,
+        reservation_requested: false,
+        reservation_date: null,
+        reservation_time: null,
+        reservation_people: null,
+      };
+
+      let { data: externalPurchase, error: externalPurchaseError } = await supabaseAdmin
+        .from("purchases")
+        .insert(externalPurchasePayload)
         .select("id")
         .maybeSingle();
+
+      if (externalPurchaseError?.code === "42703") {
+        const legacyPayload = {
+          buyer_id: externalPurchasePayload.buyer_id,
+          offer_id: externalPurchasePayload.offer_id,
+          delivery_method: externalPurchasePayload.delivery_method,
+          offer_points: externalPurchasePayload.offer_points,
+          delivery_points: externalPurchasePayload.delivery_points,
+          delivery_address: externalPurchasePayload.delivery_address,
+          total_points: externalPurchasePayload.total_points,
+          receiver_transaction_id: externalPurchasePayload.receiver_transaction_id,
+          receiver_profile_id: externalPurchasePayload.receiver_profile_id,
+          validation_code: externalPurchasePayload.validation_code,
+          security_code: externalPurchasePayload.security_code,
+          qr_token: externalPurchasePayload.qr_token,
+          qr_valid_from: externalPurchasePayload.qr_valid_from,
+          qr_valid_until: externalPurchasePayload.qr_valid_until,
+        };
+        const legacyResult = await supabaseAdmin
+          .from("purchases")
+          .insert(legacyPayload)
+          .select("id")
+          .maybeSingle();
+        externalPurchase = legacyResult.data;
+        externalPurchaseError = legacyResult.error;
+      }
+
+      if (externalPurchaseError?.code === "23503") {
+        const fallbackPayload = {
+          ...externalPurchasePayload,
+          receiver_transaction_id: "EXTERNAL",
+          receiver_profile_id: user.id,
+        };
+        const fallbackResult = await supabaseAdmin
+          .from("purchases")
+          .insert(fallbackPayload)
+          .select("id")
+          .maybeSingle();
+        externalPurchase = fallbackResult.data;
+        externalPurchaseError = fallbackResult.error;
+      }
 
       if (externalPurchaseError) {
         console.error("External purchase insert error:", externalPurchaseError);
