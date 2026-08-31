@@ -113,7 +113,40 @@
       }
 
       function formatDelivery(value) {
+        if (value === "none") return "Billete digital";
         return value === "home" ? "Entrega a domicilio" : "Recogida en tienda";
+      }
+
+      function localExternalPurchasesFor(userId) {
+        if (!userId) return [];
+        try {
+          const rows = JSON.parse(localStorage.getItem("donossExternalPurchaseHistory") || "[]");
+          return (Array.isArray(rows) ? rows : [])
+            .filter((row) => row?.buyer_id === userId && row?.offer_id && row?.offer)
+            .map((row) => ({
+              ...row,
+              local_external: true,
+              total_points: 0,
+              delivery_method: row.delivery_method || "none",
+              created_at: row.created_at || row.updated_at || new Date().toISOString(),
+            }));
+        } catch (_error) {
+          return [];
+        }
+      }
+
+      function mergePurchaseHistory(serverPurchases, localPurchases) {
+        const seen = new Set();
+        const merged = [];
+        [...(serverPurchases || []), ...(localPurchases || [])].forEach((purchase) => {
+          const offer = purchase.offer || {};
+          const isExternal = Boolean(offer.external_checkout_enabled && offer.external_checkout_url && Number(purchase.total_points || 0) === 0);
+          const key = isExternal ? `external:${purchase.buyer_id || ""}:${purchase.offer_id || offer.id || ""}` : `purchase:${purchase.id}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          merged.push(purchase);
+        });
+        return merged.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       }
 
       function getRemainingStock(offer) {
@@ -161,9 +194,10 @@
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         const isExternalCheckout = Boolean(offer.external_checkout_enabled && offer.external_checkout_url && Number(purchase.total_points || 0) === 0);
+        const detailHref = purchase.local_external ? (offer.id ? `offer-detail.html?id=${offer.id}` : offer.external_checkout_url || "#") : `order-detail.html?id=${purchase.id}`;
         return (
           <a
-            href={`order-detail.html?id=${purchase.id}`}
+            href={detailHref}
             onClick={onRead}
             className={`group relative grid gap-3 rounded-[28px] border p-3 shadow-2xl shadow-black/20 transition hover:border-mint/30 hover:bg-white/[0.08] min-[430px]:grid-cols-[92px_1fr_auto] ${isUnread ? "border-coral/35 bg-coral/[0.08] ring-1 ring-coral/20" : "border-white/10 bg-white/[0.055]"}`}
           >
@@ -548,6 +582,7 @@
         async function loadPurchases() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
           const token = sessionData.session?.access_token;
+          const currentUserId = sessionData.session?.user?.id || "";
           if (!token) {
             window.location.href = `login.html?next=${encodeURIComponent("historial.html")}`;
             return;
@@ -572,14 +607,20 @@
               setReadKeys(new Set((notificationsData.events || []).filter((event) => event.read).map((event) => event.key)));
             }
 
+            const localExternalPurchases = localExternalPurchasesFor(currentUserId);
             const response = await fetch("/api/me/purchases", {
               headers: { Authorization: `Bearer ${token}` },
             });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.error || "history_failed");
-
-            setPurchases(data.purchases || []);
-            setStatus("");
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+              setPurchases(mergePurchaseHistory(data.purchases || [], localExternalPurchases));
+              setStatus("");
+            } else if (data.error === "purchases_table_missing") {
+              setPurchases(localExternalPurchases);
+              setStatus("");
+            } else {
+              throw new Error(data.error || "history_failed");
+            }
 
             const likesResponse = await fetch("/api/me/liked-offers", {
               headers: { Authorization: `Bearer ${token}` },

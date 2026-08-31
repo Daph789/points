@@ -172,6 +172,52 @@
           }
         }
 
+        function rememberExternalCheckoutClick(data = {}) {
+          if (!offer?.id || !userId) return;
+          const key = "donossExternalPurchaseHistory";
+          let rows = [];
+          try {
+            rows = JSON.parse(localStorage.getItem(key) || "[]");
+          } catch (_error) {
+            rows = [];
+          }
+          const existingIndex = rows.findIndex((row) => row.buyer_id === userId && row.offer_id === offer.id);
+          const existing = existingIndex >= 0 ? rows[existingIndex] : null;
+          const row = {
+            id: data.purchase_id || existing?.id || `external-${userId}-${offer.id}`,
+            local_external: !data.purchase_id,
+            buyer_id: userId,
+            offer_id: offer.id,
+            delivery_method: "none",
+            offer_points: 0,
+            delivery_points: 0,
+            total_points: 0,
+            receiver_transaction_id: "",
+            receiver_profile_id: offer.business_id || "",
+            created_at: existing?.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            offer: {
+              id: offer.id,
+              title: offer.title || "Oferta Donoss",
+              cover_photo_data_url: offer.cover_photo_data_url || "",
+              presentation_image_data_urls: offer.presentation_image_data_urls || [],
+              business_display_name: offer.business_display_name || offer.receiver_display_name || offer.author || "Comercio Donoss",
+              business_is_verified: Boolean(offer.business_is_verified),
+              external_checkout_enabled: true,
+              external_checkout_url: safeExternalUrl(data.external_checkout_url) || safeExternalUrl(offer.external_checkout_url),
+              reduced_price: offer.reduced_price,
+              base_price: offer.base_price,
+            },
+          };
+          const nextRows = existingIndex >= 0
+            ? rows.map((item, index) => index === existingIndex ? row : item)
+            : [row, ...rows];
+          localStorage.setItem(key, JSON.stringify(nextRows.slice(0, 80)));
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:refresh-historial" }, window.location.origin);
+          }
+        }
+
         React.useEffect(() => {
           async function loadCheckout() {
             const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -343,6 +389,7 @@
 
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "purchase_failed");
+            if (isExternalCheckout) rememberExternalCheckoutClick(data);
 
             const updatedPoints = data?.buyer_points ?? 0;
             setPurchaseStatus({
@@ -702,12 +749,6 @@
                           : "El enlace externo está listo. El pago final y el billete dependen del comercio."
                         : "Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura."}
                     </p>
-                    {successPurchase.externalCheckoutUrl && !successPurchase.historySaved && (
-                      <p className="mt-3 rounded-2xl border border-sun/25 bg-sun/10 p-3 text-xs font-bold leading-5 text-sun">
-                        El enlace se abrirá igual. Si no aparece en Historial, falta activar el SQL de pagos para guardar esta redirección.
-                      </p>
-                    )}
-
                     <div className="mt-5 grid gap-3 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 text-left">
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Producto</span>
