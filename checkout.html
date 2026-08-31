@@ -374,7 +374,9 @@
               receiver: data?.receiver_display_name || offer.receiver_display_name || "Comercio Donoss",
               externalCheckoutUrl: safeExternalUrl(data?.external_checkout_url) || (offer.external_checkout_enabled ? safeExternalUrl(offer.external_checkout_url) : ""),
             });
-            setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
+            if (!isExternalCheckout) {
+              setOffer((current) => current ? { ...current, sold_count: Number(current.sold_count || 0) + 1 } : current);
+            }
             setProfile((current) => ({ ...current, points: updatedPoints, address: deliveryAddress.trim() || current?.address }));
           } catch (error) {
             const message = error.message || "";

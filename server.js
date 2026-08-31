@@ -5676,6 +5676,16 @@ app.post("/api/purchases/offer", async (request, response) => {
       await supabaseAdmin.from("profiles").update({ address: deliveryAddress }).eq("id", user.id);
     }
 
+    if (usesExternalCheckout) {
+      return response.json({
+        purchase_id: null,
+        total_points: 0,
+        buyer_points: buyerPoints,
+        receiver_display_name: receiverProfile.display_name,
+        external_checkout_url: safeHttpUrl(offer.external_checkout_url),
+      });
+    }
+
     let purchase = null;
     let purchaseError = null;
 
