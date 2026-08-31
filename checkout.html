@@ -67,6 +67,12 @@
         return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
       }
 
+      function formatEuro(value) {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) return "0,00 €";
+        return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(amount);
+      }
+
       const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
       const reservationWeekdayLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
@@ -234,8 +240,9 @@
           );
         }
 
-        const offerPoints = Number(offer.required_points || 0);
-        const deliveryPoints = delivery === "home" ? Number(offer.delivery_home_points || 0) : 0;
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled && safeExternalUrl(offer.external_checkout_url));
+        const offerPoints = isExternalCheckout ? 0 : Number(offer.required_points || 0);
+        const deliveryPoints = isExternalCheckout ? 0 : (delivery === "home" ? Number(offer.delivery_home_points || 0) : 0);
         const totalPoints = offerPoints + deliveryPoints;
         const deliveryLabel = delivery === "home" ? "Entrega a domicilio" : delivery === "none" ? "Billete digital" : "Recogida en tienda";
         const userPoints = Number(profile?.points || 0);
@@ -250,7 +257,7 @@
             (cleanDonosId(profile?.transaction_id) && cleanDonosId(profile?.transaction_id) === cleanDonosId(offer.receiver_transaction_id))
           )
         );
-        const hasEnoughPoints = userPoints >= totalPoints;
+        const hasEnoughPoints = isExternalCheckout || userPoints >= totalPoints;
         const needsDeliveryAddress = delivery === "home";
         const hasDeliveryAddress = !needsDeliveryAddress || deliveryAddress.trim().length >= 4;
         const reservationSlots = Array.isArray(offer.reservation_time_slots) ? offer.reservation_time_slots.filter(Boolean) : [];
@@ -352,7 +359,9 @@
             const updatedPoints = data?.buyer_points ?? 0;
             setPurchaseStatus({
               type: "success",
-              message: `Compra realizada. Te quedan ${updatedPoints} ptos.`,
+              message: isExternalCheckout
+                ? "Validación realizada. Te enviamos al pago externo."
+                : `Compra realizada. Te quedan ${updatedPoints} ptos.`,
             });
             localStorage.setItem("donosPoints", String(updatedPoints));
             setSuccessPurchase({
@@ -428,30 +437,38 @@
                     <p className="mt-2 text-2xl font-black text-white">{userPoints} ptos.</p>
                   </div>
                   <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">Total</p>
-                    <p className="mt-2 text-2xl font-black text-white">{totalPoints} ptos.</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-mint">{isExternalCheckout ? "Precio externo" : "Total"}</p>
+                    <p className="mt-2 text-2xl font-black text-white">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : `${totalPoints} ptos.`}</p>
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-[#0D111D] p-4">
+                  {isExternalCheckout && (
+                    <div className="mb-3 rounded-2xl border border-sun/25 bg-sun/10 p-3">
+                      <p className="text-xs font-black uppercase tracking-[0.14em] text-sun">No disponible en puntos</p>
+                      <p className="mt-1 text-sm font-semibold leading-5 text-slate-300">Esta oferta se paga en euros en la web del comercio después de confirmar aquí.</p>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3 py-2">
-                    <span className="text-sm font-bold text-slate-400">Oferta</span>
-                    <span className="text-sm font-black text-white">{offerPoints} ptos.</span>
+                    <span className="text-sm font-bold text-slate-400">{isExternalCheckout ? "Precio oferta" : "Oferta"}</span>
+                    <span className="text-sm font-black text-white">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : `${offerPoints} ptos.`}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 border-t border-white/10 py-3">
-                    <span className="text-sm font-bold text-slate-400">{deliveryLabel}</span>
-                    <span className="text-sm font-black text-white">{deliveryPoints} ptos.</span>
-                  </div>
+                  {!isExternalCheckout && (
+                    <div className="flex items-center justify-between gap-3 border-t border-white/10 py-3">
+                      <span className="text-sm font-bold text-slate-400">{deliveryLabel}</span>
+                      <span className="text-sm font-black text-white">{deliveryPoints} ptos.</span>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
                     <span className="text-base font-black text-white">A pagar</span>
-                    <span className="text-xl font-black text-mint">{totalPoints} ptos.</span>
+                    <span className="text-xl font-black text-mint">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : `${totalPoints} ptos.`}</span>
                   </div>
                 </div>
 
                 <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-4">
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Cuenta que recibe los puntos</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{isExternalCheckout ? "Comercio" : "Cuenta que recibe los puntos"}</p>
                   <p className="mt-2 text-base font-black text-white">{offer.receiver_display_name || "Comercio Donoss"}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-400">{formatDonosId(offer.receiver_transaction_id)}</p>
+                  {!isExternalCheckout && <p className="mt-1 text-sm font-bold text-slate-400">{formatDonosId(offer.receiver_transaction_id)}</p>}
                 </div>
 
                 {hasStockLimit && (
@@ -597,7 +614,7 @@
                   </div>
                 )}
 
-                {!hasEnoughPoints && (
+                {!isExternalCheckout && !hasEnoughPoints && (
                   <div className="rounded-[26px] border border-coral/25 bg-coral/10 p-4">
                     <div className="flex items-start gap-3">
                       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-coral/15 text-xl ring-1 ring-coral/20">!</div>
@@ -658,7 +675,7 @@
                   disabled={!canConfirmPurchase || isBuying}
                   onClick={handleBuy}
                 >
-                  {isBuying ? "Comprando..." : "Comprar ahora"}
+                  {isBuying ? "Preparando..." : isExternalCheckout ? "Continuar al pago externo" : "Comprar ahora"}
                 </button>
               </div>
             </section>
@@ -706,7 +723,7 @@
                       </div>
                       <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
                         <span className="text-sm font-bold text-slate-400">Pagado</span>
-                        <span className="text-base font-black text-mint">{successPurchase.totalPoints} ptos.</span>
+                        <span className="text-base font-black text-mint">{successPurchase.externalCheckoutUrl ? "Pago externo" : `${successPurchase.totalPoints} ptos.`}</span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Saldo restante</span>

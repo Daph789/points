@@ -3273,7 +3273,7 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -3846,6 +3846,10 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
               title: preview.title,
               cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
               required_points: preview.required_points,
+              base_price: preview.base_price,
+              reduced_price: preview.reduced_price,
+              external_checkout_enabled: Boolean(preview.external_checkout_enabled),
+              external_checkout_url: preview.external_checkout_url || "",
               business_display_name: preview.business_display_name,
               business_is_verified: Boolean(preview.business_is_verified),
             }
@@ -4285,9 +4289,11 @@ app.post("/api/social-plans", async (request, response) => {
 
   try {
     const creator = await ensureProfileForUser(auth.user);
-    if (creator.account_type === "business") return response.status(403).json({ error: "users_only" });
-
     const planType = request.body?.planType === "free" ? "free" : "ticket";
+    if (creator.account_type === "business" && planType !== "free") {
+      return response.status(403).json({ error: "business_free_plans_only" });
+    }
+
     const purchaseId = String(request.body?.purchaseId || "").trim();
     const location = String(request.body?.location || "").trim().slice(0, 160) || null;
     const eventDate = String(request.body?.eventDate || "").slice(0, 10) || null;
@@ -4317,15 +4323,18 @@ app.post("/api/social-plans", async (request, response) => {
     const totalWanted = wantedWomen + wantedMen + wantedOpen;
     if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
     const planPhotoDataUrl = normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl);
-    if (parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
+    const businessFreePlan = creator.account_type === "business" && planType === "free";
+    if (!businessFreePlan && parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
 
-    const { error: profilePhotosError } = await supabaseAdmin
-      .from("profiles")
-      .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
-      .eq("id", creator.id);
-    if (profilePhotosError) {
-      console.error("Create social plan profile photos sync error:", profilePhotosError);
-      return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    if (!businessFreePlan) {
+      const { error: profilePhotosError } = await supabaseAdmin
+        .from("profiles")
+        .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
+        .eq("id", creator.id);
+      if (profilePhotosError) {
+        console.error("Create social plan profile photos sync error:", profilePhotosError);
+        return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+      }
     }
 
     const { data: plan, error } = await supabaseAdmin
@@ -4371,11 +4380,10 @@ app.patch("/api/social-plans/:id", async (request, response) => {
 
   try {
     const owner = await ensureProfileForUser(auth.user);
-    if (owner.account_type === "business") return response.status(403).json({ error: "users_only" });
 
     const { data: existing, error: existingError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, status")
+      .select("id, creator_id, purchase_id, plan_type, status")
       .eq("id", request.params.id)
       .maybeSingle();
     if (existingError) throw existingError;
@@ -4398,6 +4406,10 @@ app.patch("/api/social-plans/:id", async (request, response) => {
     if (totalWanted < (members || []).length) return response.status(400).json({ error: "group_size_below_accepted" });
 
     const planType = request.body?.planType === "free" ? "free" : "ticket";
+    if (owner.account_type === "business" && (planType !== "free" || existing.plan_type !== "free")) {
+      return response.status(403).json({ error: "business_free_plans_only" });
+    }
+
     const purchaseId = String(request.body?.purchaseId || existing.purchase_id || "").trim();
     const location = String(request.body?.location || "").trim().slice(0, 160) || null;
     const eventDate = String(request.body?.eventDate || "").slice(0, 10) || null;
@@ -4421,15 +4433,18 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       }
     }
     const planPhotoDataUrl = normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl);
-    if (parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
+    const businessFreePlan = owner.account_type === "business" && planType === "free";
+    if (!businessFreePlan && parseSocialPlanPhotos(planPhotoDataUrl).length < 2) return response.status(400).json({ error: "plan_photos_required" });
 
-    const { error: profilePhotosError } = await supabaseAdmin
-      .from("profiles")
-      .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
-      .eq("id", owner.id);
-    if (profilePhotosError) {
-      console.error("Update social plan profile photos sync error:", profilePhotosError);
-      return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    if (!businessFreePlan) {
+      const { error: profilePhotosError } = await supabaseAdmin
+        .from("profiles")
+        .update({ plan_photo_data_url: planPhotoDataUrl, updated_at: new Date().toISOString() })
+        .eq("id", owner.id);
+      if (profilePhotosError) {
+        console.error("Update social plan profile photos sync error:", profilePhotosError);
+        return response.status(500).json({ error: profilePhotosError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+      }
     }
 
     const { data: plan, error } = await supabaseAdmin
@@ -5608,18 +5623,31 @@ app.post("/api/purchases/offer", async (request, response) => {
       }
     }
 
+    const usesExternalCheckout = Boolean(offer.external_checkout_enabled && safeHttpUrl(offer.external_checkout_url));
     const receiverId = cleanValidDonosId(offer.receiver_transaction_id);
-    if (!receiverId) {
+    if (!usesExternalCheckout && !receiverId) {
       return response.status(400).json({ error: "receiver_missing" });
     }
 
-    const { data: receiverProfile, error: receiverError } = await supabaseAdmin
-      .from("profiles")
-      .select("id, display_name, transaction_id, points")
-      .eq("transaction_id", receiverId)
-      .maybeSingle();
+    let receiverProfile = {
+      id: offer.business_id,
+      display_name: offer.business_display_name || offer.receiver_display_name || "Comercio Donoss",
+      transaction_id: receiverId,
+      points: 0,
+    };
+    let receiverError = null;
 
-	    if (receiverError || !receiverProfile) {
+    if (receiverId) {
+      const receiverResult = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, transaction_id, points")
+        .eq("transaction_id", receiverId)
+        .maybeSingle();
+      receiverProfile = receiverResult.data || receiverProfile;
+      receiverError = receiverResult.error;
+    }
+
+	    if (!usesExternalCheckout && (receiverError || !receiverProfile)) {
 	      return response.status(400).json({ error: "receiver_not_found" });
 	    }
 
@@ -5635,12 +5663,12 @@ app.post("/api/purchases/offer", async (request, response) => {
 	      return response.status(400).json({ error: "out_of_stock" });
 	    }
 
-	    const offerPoints = Math.max(Number(offer.required_points || 0), 0);
-    const deliveryPoints = deliveryMethod === "home" ? Math.max(Number(offer.delivery_home_points || 0), 0) : 0;
+	    const offerPoints = usesExternalCheckout ? 0 : Math.max(Number(offer.required_points || 0), 0);
+    const deliveryPoints = usesExternalCheckout ? 0 : (deliveryMethod === "home" ? Math.max(Number(offer.delivery_home_points || 0), 0) : 0);
     const totalPoints = offerPoints + deliveryPoints;
     const buyerPoints = Number(buyerProfile?.points || 0);
 
-    if (buyerPoints < totalPoints) {
+    if (!usesExternalCheckout && buyerPoints < totalPoints) {
       return response.status(400).json({ error: "insufficient_points" });
     }
 
@@ -5712,18 +5740,27 @@ app.post("/api/purchases/offer", async (request, response) => {
 	      }
 	    }
 
-	    const [{ data: updatedBuyer, error: buyerError }, { error: receiverUpdateError }] = await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: buyerPoints - totalPoints })
-        .eq("id", user.id)
-        .select("points")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: Number(receiverProfile.points || 0) + totalPoints })
-        .eq("id", receiverProfile.id),
-    ]);
+    let updatedBuyer = { points: buyerPoints };
+    let buyerError = null;
+    let receiverUpdateError = null;
+
+    if (!usesExternalCheckout) {
+	    const pointsUpdateResult = await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .update({ points: buyerPoints - totalPoints })
+          .eq("id", user.id)
+          .select("points")
+          .maybeSingle(),
+        supabaseAdmin
+          .from("profiles")
+          .update({ points: Number(receiverProfile.points || 0) + totalPoints })
+          .eq("id", receiverProfile.id),
+      ]);
+      updatedBuyer = pointsUpdateResult[0].data;
+      buyerError = pointsUpdateResult[0].error;
+      receiverUpdateError = pointsUpdateResult[1].error;
+    }
 
 	    if (buyerError || receiverUpdateError) {
 	      console.error("Purchase points update error:", buyerError || receiverUpdateError);
@@ -5742,7 +5779,7 @@ app.post("/api/purchases/offer", async (request, response) => {
       total_points: totalPoints,
       buyer_points: Number(updatedBuyer?.points || 0),
       receiver_display_name: receiverProfile.display_name,
-      external_checkout_url: offer.external_checkout_enabled ? safeHttpUrl(offer.external_checkout_url) : "",
+      external_checkout_url: usesExternalCheckout ? safeHttpUrl(offer.external_checkout_url) : "",
     });
   } catch (error) {
     console.error("Purchase error:", error);

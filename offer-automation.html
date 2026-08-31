@@ -290,6 +290,21 @@
                     {formStatus.message}
                   </p>
                 )}
+
+                {processStarted && (
+                  <div className="mt-4 rounded-[24px] border border-mint/25 bg-mint/10 p-4">
+                    <p className="text-sm font-black text-mint">Puedes cerrar esta página</p>
+                    <p className="mt-1 text-sm font-semibold leading-6 text-slate-300">
+                      La verificación seguirá en curso. En los próximos segundos recibirás una notificación en Historial cuando la publicación esté lista.
+                    </p>
+                    <a
+                      className="mt-3 inline-flex rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
+                      href="historial.html?tab=automation"
+                    >
+                      Ver Historial
+                    </a>
+                  </div>
+                )}
               </div>
 
               <aside className="rounded-[34px] border border-white/10 bg-[#080c17] p-5 shadow-2xl shadow-black/30">

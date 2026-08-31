@@ -284,14 +284,15 @@
           ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${offer.address} Donostia`)}`
           : "";
         const dateRange = [offer.start_date, offer.end_date].filter(Boolean).join(" - ");
-        const basePoints = Number(offer.required_points || 0);
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled && safeExternalUrl(offer.external_checkout_url));
+        const basePoints = isExternalCheckout ? 0 : Number(offer.required_points || 0);
         const hasDeliveryOptions = Boolean(offer.delivery_pickup_enabled || offer.delivery_home_enabled);
-        const deliveryExtraPoints = deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0;
+        const deliveryExtraPoints = isExternalCheckout ? 0 : (deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0);
         const totalPoints = basePoints + deliveryExtraPoints;
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const remainingStock = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
-        const canBuy = Boolean(deliveryChoice && totalPoints > 0 && !outOfStock);
+        const canBuy = Boolean(deliveryChoice && !outOfStock && (isExternalCheckout || totalPoints > 0));
         const actionButtonText = (offer.cart_button_text || "Comprar").trim() || "Comprar";
         const additionalLinks = normalizeAdditionalLinks(offer.additional_links);
         const additionalDetails = normalizeAdditionalDetails(offer.additional_details);
@@ -383,7 +384,11 @@
                   {outOfStock && (
                     <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">Agotado</span>
                   )}
+                  {isExternalCheckout ? (
+                    <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">No disponible en puntos</span>
+                  ) : (
 	                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} ptos.</span>
+                  )}
                 </div>
               </header>
               <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
@@ -421,9 +426,15 @@
                   <p className="mt-1 text-3xl font-black line-through decoration-slate-500">{formatEuro(offer.base_price)}</p>
                 </div>
                 <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                  <p className="text-xs font-semibold text-mint">Puntos</p>
-                  <p className="mt-1 text-3xl font-black">{offer.required_points || 0}</p>
+                  <p className="text-xs font-semibold text-mint">{isExternalCheckout ? "Precio externo" : "Puntos"}</p>
+                  <p className="mt-1 text-3xl font-black">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : (offer.required_points || 0)}</p>
                 </div>
+                {isExternalCheckout && (
+                  <div className="rounded-3xl border border-sun/25 bg-sun/10 p-4 sm:col-span-2">
+                    <p className="text-xs font-semibold text-sun">No disponible en puntos</p>
+                    <p className="mt-1 text-sm font-bold leading-6 text-slate-200">Esta oferta se paga en euros en la web del comercio.</p>
+                  </div>
+                )}
 	                {discountPercent !== null && (
 	                  <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:col-span-2">
 	                    <p className="text-xs font-semibold text-coral">Descuento</p>
@@ -658,7 +669,7 @@
                 <div className="mx-auto flex max-w-5xl items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Total</p>
-                  <p className="truncate text-2xl font-black text-white">{totalPoints} ptos.</p>
+                  <p className="truncate text-2xl font-black text-white">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : `${totalPoints} ptos.`}</p>
                 </div>
 	                <button
 	                  className={`h-12 rounded-2xl px-5 text-sm font-black transition sm:h-14 sm:px-6 sm:text-base ${

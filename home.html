@@ -346,7 +346,11 @@
                   id: preview.id,
                   title: preview.title,
                   cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+                  base_price: preview.base_price,
+                  reduced_price: preview.reduced_price,
                   required_points: preview.required_points,
+                  external_checkout_enabled: Boolean(preview.external_checkout_enabled),
+                  external_checkout_url: preview.external_checkout_url || "",
                   business_display_name: preview.business_display_name,
                   business_is_verified: Boolean(preview.business_is_verified),
                 }
@@ -441,6 +445,7 @@
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const outOfStock = isOutOfStock(offer);
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         const categoryIcon = categories.find((category) => category.label === firstCategory)?.icon || "✨";
         return (
@@ -462,9 +467,13 @@
                   {discountPercent !== null && (
                     <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discountPercent}%</span>
                   )}
-                  <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">
-                    {offer.required_points || 0} ptos.
-                  </span>
+                  {isExternalCheckout ? (
+                    <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">No disponible en puntos</span>
+                  ) : (
+                    <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">
+                      {offer.required_points || 0} ptos.
+                    </span>
+                  )}
                 </div>
               </div>
               <button
@@ -498,7 +507,9 @@
                   )}
                 </div>
                 <div className="text-right">
-                  {offer.base_price !== null && (
+                  {isExternalCheckout ? (
+                    <p className="text-xl font-black text-white">{formatEuro(offer.reduced_price || offer.base_price)}</p>
+                  ) : offer.base_price !== null && (
                     <p className="text-xl font-black text-slate-400 line-through">{formatEuro(offer.base_price)}</p>
                   )}
                 </div>
@@ -525,11 +536,12 @@
         const discountPercent = getDiscountPercent(offer.base_price, offer.reduced_price);
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const outOfStock = isOutOfStock(offer);
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         const detailItems = [
           ["Dirección", offer.address],
           ["Categoría", offer.categories?.join(", ")],
           ["Precio base", formatEuro(offer.base_price)],
-          ["Puntos necesarios", `${offer.required_points || 0} ptos.`],
+          [isExternalCheckout ? "Pago" : "Puntos necesarios", isExternalCheckout ? `Externo · ${formatEuro(offer.reduced_price || offer.base_price)}` : `${offer.required_points || 0} ptos.`],
           ["Horarios", offer.hours],
           ["Fecha de inicio", offer.start_date],
           ["Fecha de fin", offer.end_date],
@@ -569,9 +581,15 @@
                     <p className="mt-1 text-2xl font-black text-white line-through decoration-slate-500">{formatEuro(offer.base_price)}</p>
                   </div>
                   <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                    <p className="text-xs font-semibold text-mint">Puntos</p>
-                    <p className="mt-1 text-2xl font-black text-white">{offer.required_points || 0}</p>
+                    <p className="text-xs font-semibold text-mint">{isExternalCheckout ? "Precio externo" : "Puntos"}</p>
+                    <p className="mt-1 text-2xl font-black text-white">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : (offer.required_points || 0)}</p>
                   </div>
+                  {isExternalCheckout && (
+                    <div className="col-span-2 rounded-3xl border border-sun/25 bg-sun/10 p-4">
+                      <p className="text-xs font-semibold text-sun">No disponible en puntos</p>
+                      <p className="mt-1 text-sm font-bold text-slate-200">Se paga en euros en la web del comercio.</p>
+                    </div>
+                  )}
 	                  {discountPercent !== null && (
 	                    <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 col-span-2">
 	                      <p className="text-xs font-semibold text-coral">Descuento</p>
@@ -711,7 +729,7 @@
           try {
             const { data, error } = await supabaseClient
               .from("business_offers")
-              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,required_points,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
+              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
               .order("created_at", { ascending: false })
               .limit(250);
             if (error) throw error;

@@ -127,7 +127,8 @@
         return (plan?.plan_type || "ticket") === "free";
       }
 
-      const FREE_PLAN_CATEGORIES = ["Estudiar", "Pasear", "Tomar algo", "Deporte", "Idiomas", "Fotos", "Meditar", "Otro"];
+      const USER_FREE_PLAN_CATEGORIES = ["Estudiar", "Pasear", "Tomar algo", "Deporte", "Idiomas", "Fotos", "Meditar", "Otro"];
+      const BUSINESS_FREE_PLAN_CATEGORIES = ["Evento", "Moda", "Trabajo", "Ayuda puntual", "Promoción", "Fotos", "Otro"];
 
       function ticketImage(ticket) {
         return ticket?.offer?.cover_photo_data_url || ticket?.offer?.presentation_image_data_urls?.[0] || "";
@@ -203,6 +204,7 @@
           plan_photos_sql_missing: "Falta ejecutar el SQL de fotos para planes.",
           plan_photos_failed: "No se han podido cargar tus fotos para planes.",
           users_only: "Solo los usuarios pueden crear planes para quedar.",
+          business_free_plans_only: "Las empresas solo pueden crear planes libres en Quedar.",
           already_joined: "Ya pediste entrar en este plan.",
           plans_failed: "No se han podido cargar los planes.",
           mine_failed: "No se han podido cargar tus planes.",
@@ -483,14 +485,18 @@
             const profileResponse = await fetch("/api/me/profile", { headers: { Authorization: `Bearer ${accessToken}` } });
             const profileData = await profileResponse.json().catch(() => ({}));
             setProfile(profileData.profile || null);
-            if (profileData.profile?.account_type === "business") {
-              setStatus("");
-              return;
-            }
+            const isBusinessProfile = profileData.profile?.account_type === "business";
+            if (isBusinessProfile) setPlanType("free");
             if (["woman", "man"].includes(profileData.profile?.plan_gender_preference)) {
               setJoinGender(profileData.profile.plan_gender_preference);
             }
-            await Promise.all([loadPlans(accessToken), loadMine(accessToken), loadTickets(accessToken), loadPlanProfilePhotos(accessToken), loadNotifications(accessToken)]);
+            await Promise.all([
+              loadPlans(accessToken),
+              loadMine(accessToken),
+              isBusinessProfile ? Promise.resolve() : loadTickets(accessToken),
+              isBusinessProfile ? Promise.resolve() : loadPlanProfilePhotos(accessToken),
+              loadNotifications(accessToken),
+            ]);
           } catch (error) {
             setStatus(friendlyError(error.message, "No se ha podido cargar Quedar."));
           }
@@ -814,7 +820,7 @@
               return;
             }
           }
-          if (photoDataUrls.length < 2) {
+          if (!isBusinessAccount && photoDataUrls.length < 2) {
             setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
             return;
           }
@@ -828,8 +834,8 @@
           setIsSaving(true);
           setStatus("");
           try {
-            const savedPhotos = await syncPlanPhotos(photoDataUrls, { silent: true });
-            if (savedPhotos.length < 2) {
+            const savedPhotos = isBusinessAccount ? [] : await syncPlanPhotos(photoDataUrls, { silent: true });
+            if (!isBusinessAccount && savedPhotos.length < 2) {
               setStatus("Añade mínimo 2 fotos tuyas para publicar el plan.");
               setIsSaving(false);
               return;
@@ -855,7 +861,7 @@
             setMode("mine");
             setEditingPlanId("");
             setSelectedTicketId("");
-            setPlanType("ticket");
+            setPlanType(isBusinessAccount ? "free" : "ticket");
             setFreeCategory("Estudiar");
             setCustomFreeCategory("");
             setFreeLocation("");
@@ -949,8 +955,9 @@
           setEditingPlanId(plan.id);
           setPlanType(free ? "free" : "ticket");
           setSelectedTicketId(free ? "" : (plan.purchase_id || plan.purchase?.id || ""));
-          setFreeCategory(FREE_PLAN_CATEGORIES.includes(plan.free_category) ? plan.free_category : "Otro");
-          setCustomFreeCategory(FREE_PLAN_CATEGORIES.includes(plan.free_category) ? "" : (plan.free_category || ""));
+          const availableCategories = profile?.account_type === "business" ? BUSINESS_FREE_PLAN_CATEGORIES : USER_FREE_PLAN_CATEGORIES;
+          setFreeCategory(availableCategories.includes(plan.free_category) ? plan.free_category : "Otro");
+          setCustomFreeCategory(availableCategories.includes(plan.free_category) ? "" : (plan.free_category || ""));
           setFreeLocation(plan.location || "");
           setFreeEventDate((plan.event_date || new Date().toISOString()).slice(0, 10));
           setFreeCoverDataUrl(plan.free_cover_data_url || "");
@@ -1094,6 +1101,8 @@
         const visiblePlans = plans.filter((plan) => !plan.is_owner);
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
         const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
+        const isBusinessAccount = profile?.account_type === "business";
+        const freePlanCategories = isBusinessAccount ? BUSINESS_FREE_PLAN_CATEGORIES : USER_FREE_PLAN_CATEGORIES;
         const filteredTickets = tickets.filter((ticket) => {
           const query = ticketQuery.trim().toLowerCase();
           if (!query) return true;
@@ -1112,29 +1121,6 @@
           { value: "mine", label: "Míos", icon: "list", count: ownedPlans.length },
           { value: "joined", label: "Voy", icon: "checkCircle", count: joinedPlans.length },
         ];
-
-        if (profile?.account_type === "business") {
-          return (
-            <main className="mx-auto min-h-screen w-full max-w-3xl px-4 pb-28 pt-4">
-              <header className="flex items-center gap-3">
-                <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</div>
-                <div>
-                  <p className="text-lg font-black">Donoss</p>
-                  <p className="text-xs font-semibold text-slate-400">Zona empresa</p>
-                </div>
-              </header>
-              <section className="mt-6 rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow">
-                <p className="text-sm font-black uppercase tracking-[0.16em] text-mint">Quedar es para usuarios</p>
-                <h1 className="mt-2 text-3xl font-black text-white">Tu empresa publica ofertas</h1>
-                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Los planes sociales son para jóvenes que ya compraron un billete. Como comercio puedes crear y editar tus ofertas.</p>
-                <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <a className="grid h-12 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" href="create-offer.html">Crear oferta</a>
-                  <a className="grid h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" href="my-offers.html">Mis publicaciones</a>
-                </div>
-              </section>
-            </main>
-          );
-        }
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-52 pt-4 sm:px-6 lg:px-8">
@@ -1187,11 +1173,13 @@
 
             {mode === "create" && (
               <section className="mt-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    { value: "ticket", title: "Publicar un billete", hint: "Para ir con gente a un evento que ya compraste.", icon: "ticket" },
-                    { value: "free", title: "Crear plan libre", hint: "Estudiar, pasear, meditar, tomar algo o quedar sin billete.", icon: "users" },
-                  ].map((item) => (
+                <div className={`grid gap-3 ${isBusinessAccount ? "" : "sm:grid-cols-2"}`}>
+                  {(isBusinessAccount
+                    ? [{ value: "free", title: "Crear un plan libre", hint: "Busca jóvenes para ayudarte en eventos, moda, trabajos puntuales u otras actividades y habla con ellos por chat.", icon: "users" }]
+                    : [
+                        { value: "ticket", title: "Publicar un billete", hint: "Para ir con gente a un evento que ya compraste.", icon: "ticket" },
+                        { value: "free", title: "Crear plan libre", hint: "Estudiar, pasear, meditar, tomar algo o quedar sin billete.", icon: "users" },
+                      ]).map((item) => (
                     <button
                       key={item.value}
                       type="button"
@@ -1237,10 +1225,14 @@
                     ) : (
                       <>
                         <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Plan libre</p>
-                        <h2 className="mt-2 text-2xl font-black text-white">Quedar sin comprar billete</h2>
-                        <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Perfecto para estudiar, caminar, hacer fotos, hablar idiomas o montar algo tranquilo en Donostia.</p>
+                        <h2 className="mt-2 text-2xl font-black text-white">{isBusinessAccount ? "Conectar con jóvenes" : "Quedar sin comprar billete"}</h2>
+                        <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                          {isBusinessAccount
+                            ? "Publica una llamada para encontrar gente joven interesada en ayudar en un evento, una sesión de moda, un trabajo puntual, una acción de barrio o una actividad de tu empresa. Las personas podrán apuntarse y hablar contigo por chat."
+                            : "Perfecto para estudiar, caminar, hacer fotos, hablar idiomas o montar algo tranquilo en Donostia."}
+                        </p>
                         <div className="mt-4 grid grid-cols-2 gap-2">
-                          {FREE_PLAN_CATEGORIES.map((category) => (
+                          {freePlanCategories.map((category) => (
                             <button
                               key={category}
                               type="button"
@@ -1254,12 +1246,12 @@
                         {freeCategory === "Otro" && (
                           <label className="mt-3 block">
                             <span className="text-sm font-black text-white">Categoría personalizada</span>
-                            <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={customFreeCategory} onChange={(event) => setCustomFreeCategory(event.target.value)} placeholder="Ej. Teatro, picnic, club de lectura..." />
+                            <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={customFreeCategory} onChange={(event) => setCustomFreeCategory(event.target.value)} placeholder={isBusinessAccount ? "Ej. Casting, staff, promoción local..." : "Ej. Teatro, picnic, club de lectura..."} />
                           </label>
                         )}
                         <label className="mt-4 block">
                           <span className="text-sm font-black text-white">Lugar</span>
-                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={freeLocation} onChange={(event) => setFreeLocation(event.target.value)} placeholder="Ej. Biblioteca, Parque Cristina Enea..." />
+                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={freeLocation} onChange={(event) => setFreeLocation(event.target.value)} placeholder={isBusinessAccount ? "Ej. Tienda, local, backstage, punto de encuentro..." : "Ej. Biblioteca, Parque Cristina Enea..."} />
                         </label>
                         <label className="mt-3 block">
                           <span className="text-sm font-black text-white">Es para el día</span>
@@ -1289,42 +1281,49 @@
                     </div>
                     {editingPlanId && <button className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-black text-slate-300" onClick={cancelEdit}>Cancelar</button>}
                   </div>
-                  <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={planType === "free" ? "Título: Estudiar en la biblio..." : "Título: Vamos al concierto..."} />
-                  <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={planType === "free" ? "Texto: qué quieres hacer, hora aproximada, ambiente del plan..." : "Texto: quién eres, qué plan quieres, punto de encuentro..."} />
-                  <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-black text-white">Fotos tuyas para el plan</p>
-                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                          Mínimo 2. Se cargan desde tu perfil y solo las verá la gente autorizada del plan.
-                        </p>
-                      </div>
-                      <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${photoDataUrls.length >= 2 ? "bg-mint text-ink" : "bg-coral/10 text-coral ring-1 ring-coral/20"}`}>
-                        {photoDataUrls.length}/5
-                      </span>
-                    </div>
-                  <label className={`mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 ${photoDataUrls.length >= 5 ? "opacity-55" : ""}`}>
-                    <span className="text-sm font-bold text-slate-300">{photoDataUrls.length ? "Añadir o reemplazar fotos" : "Subir fotos tuyas"}</span>
-                    <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Importar</span>
-                    <input type="file" className="hidden" accept="image/*" multiple disabled={photoDataUrls.length >= 5} onChange={handlePhoto} />
-                  </label>
-                  {photoDataUrls.length > 0 && (
-                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                      {photoDataUrls.map((photo, index) => (
-                        <div key={`${photo.slice(0, 32)}-${index}`} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-3xl ring-1 ring-white/10">
-                          <img className="h-full w-full object-cover" src={photo} alt="" />
-                          <button
-                            className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm font-black text-white"
-                            type="button"
-                            onClick={() => syncPlanPhotos(photoDataUrls.filter((_, itemIndex) => itemIndex !== index))}
-                          >
-                            ×
-                          </button>
+                  <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={isBusinessAccount ? "Título: Buscamos ayuda para un evento..." : planType === "free" ? "Título: Estudiar en la biblio..." : "Título: Vamos al concierto..."} />
+                  <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isBusinessAccount ? "Texto: explica qué necesitas, horario, ambiente, requisitos y cómo será el contacto por chat..." : planType === "free" ? "Texto: qué quieres hacer, hora aproximada, ambiente del plan..." : "Texto: quién eres, qué plan quieres, punto de encuentro..."} />
+                  {!isBusinessAccount ? (
+                    <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-black text-white">Fotos tuyas para el plan</p>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                            Mínimo 2. Se cargan desde tu perfil y solo las verá la gente autorizada del plan.
+                          </p>
                         </div>
-                      ))}
+                        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${photoDataUrls.length >= 2 ? "bg-mint text-ink" : "bg-coral/10 text-coral ring-1 ring-coral/20"}`}>
+                          {photoDataUrls.length}/5
+                        </span>
+                      </div>
+                    <label className={`mt-3 flex cursor-pointer items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.055] px-4 py-3 ${photoDataUrls.length >= 5 ? "opacity-55" : ""}`}>
+                      <span className="text-sm font-bold text-slate-300">{photoDataUrls.length ? "Añadir o reemplazar fotos" : "Subir fotos tuyas"}</span>
+                      <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Importar</span>
+                      <input type="file" className="hidden" accept="image/*" multiple disabled={photoDataUrls.length >= 5} onChange={handlePhoto} />
+                    </label>
+                    {photoDataUrls.length > 0 && (
+                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                        {photoDataUrls.map((photo, index) => (
+                          <div key={`${photo.slice(0, 32)}-${index}`} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-3xl ring-1 ring-white/10">
+                            <img className="h-full w-full object-cover" src={photo} alt="" />
+                            <button
+                              className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-sm font-black text-white"
+                              type="button"
+                              onClick={() => syncPlanPhotos(photoDataUrls.filter((_, itemIndex) => itemIndex !== index))}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-[26px] border border-mint/20 bg-mint/10 p-4">
+                      <p className="text-sm font-black text-mint">Publicación de empresa</p>
+                      <p className="mt-1 text-xs font-bold leading-5 text-slate-300">No necesitas subir fotos personales. Usa la portada para explicar visualmente el evento, la ayuda o el trabajo que buscas.</p>
                     </div>
                   )}
-                  </div>
 
                   <label className="mt-4 block rounded-[26px] border border-white/10 bg-black/20 p-4">
                     <span className="text-sm font-black text-white">¿Cuántas personas máximo pueden apuntarse?</span>

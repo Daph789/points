@@ -94,6 +94,7 @@
       function OfferCard({ offer, isLiked, onLike, onOpen }) {
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0] || "";
         const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         return (
           <article
             className="group cursor-pointer overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20 transition active:scale-[0.99] sm:hover:-translate-y-1"
@@ -129,10 +130,16 @@
             <div className="p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="truncate text-sm font-bold text-slate-400">{offer.address || "Donostia"}</p>
-                {offer.base_price !== null && <p className="shrink-0 text-lg font-black text-slate-500 line-through">{formatEuro(offer.base_price)}</p>}
+                {isExternalCheckout ? (
+                  <p className="shrink-0 text-lg font-black text-white">{formatEuro(offer.reduced_price || offer.base_price)}</p>
+                ) : offer.base_price !== null && <p className="shrink-0 text-lg font-black text-slate-500 line-through">{formatEuro(offer.base_price)}</p>}
               </div>
               <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} puntos</span>
+                {isExternalCheckout ? (
+                  <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">No disponible en puntos</span>
+                ) : (
+                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} puntos</span>
+                )}
                 <span className="text-xs font-black text-white">Ver detalle</span>
               </div>
             </div>
