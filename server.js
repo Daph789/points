@@ -5570,28 +5570,30 @@ app.post("/api/purchases/offer", async (request, response) => {
       return response.status(400).json({ error: "offer_hidden" });
     }
 
+    const usesExternalCheckout = Boolean(offer.external_checkout_enabled && safeHttpUrl(offer.external_checkout_url));
+
     const validUntil = offer.qr_valid_until || offer.end_date || null;
     if (validUntil && String(validUntil).slice(0, 10) < todayDateString()) {
       return response.status(400).json({ error: "offer_expired" });
     }
 
-    if (deliveryMethod === "none" && (offer.delivery_pickup_enabled === true || offer.delivery_home_enabled === true)) {
+    if (!usesExternalCheckout && deliveryMethod === "none" && (offer.delivery_pickup_enabled === true || offer.delivery_home_enabled === true)) {
       return response.status(400).json({ error: "delivery_method_required" });
     }
 
-    if (deliveryMethod === "pickup" && offer.delivery_pickup_enabled === false) {
+    if (!usesExternalCheckout && deliveryMethod === "pickup" && offer.delivery_pickup_enabled === false) {
       return response.status(400).json({ error: "pickup_not_available" });
     }
 
-    if (deliveryMethod === "home" && offer.delivery_home_enabled !== true) {
+    if (!usesExternalCheckout && deliveryMethod === "home" && offer.delivery_home_enabled !== true) {
       return response.status(400).json({ error: "home_delivery_not_available" });
     }
 
-    if (deliveryMethod === "home" && deliveryAddress.length < 4) {
+    if (!usesExternalCheckout && deliveryMethod === "home" && deliveryAddress.length < 4) {
       return response.status(400).json({ error: "delivery_address_missing" });
     }
 
-    if (reservationRequested) {
+    if (!usesExternalCheckout && reservationRequested) {
       if (offer.reservation_enabled !== true) {
         return response.status(400).json({ error: "reservation_not_available" });
       }
@@ -5623,7 +5625,6 @@ app.post("/api/purchases/offer", async (request, response) => {
       }
     }
 
-    const usesExternalCheckout = Boolean(offer.external_checkout_enabled && safeHttpUrl(offer.external_checkout_url));
     const receiverId = cleanValidDonosId(offer.receiver_transaction_id);
     if (!usesExternalCheckout && !receiverId) {
       return response.status(400).json({ error: "receiver_missing" });

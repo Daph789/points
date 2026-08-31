@@ -388,10 +388,18 @@
                     ? "Añade una dirección para la entrega a domicilio."
                   : message.includes("delivery_method_required")
                     ? "Elige una opción de entrega válida para esta compra."
+                  : message.includes("pickup_not_available")
+                    ? "La recogida no está disponible para esta oferta."
+                  : message.includes("home_delivery_not_available")
+                    ? "La entrega a domicilio no está disponible para esta oferta."
                   : message.includes("own_offer_not_allowed")
                     ? "No puedes comprar tu propia publicación."
                   : message.includes("out_of_stock")
                     ? "Esta oferta está agotada."
+                  : message.includes("offer_not_found")
+                    ? "No encontramos esta oferta."
+                  : message.includes("offer_hidden")
+                    ? "Esta oferta ya no está disponible."
                   : message.includes("offer_expired")
                     ? "Esta oferta ha caducado."
                   : message.includes("reservation_day_unavailable")
