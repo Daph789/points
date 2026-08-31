@@ -58,6 +58,21 @@
         return "Recogida en tienda";
       }
 
+      function formatEuro(value) {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) return "0,00 €";
+        return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(amount);
+      }
+
+      function safeExternalUrl(value) {
+        try {
+          const url = new URL(String(value || "").trim());
+          return ["http:", "https:"].includes(url.protocol) ? url.href : "";
+        } catch (_error) {
+          return "";
+        }
+      }
+
       function VerifiedBadge() {
         return (
           <span className="relative inline-grid h-5 w-5 shrink-0 place-items-center rounded-full bg-sky-500 text-white shadow-[0_0_18px_rgba(14,165,233,0.45)] ring-2 ring-white/20" title="Cuenta certificada">
@@ -90,7 +105,7 @@
         }, []);
 
         React.useEffect(() => {
-          if (!purchase?.qr_token || !qrRef.current || !window.QRCode) return;
+          if (!purchase?.qr_token || purchase?.offer?.external_checkout_enabled || !qrRef.current || !window.QRCode) return;
           qrRef.current.innerHTML = "";
           const validationUrl = `${window.location.origin}/validate-ticket.html?ticket=${encodeURIComponent(purchase.qr_token)}`;
           new window.QRCode(qrRef.current, {
@@ -146,13 +161,16 @@
         const businessName = offer.business_display_name || purchase.receiver?.display_name || offer.author || "Donoss";
         const isBusinessVerified = Boolean(offer.business_is_verified || purchase.receiver?.is_verified);
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        const externalCheckoutUrl = safeExternalUrl(offer.external_checkout_url);
+        const isExternalCheckout = Boolean(offer.external_checkout_enabled && externalCheckoutUrl && Number(purchase.total_points || 0) === 0);
+        const externalPrice = Number(offer.reduced_price || offer.base_price || 0);
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between gap-3">
               <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="historial.html">Volver</a>
               <span className="rounded-full bg-mint/10 px-4 py-2 text-xs font-black text-mint ring-1 ring-mint/20">
-                Pedido #{formatShortId(purchase.id)}
+                {isExternalCheckout ? "Pago externo" : `Pedido #${formatShortId(purchase.id)}`}
               </span>
             </header>
 
@@ -172,9 +190,9 @@
 
               <div className="space-y-5 p-4 sm:p-7">
                 <div className="grid gap-3 min-[430px]:grid-cols-3">
-                  <InfoCard label="Total pagado" value={`${purchase.total_points || 0} ptos.`} tone="mint" />
-                  <InfoCard label="Oferta" value={`${purchase.offer_points || 0} ptos.`} />
-                  <InfoCard label="Entrega" value={`${purchase.delivery_points || 0} ptos.`} />
+                  <InfoCard label={isExternalCheckout ? "Precio en la web" : "Total pagado"} value={isExternalCheckout ? formatEuro(externalPrice) : `${purchase.total_points || 0} ptos.`} tone="mint" />
+                  <InfoCard label={isExternalCheckout ? "Estado Donoss" : "Oferta"} value={isExternalCheckout ? "Redirección registrada" : `${purchase.offer_points || 0} ptos.`} />
+                  <InfoCard label={isExternalCheckout ? "Billete" : "Entrega"} value={isExternalCheckout ? "Lo gestiona el comercio" : `${purchase.delivery_points || 0} ptos.`} />
                 </div>
 
                 {purchase.reservation_requested && (
@@ -188,22 +206,40 @@
                   </section>
                 )}
 
-                <section className="grid gap-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 sm:grid-cols-[210px_1fr] sm:items-center">
-                  <div className="mx-auto rounded-[26px] bg-white p-4 shadow-glow">
-                    <div ref={qrRef} className="grid h-44 w-44 place-items-center text-xs font-black text-ink"></div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Billete Donoss</p>
-                    <h2 className="mt-2 text-2xl font-black text-white">Código de validación</h2>
-                    <div className="mt-4 grid gap-3 min-[430px]:grid-cols-2">
-                      <InfoCard label="Validación" value={purchase.validation_code} />
-                      <InfoCard label="Seguridad" value={purchase.security_code} />
-                    </div>
-                    <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">
-                      Presenta este QR o estos códigos solo si el comercio te los pide. El código de seguridad es secreto: no lo compartas con nadie más.
+                {isExternalCheckout ? (
+                  <section className="rounded-[30px] border border-sun/25 bg-sun/10 p-5">
+                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-sun">Compra fuera de Donoss</p>
+                    <h2 className="mt-2 text-2xl font-black text-white">Donoss no confirma este pago</h2>
+                    <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
+                      Esta publicación lleva al pago externo del comerciante. Donoss solo guarda que abriste el enlace desde esta app. Antes de ir al evento o publicar el plan, verifica que pagaste correctamente en la web del comercio y que el comercio te envió el billete real.
                     </p>
-                  </div>
-                </section>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <a className="grid min-h-12 place-items-center rounded-2xl bg-sun px-4 text-center text-sm font-black text-ink" href={externalCheckoutUrl} target="_blank" rel="noreferrer">
+                        Abrir enlace del comercio
+                      </a>
+                      <a className="grid min-h-12 place-items-center rounded-2xl border border-white/10 bg-white/[0.07] px-4 text-center text-sm font-black text-white" href="plans.html">
+                        Publicar en Quedar
+                      </a>
+                    </div>
+                  </section>
+                ) : (
+                  <section className="grid gap-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 sm:grid-cols-[210px_1fr] sm:items-center">
+                    <div className="mx-auto rounded-[26px] bg-white p-4 shadow-glow">
+                      <div ref={qrRef} className="grid h-44 w-44 place-items-center text-xs font-black text-ink"></div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint">Billete Donoss</p>
+                      <h2 className="mt-2 text-2xl font-black text-white">Código de validación</h2>
+                      <div className="mt-4 grid gap-3 min-[430px]:grid-cols-2">
+                        <InfoCard label="Validación" value={purchase.validation_code} />
+                        <InfoCard label="Seguridad" value={purchase.security_code} />
+                      </div>
+                      <p className="mt-3 text-xs font-semibold leading-5 text-slate-400">
+                        Presenta este QR o estos códigos solo si el comercio te los pide. El código de seguridad es secreto: no lo compartas con nadie más.
+                      </p>
+                    </div>
+                  </section>
+                )}
 
                 <section className="rounded-[28px] border border-white/10 bg-[#0D111D] p-4">
                   <p className="text-sm font-black text-white">Resumen del pedido</p>
@@ -220,16 +256,20 @@
                       <span className="text-slate-400">Comercio</span>
                       <span className="text-right text-white">{businessName}</span>
                     </div>
-                    <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
-                      <span className="text-slate-400">ID receptor</span>
-                      <span className="break-all text-right font-mono text-white">{purchase.receiver_transaction_id}</span>
-                    </div>
-                    <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
-                      <span className="text-slate-400">Validez QR</span>
-                      <span className="text-right text-white">
-                        Desde {purchase.qr_valid_from || "hoy"}{purchase.qr_valid_until ? ` hasta ${purchase.qr_valid_until}` : ""}
-                      </span>
-                    </div>
+                    {!isExternalCheckout && (
+                      <>
+                        <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
+                          <span className="text-slate-400">ID receptor</span>
+                          <span className="break-all text-right font-mono text-white">{purchase.receiver_transaction_id}</span>
+                        </div>
+                        <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
+                          <span className="text-slate-400">Validez QR</span>
+                          <span className="text-right text-white">
+                            Desde {purchase.qr_valid_from || "hoy"}{purchase.qr_valid_until ? ` hasta ${purchase.qr_valid_until}` : ""}
+                          </span>
+                        </div>
+                      </>
+                    )}
                     {purchase.verified_at && (
                       <div className="flex justify-between gap-4 border-t border-white/10 pt-3">
                         <span className="text-slate-400">Estado</span>

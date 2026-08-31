@@ -3228,7 +3228,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -5677,8 +5677,41 @@ app.post("/api/purchases/offer", async (request, response) => {
     }
 
     if (usesExternalCheckout) {
+      const { data: externalPurchase, error: externalPurchaseError } = await supabaseAdmin
+        .from("purchases")
+        .insert({
+          buyer_id: user.id,
+          offer_id: offer.id,
+          delivery_method: delivery,
+          offer_points: 0,
+          delivery_points: 0,
+          delivery_address: deliveryMethod === "home" ? deliveryAddress : null,
+          total_points: 0,
+          receiver_transaction_id: receiverProfile.transaction_id || "",
+          receiver_profile_id: receiverProfile.id,
+          validation_code: null,
+          security_code: null,
+          qr_token: null,
+          qr_valid_from: null,
+          qr_valid_until: null,
+          reservation_requested: reservationRequested,
+          reservation_date: reservationRequested ? reservationDate : null,
+          reservation_time: reservationRequested ? reservationTime : null,
+          reservation_people: reservationRequested ? reservationPeople : null,
+        })
+        .select("id")
+        .maybeSingle();
+
+      if (externalPurchaseError) {
+        console.error("External purchase insert error:", externalPurchaseError);
+        return response.status(500).json({
+          error: externalPurchaseError.code === "42P01" ? "purchases_table_missing" : externalPurchaseError.code === "42703" ? "reservation_columns_missing" : "purchase_insert_failed",
+          detail: externalPurchaseError.message || "",
+        });
+      }
+
       return response.json({
-        purchase_id: null,
+        purchase_id: externalPurchase?.id || null,
         total_points: 0,
         buyer_points: buyerPoints,
         receiver_display_name: receiverProfile.display_name,

@@ -360,7 +360,7 @@
             setPurchaseStatus({
               type: "success",
               message: isExternalCheckout
-                ? "Validación realizada. Te enviamos al pago externo."
+                ? "Enlace preparado. Te enviamos al pago externo."
                 : `Compra realizada. Te quedan ${updatedPoints} ptos.`,
             });
             localStorage.setItem("donosPoints", String(updatedPoints));
@@ -697,10 +697,10 @@
 
                   <div className="px-6 pb-6 pt-5 text-center">
                     <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">Pago realizado</p>
-                    <h2 className="mt-2 text-3xl font-black leading-tight text-white">Compra completada</h2>
+                    <h2 className="mt-2 text-3xl font-black leading-tight text-white">{successPurchase.externalCheckoutUrl ? "Enlace externo preparado" : "Compra completada"}</h2>
                     <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
                       {successPurchase.externalCheckoutUrl
-                        ? "Donoss ya ha validado tus puntos. Ahora te enviamos al pago final del comercio."
+                        ? "Donoss ha guardado esta redirección en tu historial. El pago final y el billete dependen del comercio."
                         : "Tu reserva se ha confirmado correctamente. Los puntos ya se han movido de forma segura."}
                     </p>
 
@@ -724,8 +724,8 @@
                         <span className="text-sm font-black text-white">{successPurchase.receiver}</span>
                       </div>
                       <div className="flex justify-between gap-3 border-t border-white/10 pt-3">
-                        <span className="text-sm font-bold text-slate-400">Pagado</span>
-                        <span className="text-base font-black text-mint">{successPurchase.externalCheckoutUrl ? "Pago externo" : `${successPurchase.totalPoints} ptos.`}</span>
+                        <span className="text-sm font-bold text-slate-400">{successPurchase.externalCheckoutUrl ? "Estado" : "Pagado"}</span>
+                        <span className="text-base font-black text-mint">{successPurchase.externalCheckoutUrl ? "No confirmado por Donoss" : `${successPurchase.totalPoints} ptos.`}</span>
                       </div>
                       <div className="flex justify-between gap-3">
                         <span className="text-sm font-bold text-slate-400">Saldo restante</span>

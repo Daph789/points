@@ -264,6 +264,7 @@
 
       function TicketCard({ ticket, selected, onClick }) {
         const image = ticketImage(ticket);
+        const isExternalTicket = Boolean(ticket.offer?.external_checkout_enabled && ticket.offer?.external_checkout_url && Number(ticket.total_points || 0) === 0);
         return (
           <button
             type="button"
@@ -272,12 +273,12 @@
           >
             <div className="relative h-24 overflow-hidden rounded-3xl bg-gradient-to-br from-mint via-[#183047] to-violet">
               {image ? <img className="h-full w-full object-cover" src={image} alt="" /> : <span className="grid h-full w-full place-items-center text-3xl">🎟️</span>}
-              <div className="absolute left-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[10px] font-black text-white backdrop-blur">Billete verificado</div>
+              <div className="absolute left-2 top-2 rounded-full bg-black/45 px-2 py-1 text-[10px] font-black text-white backdrop-blur">{isExternalTicket ? "Billete externo" : "Billete verificado"}</div>
             </div>
             <div className="min-w-0">
               <p className="truncate text-base font-black text-white">{ticket.offer?.title || "Billete Donoss"}</p>
               <p className="mt-1 truncate text-sm font-bold text-slate-400">{ticket.offer?.business_display_name || ticket.receiver?.display_name || "Donoss"}</p>
-              <p className="mt-2 text-xs font-bold text-slate-500">{formatDate(ticket.created_at)} · {ticket.total_points || 0} ptos.</p>
+              <p className="mt-2 text-xs font-bold text-slate-500">{formatDate(ticket.created_at)} · {isExternalTicket ? "Pago fuera de Donoss" : `${ticket.total_points || 0} ptos.`}</p>
             </div>
           </button>
         );
