@@ -220,51 +220,72 @@
 
         React.useEffect(() => {
           async function loadCheckout() {
-            const { data: sessionData } = await supabaseClient.auth.getSession();
-            const session = sessionData.session;
-            if (!session?.user) {
-              window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+            try {
+              const { data: sessionData } = await supabaseClient.auth.getSession();
+              const session = sessionData.session;
+              if (!session?.user) {
+                window.location.href = `login.html?next=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                return;
+              }
+              setUserId(session.user.id);
+              setAccessToken(session.access_token);
+
+              let offerData = null;
+              let profileData = null;
+
+              const [{ data: directOffer, error: offerError }, profileResult] = await Promise.all([
+                supabaseClient.from("business_offers").select("*").eq("id", offerId).maybeSingle(),
+                supabaseClient.from("profiles").select("*").eq("id", session.user.id).maybeSingle(),
+              ]);
+              if (!offerError && directOffer) {
+                offerData = directOffer;
+                profileData = profileResult.data || null;
+              } else if (window.location.protocol !== "file:") {
+                const [offerResponse, profileResponse] = await Promise.all([
+                  fetch(`/api/offers/${encodeURIComponent(offerId)}`, {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  }),
+                  fetch("/api/me/profile", {
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                  }),
+                ]);
+
+                const offerJson = await offerResponse.json().catch(() => ({}));
+                const profileJson = await profileResponse.json().catch(() => ({}));
+                offerData = offerResponse.ok ? offerJson.offer : null;
+                profileData = profileResponse.ok ? profileJson.profile : null;
+
+                if (!offerResponse.ok || !offerData) {
+                  setStatus(offerJson.error === "offer_expired" ? "Esta oferta ha caducado." : offerJson.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
+                  return;
+                }
+              } else {
+                setStatus("No hemos encontrado esta oferta.");
+                return;
+              }
+
+              if (offerData.is_hidden) {
+                setStatus("Esta oferta ya no está disponible.");
+                return;
+              }
+
+              setOffer(offerData);
+              setProfile(profileData);
+              setDeliveryAddress(profileData?.address || "");
+              if (offerData.reservation_enabled) {
+                const allowedWeekdays = normalizeReservationWeekdays(offerData.reservation_available_weekdays);
+                const availableDates = buildReservableDates(Math.max(Number(offerData.reservation_days_ahead || 0), 0), allowedWeekdays);
+                setReservationDate(availableDates[0]?.value || "");
+                const slots = Array.isArray(offerData.reservation_time_slots) ? offerData.reservation_time_slots.filter(Boolean) : [];
+                setReservationTime(slots[0] || "");
+                setReservationPeople("1");
+              }
+              setStatus("");
+            } catch (error) {
+              console.error("Checkout load error:", error);
+              setStatus("No se ha podido cargar el pago. Inténtalo otra vez.");
               return;
             }
-            setUserId(session.user.id);
-            setAccessToken(session.access_token);
-
-            const [offerResponse, profileResponse] = await Promise.all([
-              fetch(`/api/offers/${encodeURIComponent(offerId)}`, {
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              }),
-              fetch("/api/me/profile", {
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              }),
-            ]);
-
-            const offerJson = await offerResponse.json().catch(() => ({}));
-            const profileJson = await profileResponse.json().catch(() => ({}));
-            const offerData = offerResponse.ok ? offerJson.offer : null;
-            const profileData = profileResponse.ok ? profileJson.profile : null;
-
-            if (!offerResponse.ok || !offerData) {
-              setStatus(offerJson.error === "offer_expired" ? "Esta oferta ha caducado." : offerJson.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
-              return;
-            }
-
-            if (offerData.is_hidden) {
-              setStatus("Esta oferta ya no está disponible.");
-              return;
-            }
-
-            setOffer(offerData);
-            setProfile(profileData);
-            setDeliveryAddress(profileData?.address || "");
-            if (offerData.reservation_enabled) {
-              const allowedWeekdays = normalizeReservationWeekdays(offerData.reservation_available_weekdays);
-              const availableDates = buildReservableDates(Math.max(Number(offerData.reservation_days_ahead || 0), 0), allowedWeekdays);
-              setReservationDate(availableDates[0]?.value || "");
-              const slots = Array.isArray(offerData.reservation_time_slots) ? offerData.reservation_time_slots.filter(Boolean) : [];
-              setReservationTime(slots[0] || "");
-              setReservationPeople("1");
-            }
-            setStatus("");
           }
 
           loadCheckout();

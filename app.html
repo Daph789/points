@@ -712,7 +712,6 @@
 
         let loaded = 0;
         function hideBootWhenReady(options = {}) {
-          if (!options.force && !inicioReady && activeRoute === "inicio") return;
           loaded += 1;
           if (loaded >= 1) window.setTimeout(() => boot.classList.add("is-hidden"), 260);
         }
@@ -721,9 +720,8 @@
         allFrames().forEach(sendThemeToFrame);
 
         window.setTimeout(() => {
-          if (activeRoute === "inicio" && !inicioReady) return;
           boot.classList.add("is-hidden");
-        }, 3400);
+        }, 1400);
         window.requestAnimationFrame(() => {
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);

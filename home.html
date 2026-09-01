@@ -678,17 +678,6 @@
 
         async function loadFeaturedOffers() {
           try {
-            const response = await fetch("/api/offers/featured");
-            const data = await response.json().catch(() => ({}));
-            if (response.ok) {
-              setFeaturedOffers(data.offers || []);
-              return;
-            }
-          } catch (error) {
-            // Fallback below keeps Inicio useful even if the server route is still warming up.
-          }
-
-          try {
             const { data, error } = await supabaseClient
               .from("business_offers")
               .select("*")
@@ -714,23 +703,21 @@
               }
             }
             setFeaturedOffers(featured);
-          } catch (error) {
-            setFeaturedOffers([]);
+            return;
+          } catch (_directError) {
+            try {
+              const response = await fetch("/api/offers/featured");
+              const data = await response.json().catch(() => ({}));
+              if (response.ok) {
+                setFeaturedOffers(data.offers || []);
+                return;
+              }
+            } catch (_serverError) {}
           }
+          setFeaturedOffers([]);
         }
 
         async function loadCategorySummary() {
-          try {
-            const response = await fetch("/api/offers/categories/summary");
-            const data = await response.json().catch(() => ({}));
-            if (response.ok) {
-              setCategorySummary(data.categories || []);
-              return;
-            }
-          } catch (error) {
-            // Fallback below keeps the UI useful even if the server summary is not deployed yet.
-          }
-
           try {
             const { data, error } = await supabaseClient
               .from("business_offers")
@@ -739,9 +726,18 @@
               .limit(250);
             if (error) throw error;
             setCategorySummary(buildCategorySummaryFromOffers(data || []));
-          } catch (error) {
-            setCategorySummary([]);
+            return;
+          } catch (_directError) {
+            try {
+              const response = await fetch("/api/offers/categories/summary");
+              const data = await response.json().catch(() => ({}));
+              if (response.ok) {
+                setCategorySummary(data.categories || []);
+                return;
+              }
+            } catch (_serverError) {}
           }
+          setCategorySummary([]);
         }
 
         async function loadLikedOffers(token) {
@@ -877,17 +873,29 @@
             setOffersStatus("");
           }
 
-          const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
-          const data = await response.json().catch(() => ({}));
+          let visibleOffers = [];
 
-          if (!response.ok) {
-            setCategoryOffers([]);
-            setOffersStatus("No se han podido cargar las ofertas ahora.");
-          } else {
-            const visibleOffers = data.offers || [];
+          try {
+            const { data, error } = await supabaseClient
+              .from("business_offers")
+              .select("*")
+              .contains("categories", [categoryLabel])
+              .order("created_at", { ascending: false });
+            if (error) throw error;
+            visibleOffers = (data || []).filter(isVisibleForUsers);
+          } catch (_directError) {
+            const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              setCategoryOffers([]);
+              setOffersStatus("No se han podido cargar las ofertas ahora.");
+              if (!options.silent) setIsLoadingOffers(false);
+              return;
+            }
+            visibleOffers = data.offers || [];
+          }
             setCategoryOffers(visibleOffers);
             setOffersStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${categoryLabel}.`);
-          }
 
           if (!options.silent) setIsLoadingOffers(false);
         }

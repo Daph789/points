@@ -310,15 +310,26 @@
 
         const loadOffers = React.useCallback(async ({ silent = false } = {}) => {
             if (!silent) setStatus("Cargando ofertas...");
-            const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`);
-            const data = await response.json().catch(() => ({}));
+            let visibleOffers = [];
 
-            if (!response.ok) {
-              setStatus("No se han podido cargar las ofertas.");
-              return;
+            try {
+              const { data, error } = await supabaseClient
+                .from("business_offers")
+                .select("*")
+                .contains("categories", [category])
+                .order("created_at", { ascending: false });
+              if (error) throw error;
+              visibleOffers = (data || []).filter(isVisibleForUsers);
+            } catch (_directError) {
+              const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`);
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                setStatus("No se han podido cargar las ofertas.");
+                return;
+              }
+              visibleOffers = data.offers || [];
             }
 
-            const visibleOffers = data.offers || [];
             setOffers(visibleOffers);
             setStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${category}.`);
         }, [category]);

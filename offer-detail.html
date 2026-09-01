@@ -165,45 +165,64 @@
 
         React.useEffect(() => {
           async function loadOffer() {
-            const { data: sessionData } = await supabaseClient.auth.getSession();
-            const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
-            const response = await fetch(`/api/offers/${encodeURIComponent(id)}`, { headers });
-            const payload = await response.json().catch(() => ({}));
+            try {
+              const { data: sessionData } = await supabaseClient.auth.getSession();
+              let payload = {};
 
-            if (!response.ok || !payload.offer) {
-              setStatus(payload.error === "offer_expired" ? "Esta oferta ha caducado." : payload.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
-              return;
-            }
-
-            const data = payload.offer;
-            setCanEdit(Boolean(payload.can_edit));
-            if (data.is_hidden && !payload.can_edit) {
-              setStatus("Esta oferta ya no está disponible.");
-              return;
-            }
-            if (isOfferExpired(data) && !payload.can_edit) {
-              setStatus("Esta oferta ha caducado.");
-              return;
-            }
-            let nextOffer = data;
-            if (data.business_id) {
-              try {
-                const profileResponse = await fetch(`/api/businesses/${encodeURIComponent(data.business_id)}/profile`);
-                const profileData = await profileResponse.json().catch(() => ({}));
-                if (profileResponse.ok && profileData.business) {
-                  nextOffer = {
-                    ...data,
-                    business_display_name: profileData.business.display_name || data.business_display_name,
-                    business_is_verified: Boolean(profileData.business.is_verified || data.business_is_verified),
-                  };
+              const { data: directOffer, error } = await supabaseClient
+                .from("business_offers")
+                .select("*")
+                .eq("id", id)
+                .maybeSingle();
+              if (!error && directOffer) {
+                const viewerId = sessionData.session?.user?.id || "";
+                payload = { offer: directOffer, can_edit: Boolean(viewerId && viewerId === directOffer.business_id) };
+              } else if (window.location.protocol !== "file:") {
+                const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
+                const response = await fetch(`/api/offers/${encodeURIComponent(id)}`, { headers });
+                payload = await response.json().catch(() => ({}));
+                if (!response.ok || !payload.offer) {
+                  setStatus(payload.error === "offer_expired" ? "Esta oferta ha caducado." : payload.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
+                  return;
                 }
-              } catch (_error) {
-                nextOffer = data;
+              } else {
+                setStatus("No hemos encontrado esta oferta.");
+                return;
               }
+
+              const data = payload.offer;
+              setCanEdit(Boolean(payload.can_edit));
+              if (data.is_hidden && !payload.can_edit) {
+                setStatus("Esta oferta ya no está disponible.");
+                return;
+              }
+              if (isOfferExpired(data) && !payload.can_edit) {
+                setStatus("Esta oferta ha caducado.");
+                return;
+              }
+              let nextOffer = data;
+              if (data.business_id && window.location.protocol !== "file:") {
+                try {
+                  const profileResponse = await fetch(`/api/businesses/${encodeURIComponent(data.business_id)}/profile`);
+                  const profileData = await profileResponse.json().catch(() => ({}));
+                  if (profileResponse.ok && profileData.business) {
+                    nextOffer = {
+                      ...data,
+                      business_display_name: profileData.business.display_name || data.business_display_name,
+                      business_is_verified: Boolean(profileData.business.is_verified || data.business_is_verified),
+                    };
+                  }
+                } catch (_error) {
+                  nextOffer = data;
+                }
+              }
+              setOffer(nextOffer);
+              setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "none");
+              setStatus("");
+            } catch (error) {
+              console.error("Offer detail load error:", error);
+              setStatus("No se ha podido cargar el detalle. Inténtalo otra vez.");
             }
-            setOffer(nextOffer);
-            setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "none");
-            setStatus("");
           }
 
           loadOffer();
