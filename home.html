@@ -654,6 +654,7 @@
         const [navBadges, setNavBadges] = React.useState({});
         const [themeMode, setThemeMode] = React.useState(window.donossTheme?.getTheme?.() || "dark");
         const selectedCategoryRef = React.useRef("");
+        const backgroundRefreshRef = React.useRef(false);
 
         React.useEffect(() => {
           const syncTheme = (event) => setThemeMode(event.detail?.theme || window.donossTheme?.getTheme?.() || "dark");
@@ -840,11 +841,17 @@
 
         React.useEffect(() => {
           const interval = window.setInterval(() => {
-            if (document.hidden) return;
-            loadFeaturedOffers();
-            loadCategorySummary();
-            if (selectedCategoryRef.current) loadCategoryOffers(selectedCategoryRef.current, { silent: true });
-          }, 10000);
+            if (document.hidden || window.__donosFrameActive === false) return;
+            if (backgroundRefreshRef.current) return;
+            backgroundRefreshRef.current = true;
+            Promise.allSettled([
+              loadFeaturedOffers(),
+              loadCategorySummary(),
+              selectedCategoryRef.current ? loadCategoryOffers(selectedCategoryRef.current, { silent: true }) : Promise.resolve(),
+            ]).finally(() => {
+              backgroundRefreshRef.current = false;
+            });
+          }, 45000);
           return () => window.clearInterval(interval);
         }, []);
 

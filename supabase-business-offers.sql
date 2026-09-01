@@ -1,3 +1,8 @@
+-- Donoss - publications/offres des entreprises.
+-- Mode lancement actuel: business_offers reste sans RLS pour que les offres publiques
+-- s'affichent partout dans l'app. Si tu securises cette table plus tard, il faudra
+-- une vraie politique publique en lecture + des routes serveur pour les actions privees.
+
 create table if not exists public.business_offers (
   id uuid primary key default gen_random_uuid(),
   business_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
@@ -175,30 +180,13 @@ update public.business_offers
 set sold_count = 0
 where sold_count is null;
 
-alter table public.business_offers enable row level security;
-
 drop policy if exists "Businesses can read their own offers" on public.business_offers;
 drop policy if exists "Businesses can insert their own offers" on public.business_offers;
 drop policy if exists "Businesses can update their own offers" on public.business_offers;
+drop policy if exists "Anyone can read public offers" on public.business_offers;
+drop policy if exists "Businesses can manage their own offers" on public.business_offers;
 
-create policy "Businesses can read their own offers"
-  on public.business_offers
-  for select
-  to authenticated
-  using (auth.uid() = business_id);
-
-create policy "Businesses can insert their own offers"
-  on public.business_offers
-  for insert
-  to authenticated
-  with check (auth.uid() = business_id);
-
-create policy "Businesses can update their own offers"
-  on public.business_offers
-  for update
-  to authenticated
-  using (auth.uid() = business_id)
-  with check (auth.uid() = business_id);
+alter table public.business_offers disable row level security;
 
 create or replace function public.save_business_offer(offer jsonb)
 returns uuid

@@ -413,6 +413,9 @@
                 : frame.dataset.route === route;
             frame.classList.toggle("is-active", isActive);
             frame.classList.toggle("is-left", !isActive && direction === "left");
+            try {
+              frame.contentWindow?.postMessage({ type: "donos:route-visibility", active: isActive }, window.location.origin);
+            } catch (_error) {}
           });
 
           if (!options.skipHash && window.location.hash !== `#${route}`) {
@@ -726,7 +729,7 @@
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);
           window.setTimeout(checkAppUpdate, 1800);
-          window.setInterval(checkAppUpdate, 15000);
+          window.setInterval(checkAppUpdate, 60000);
           openRouteFromHash();
         });
       })();

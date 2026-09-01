@@ -2,6 +2,14 @@
   const params = new URLSearchParams(window.location.search);
   if (params.get("embedded") === "1") {
     document.body.classList.add("donos-embedded", "donos-shell-ready");
+    window.__donosFrameActive = false;
+    window.addEventListener("message", (event) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === "donos:route-visibility") {
+        window.__donosFrameActive = Boolean(event.data.active);
+        window.dispatchEvent(new CustomEvent("donos:frame-visibility", { detail: { active: window.__donosFrameActive } }));
+      }
+    });
     const routeByFile = {
       "home.html": "inicio",
       "historial.html": "historial",

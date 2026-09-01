@@ -137,6 +137,7 @@
         const bottomRef = React.useRef(null);
         const forceScrollRef = React.useRef(false);
         const isActiveRef = React.useRef(!startsPrefetched);
+        const loadingGroupRef = React.useRef(false);
 
         React.useEffect(() => { bootstrap(); }, []);
         React.useEffect(() => {
@@ -148,7 +149,7 @@
         }, []);
         React.useEffect(() => {
           if (!token || !isActiveGroup) return undefined;
-          const timer = window.setInterval(() => loadGroup(token, true), 2500);
+          const timer = window.setInterval(() => loadGroup(token, true), 6000);
           return () => window.clearInterval(timer);
         }, [token, isActiveGroup]);
         function scrollChatToBottom(behavior = "smooth") {
@@ -166,6 +167,11 @@
         React.useEffect(() => {
           function handleMessage(event) {
             if (event.origin !== window.location.origin) return;
+            if (event.data?.type === "donos:route-visibility" && !event.data.active) {
+              isActiveRef.current = false;
+              setIsActiveGroup(false);
+              return;
+            }
             if (event.data?.type === "donos:activate-side-group") {
               isActiveRef.current = true;
               setIsActiveGroup(true);
@@ -183,10 +189,16 @@
           const accessToken = data.session?.access_token;
           if (!accessToken) return redirectToLogin();
           setToken(accessToken);
+          if (startsPrefetched) {
+            setStatus("");
+            return;
+          }
           await loadGroup(accessToken, startsPrefetched, { markRead: !startsPrefetched });
         }
 
         async function loadGroup(accessToken = token, silent = false, options = {}) {
+          if (loadingGroupRef.current) return;
+          loadingGroupRef.current = true;
           try {
             const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}`, { headers: { Authorization: `Bearer ${accessToken}` } });
             const data = await response.json().catch(() => ({}));
@@ -205,6 +217,8 @@
             }
           } catch (error) {
             if (!silent) setStatus(error.message === "side_groups_sql_missing" ? "Falta ejecutar supabase-side-groups.sql en Supabase." : "No se ha podido cargar este grupo.");
+          } finally {
+            loadingGroupRef.current = false;
           }
         }
 

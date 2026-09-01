@@ -21,6 +21,8 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const adminPassword = process.env.ADMIN_DONOS_PASSWORD || "";
 const publicAppUrl = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "";
 const offerTransferAdminEmail = "donoss.red@gmail.com";
+const notificationCache = new Map();
+const notificationCacheTtlMs = 6000;
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -516,6 +518,30 @@ async function ensureProfileForUser(user) {
   if (existingError) throw existingError;
   const metadata = user.user_metadata || user.raw_user_meta_data || {};
   if (existing) {
+    const metadataAccountType = metadataText(metadata, "account_type") === "business" ? "business" : "";
+    if (metadataAccountType === "business" && existing.account_type !== "business") {
+      try {
+        const businessCategories = Array.isArray(metadata.business_categories) ? metadata.business_categories : existing.business_categories;
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            account_type: "business",
+            business_categories: businessCategories || existing.business_categories || null,
+            tax_id: metadataText(metadata, "tax_id") || existing.tax_id || null,
+            address: metadataText(metadata, "address") || existing.address || null,
+          })
+          .eq("id", user.id)
+          .select(profileColumns)
+          .maybeSingle();
+        if (!updateError && updated) {
+          await registerReferralForProfile(updated, metadata);
+          return updated;
+        }
+        if (updateError?.code !== "42703") console.error("Business account type backfill error:", updateError);
+      } catch (error) {
+        if (error?.code !== "42703") console.error("Business account type backfill fatal error:", error);
+      }
+    }
     const metadataBio = metadataText(metadata, "bio");
     if (metadataBio && !existing.bio) {
       try {
@@ -3156,6 +3182,10 @@ app.get("/api/me/notifications", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
+    const cached = notificationCache.get(profile.id);
+    if (cached && Date.now() - cached.createdAt < notificationCacheTtlMs) {
+      return response.json(cached.payload);
+    }
     const events = await buildNotificationsForProfile(profile);
     const keys = events.map((event) => event.key);
     let readKeys = new Set();
@@ -3175,11 +3205,13 @@ app.get("/api/me/notifications", async (request, response) => {
       readKeys = new Set((reads || []).map((read) => read.notification_key));
     }
 
-    response.json({
+    const payload = {
       counts: compactNotificationCounts(events, readKeys),
       events: events.map((event) => ({ ...event, read: readKeys.has(event.key) })),
       unread_keys: events.filter((event) => !readKeys.has(event.key)).map((event) => event.key),
-    });
+    };
+    notificationCache.set(profile.id, { createdAt: Date.now(), payload });
+    response.json(payload);
   } catch (error) {
     console.error("Notifications fatal error:", error);
     response.status(500).json({ error: error.code === "42P01" ? "notification_reads_table_missing" : "notifications_failed" });
@@ -3196,6 +3228,7 @@ app.post("/api/me/notifications/read", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
+    notificationCache.delete(profile.id);
     const keys = Array.isArray(request.body?.keys)
       ? [...new Set(request.body.keys.map((key) => String(key || "").trim()).filter(Boolean))]
       : [];

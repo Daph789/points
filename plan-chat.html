@@ -150,6 +150,7 @@
         const bottomRef = React.useRef(null);
         const forceScrollRef = React.useRef(false);
         const isActiveRef = React.useRef(!startsPrefetched);
+        const loadingChatRef = React.useRef(false);
 
         React.useEffect(() => {
           bootstrap();
@@ -166,6 +167,11 @@
         React.useEffect(() => {
           function handleMessage(event) {
             if (event.origin !== window.location.origin) return;
+            if (event.data?.type === "donos:route-visibility" && !event.data.active) {
+              isActiveRef.current = false;
+              setIsActiveChat(false);
+              return;
+            }
             if (event.data?.type === "donos:activate-chat") {
               isActiveRef.current = true;
               setIsActiveChat(true);
@@ -180,7 +186,7 @@
 
         React.useEffect(() => {
           if (!token || !planId || !isActiveChat) return undefined;
-          const interval = window.setInterval(() => loadChat(token, true), 2500);
+          const interval = window.setInterval(() => loadChat(token, true), 6000);
           return () => window.clearInterval(interval);
         }, [token, planId, isActiveChat]);
 
@@ -206,10 +212,16 @@
           const accessToken = sessionData.session?.access_token;
           if (!accessToken) return redirectToLogin();
           setToken(accessToken);
+          if (startsPrefetched) {
+            setStatus("");
+            return;
+          }
           await loadChat(accessToken, startsPrefetched, { markRead: !startsPrefetched });
         }
 
         async function loadChat(accessToken = token, silent = false, options = {}) {
+          if (loadingChatRef.current) return;
+          loadingChatRef.current = true;
           try {
             const response = await fetch(`/api/social-plans/${planId}/chat`, {
               headers: { Authorization: `Bearer ${accessToken}` },
@@ -226,6 +238,8 @@
             }
           } catch (error) {
             if (!silent) setStatus(friendlyChatError(error.message));
+          } finally {
+            loadingChatRef.current = false;
           }
         }
 

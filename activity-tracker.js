@@ -98,5 +98,5 @@
   window.addEventListener("pagehide", () => track("pagehide"));
   window.setInterval(() => {
     if (document.visibilityState === "visible") track("heartbeat");
-  }, 45000);
+  }, 120000);
 })();

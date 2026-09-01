@@ -500,6 +500,7 @@
         const warmedSideKeysRef = React.useRef(new Set());
         const createFormRef = React.useRef(null);
         const isSavingRef = React.useRef(false);
+        const pollingRef = React.useRef(false);
 
         React.useEffect(() => {
           bootstrap();
@@ -510,14 +511,19 @@
         }, [isSaving]);
 
         React.useEffect(() => {
-          warmVisibleChats();
+          // Anti-saturation Supabase: on ne precharge plus les chats caches.
+          // Les chats se chargent uniquement quand l'utilisateur les ouvre.
         }, [plans, ownedPlans, joinedPlans, notificationEvents.length, mode]);
 
         React.useEffect(() => {
           const interval = window.setInterval(() => {
-            if (!token || document.hidden || isSavingRef.current) return;
-            Promise.allSettled([loadPlans(token), loadMine(token), loadNotifications(token)]);
-          }, 6000);
+            if (!token || document.hidden || window.__donosFrameActive === false || isSavingRef.current) return;
+            if (pollingRef.current) return;
+            pollingRef.current = true;
+            Promise.allSettled([loadPlans(token), loadMine(token), loadNotifications(token)]).finally(() => {
+              pollingRef.current = false;
+            });
+          }, 18000);
           return () => window.clearInterval(interval);
         }, [token]);
 
@@ -681,6 +687,7 @@
         }
 
         function warmPlanChat(plan) {
+          return;
           if (!isEmbeddedPlans || window.parent === window || !canUseMainChat(plan)) return;
           if (warmedChatIdsRef.current.has(plan.id)) return;
           warmedChatIdsRef.current.add(plan.id);
@@ -688,6 +695,7 @@
         }
 
         function warmSideGroup(plan, status = sideStatusForPlan(plan)) {
+          return;
           if (!isEmbeddedPlans || window.parent === window || !canUseSideGroup(plan)) return;
           const key = `${plan.id}:${status}`;
           if (warmedSideKeysRef.current.has(key)) return;
