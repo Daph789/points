@@ -199,10 +199,24 @@
             setMerged(Boolean(data.merged));
             setOtherCount(Number(data.other_count || 0));
             setStatus("");
-            if (options.markRead || isActiveRef.current) markSideNotificationsRead(accessToken);
+            if (options.markRead || isActiveRef.current) {
+              markSideMessagesRead(accessToken);
+              markSideNotificationsRead(accessToken);
+            }
           } catch (error) {
             if (!silent) setStatus(error.message === "side_groups_sql_missing" ? "Falta ejecutar supabase-side-groups.sql en Supabase." : "No se ha podido cargar este grupo.");
           }
+        }
+
+        async function markSideMessagesRead(accessToken = token) {
+          if (!accessToken || !planId || !sideStatus || !isActiveRef.current) return;
+          try {
+            await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/read`, {
+              method: "POST",
+              keepalive: true,
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+          } catch (_error) {}
         }
 
         async function markSideNotificationsRead(accessToken = token) {

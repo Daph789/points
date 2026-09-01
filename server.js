@@ -2793,6 +2793,9 @@ async function buildNotificationsForProfile(profile) {
             href: "plans.html?tab=mine",
             key: `quedar:mine:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
             subsection: "mine",
+            kind: "member_update",
+            plan_id: member.plan_id,
+            member_status: member.status,
             title: member.status === "waiting" ? "Nueva persona en espera" : member.status === "accepted" ? "Nueva persona aceptada" : "Movimiento en tu plan",
             detail: plan.title || "Plan Donoss",
             created_at: member.updated_at || member.created_at,
@@ -2833,24 +2836,27 @@ async function buildNotificationsForProfile(profile) {
       .order("updated_at", { ascending: false })
       .limit(120);
 
+    let joinedPlansById = {};
     if (!joinedError && (joinedMembers || []).length > 0) {
       const joinedPlanIds = [...new Set(joinedMembers.map((member) => member.plan_id).filter(Boolean))];
-      let plansById = {};
       if (joinedPlanIds.length > 0) {
         const { data: plans } = await supabaseAdmin
           .from("social_plans")
           .select("id, title, status")
           .in("id", joinedPlanIds);
-        plansById = Object.fromEntries((plans || []).map((plan) => [plan.id, plan]));
+        joinedPlansById = Object.fromEntries((plans || []).map((plan) => [plan.id, plan]));
       }
 
       for (const member of joinedMembers || []) {
-        const plan = plansById[member.plan_id] || {};
+        const plan = joinedPlansById[member.plan_id] || {};
         pushNotification(events, {
           section: "quedar",
           href: "plans.html?tab=joined",
           key: `quedar:joined:${member.id}:${member.status}:${member.updated_at || member.created_at}`,
           subsection: "joined",
+          kind: "member_status",
+          plan_id: member.plan_id,
+          member_status: member.status,
           title: member.status === "accepted" ? "Te aceptaron en un plan" : member.status === "waiting" ? "Sigues en lista de espera" : member.status === "removed" ? "Ya no estás en este plan" : "Actualización de plan",
           detail: plan.title || "Plan Donoss",
           created_at: member.updated_at || member.created_at,
@@ -2872,7 +2878,7 @@ async function buildNotificationsForProfile(profile) {
       }
     }
 
-    const sideMembers = (joinedMembers || []).filter((member) => ["waiting", "removed"].includes(member.status) && plansById[member.plan_id]?.status === "confirmed");
+    const sideMembers = (joinedMembers || []).filter((member) => ["waiting", "removed"].includes(member.status) && joinedPlansById[member.plan_id]?.status === "confirmed");
     const sidePlanIds = [...new Set(sideMembers.map((member) => member.plan_id).filter(Boolean))];
     const sideMemberByPlanId = new Map(sideMembers.map((member) => [member.plan_id, member]));
 
@@ -2891,7 +2897,7 @@ async function buildNotificationsForProfile(profile) {
           const member = sideMemberByPlanId.get(message.plan_id);
           if (!member) continue;
           if (![member.status, "merged"].includes(message.group_status)) continue;
-          const plan = plansById[message.plan_id] || {};
+          const plan = joinedPlansById[message.plan_id] || {};
           pushNotification(events, {
             section: "quedar",
             href: `side-group.html?id=${message.plan_id}&status=${member.status}`,
@@ -2920,7 +2926,7 @@ async function buildNotificationsForProfile(profile) {
         for (const requestRow of mergeRequests || []) {
           const member = sideMemberByPlanId.get(requestRow.plan_id);
           if (!member || ![requestRow.from_status, requestRow.to_status].includes(member.status)) continue;
-          const plan = plansById[requestRow.plan_id] || {};
+          const plan = joinedPlansById[requestRow.plan_id] || {};
           if (requestRow.status === "pending" && requestRow.to_status === member.status && requestRow.requester_id !== profile.id) {
             pushNotification(events, {
               section: "quedar",
@@ -3563,6 +3569,22 @@ async function markPlanChatMessagesRead(messages = [], planId, readerId) {
   }
 }
 
+async function markPlanChatReadForProfile(planId, readerId) {
+  const { data: messages, error } = await supabaseAdmin
+    .from("social_plan_messages")
+    .select("id, plan_id, sender_id, deleted_at")
+    .eq("plan_id", planId)
+    .neq("sender_id", readerId)
+    .is("deleted_at", null)
+    .limit(200);
+  if (error) {
+    if (!["42P01", "42703"].includes(error.code)) console.error("Social plan chat read load error:", error);
+    throw error;
+  }
+  await markPlanChatMessagesRead(messages || [], planId, readerId);
+  return messages?.length || 0;
+}
+
 async function enrichPlanChatMessages(messages = []) {
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
   const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
@@ -3765,6 +3787,25 @@ async function markSideGroupMessagesRead(messages = [], planId, readerId) {
   if (error && !["42P01", "42703"].includes(error.code)) {
     console.error("Side group read receipt error:", error);
   }
+}
+
+async function markSideGroupReadForProfile(planId, readerId, statuses = []) {
+  const cleanStatuses = [...new Set((statuses || []).filter(Boolean))];
+  if (cleanStatuses.length === 0) return 0;
+  const { data: messages, error } = await supabaseAdmin
+    .from("social_plan_side_group_messages")
+    .select("id, plan_id, group_status, sender_id, deleted_at")
+    .eq("plan_id", planId)
+    .in("group_status", cleanStatuses)
+    .neq("sender_id", readerId)
+    .is("deleted_at", null)
+    .limit(240);
+  if (error) {
+    if (!["42P01", "42703"].includes(error.code)) console.error("Side group read load error:", error);
+    throw error;
+  }
+  await markSideGroupMessagesRead(messages || [], planId, readerId);
+  return messages?.length || 0;
 }
 
 app.get("/api/offers/featured", async (_request, response) => {
@@ -4294,19 +4335,76 @@ app.post("/api/social-plans", async (request, response) => {
       return response.status(403).json({ error: "business_free_plans_only" });
     }
 
-    const purchaseId = String(request.body?.purchaseId || "").trim();
+    let purchaseId = String(request.body?.purchaseId || "").trim();
+    const externalOfferId = String(request.body?.externalOfferId || "").trim();
     const location = String(request.body?.location || "").trim().slice(0, 160) || null;
     const eventDate = String(request.body?.eventDate || "").slice(0, 10) || null;
     const freeCategory = String(request.body?.freeCategory || "").trim().slice(0, 60) || null;
     const freeCoverDataUrl = planType === "free" ? normalizedSocialPlanCover(request.body?.freeCoverDataUrl) : null;
 
     if (planType === "ticket") {
-      const { data: purchase, error: purchaseError } = await supabaseAdmin
+      let { data: purchase, error: purchaseError } = await supabaseAdmin
         .from("purchases")
         .select("id, buyer_id")
-        .eq("id", purchaseId)
+        .eq("id", purchaseId || "00000000-0000-0000-0000-000000000000")
         .eq("buyer_id", creator.id)
         .maybeSingle();
+
+      if (!purchase && externalOfferId) {
+        const { data: offer, error: offerError } = await supabaseAdmin
+          .from("business_offers")
+          .select("id, business_id, title, external_checkout_enabled, external_checkout_url, business_display_name, receiver_transaction_id")
+          .eq("id", externalOfferId)
+          .maybeSingle();
+        if (offerError) throw offerError;
+        if (!offer?.external_checkout_enabled || !safeHttpUrl(offer.external_checkout_url)) {
+          return response.status(404).json({ error: "purchase_not_found" });
+        }
+
+        const { data: existingExternal, error: existingExternalError } = await supabaseAdmin
+          .from("purchases")
+          .select("id, buyer_id")
+          .eq("buyer_id", creator.id)
+          .eq("offer_id", offer.id)
+          .eq("total_points", 0)
+          .order("created_at", { ascending: false })
+          .limit(1);
+        if (existingExternalError && existingExternalError.code !== "42703") throw existingExternalError;
+        purchase = existingExternal?.[0] || null;
+
+        if (!purchase) {
+          const { data: createdExternal, error: createdExternalError } = await supabaseAdmin
+            .from("purchases")
+            .insert({
+              buyer_id: creator.id,
+              offer_id: offer.id,
+              delivery_method: "none",
+              offer_points: 0,
+              delivery_points: 0,
+              delivery_address: null,
+              total_points: 0,
+              receiver_transaction_id: offer.receiver_transaction_id || "EXTERNAL",
+              receiver_profile_id: offer.business_id || creator.id,
+              validation_code: null,
+              security_code: null,
+              qr_token: null,
+              qr_valid_from: null,
+              qr_valid_until: null,
+              reservation_requested: false,
+              reservation_date: null,
+              reservation_time: null,
+              reservation_people: null,
+            })
+            .select("id, buyer_id")
+            .maybeSingle();
+          if (createdExternalError) {
+            console.error("Create social plan external purchase error:", createdExternalError);
+            return response.status(500).json({ error: createdExternalError.code === "42P01" ? "purchases_table_missing" : createdExternalError.code === "42703" ? "reservation_columns_missing" : "purchase_insert_failed" });
+          }
+          purchase = createdExternal;
+        }
+        purchaseId = purchase?.id || "";
+      }
 
       if (purchaseError) throw purchaseError;
       if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
@@ -4631,8 +4729,6 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       console.error("Social plan chat list error:", error);
       return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_failed" });
     }
-    await markPlanChatMessagesRead(messages || [], access.plan.id, profile.id);
-
     response.json({
       profile: privatePlanProfile(profile),
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
@@ -4641,6 +4737,24 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
   } catch (error) {
     console.error("Social plan chat list fatal error:", error);
     response.status(500).json({ error: "plan_chat_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/chat/read", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+    const read = await markPlanChatReadForProfile(access.plan.id, profile.id);
+    response.json({ ok: true, read });
+  } catch (error) {
+    console.error("Social plan chat read fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_read_failed" });
   }
 });
 
@@ -4801,7 +4915,6 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       .order("created_at", { ascending: true })
       .limit(240);
     if (messagesError) return response.status(500).json({ error: ["42P01", "42703"].includes(messagesError.code) ? "side_groups_sql_missing" : "side_group_failed" });
-    await markSideGroupMessagesRead(messages || [], access.plan.id, profile.id);
 
     const { data: mergeRequests, error: mergeError } = await supabaseAdmin
       .from("social_plan_side_group_merges")
@@ -4826,6 +4939,26 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
   } catch (error) {
     console.error("Side group fatal error:", error);
     response.status(500).json({ error: error.code === "42P01" ? "side_groups_sql_missing" : "side_group_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/side-group/:status/read", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
+    const merge = await getAcceptedSideMerge(access.plan.id);
+    const mergedStatuses = merge ? [merge.from_status, merge.to_status].filter(Boolean) : [access.status];
+    const read = await markSideGroupReadForProfile(access.plan.id, profile.id, mergedStatuses);
+    response.json({ ok: true, read });
+  } catch (error) {
+    console.error("Side group read fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_group_read_failed" });
   }
 });
 

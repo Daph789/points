@@ -48,6 +48,21 @@
         transform: translateY(4px);
         transition: opacity 120ms ease, transform 120ms ease;
       }
+      .history-mode-grid {
+        grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
+      }
+      @media (min-width: 900px) {
+        .history-mode-grid {
+          grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+        }
+      }
+      .history-mode-card {
+        min-height: 132px;
+      }
+      .history-mode-card > p:nth-of-type(2) {
+        overflow-wrap: anywhere;
+        line-height: 1.12;
+      }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -976,7 +991,7 @@
         }
 
         return (
-          <main className="mx-auto min-h-screen w-full max-w-4xl px-3 pb-28 pt-4 sm:px-6 lg:px-8">
+          <main className="mx-auto min-h-screen w-full max-w-6xl px-3 pb-28 pt-4 sm:px-6 lg:px-8">
             <header className="flex items-center justify-between gap-3">
               <a href="home.html" className="flex min-w-0 items-center gap-3">
                 <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-mint text-lg font-black text-ink shadow-glow">D</div>
@@ -995,9 +1010,9 @@
               <h1 className="mt-2 break-words text-3xl font-black leading-tight text-white sm:text-4xl">Historial Donoss</h1>
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Consulta tus compras y movimientos importantes, ordenados del más reciente al más antiguo.</p>
 
-	              <div className={`mt-5 grid gap-2 ${accountType === "business" ? "min-[390px]:grid-cols-2 lg:grid-cols-8" : "min-[390px]:grid-cols-2 lg:grid-cols-3"}`}>
+	              <div className="history-mode-grid mt-5 grid gap-3">
                 <button
-                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "purchases" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => selectHistoryMode("purchases")}
                 >
                   <NotificationBadge count={unreadCount("purchases")} />
@@ -1006,7 +1021,7 @@
                   <p className="mt-1 text-xs font-bold text-slate-400">{purchases.length} pedidos</p>
                 </button>
                 <button
-                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "likes" ? "border-coral/50 bg-coral/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "likes" ? "border-coral/50 bg-coral/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => selectHistoryMode("likes")}
                 >
                   <p className="text-2xl">♥</p>
@@ -1016,7 +1031,7 @@
 	                {accountType === "business" && (
                   <>
                     <button
-                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "incoming" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                       onClick={() => selectHistoryMode("incoming")}
                     >
                       <NotificationBadge count={unreadCount("incoming")} />
@@ -1025,7 +1040,7 @@
                       <p className="mt-1 text-xs font-bold text-slate-400">{incomingPurchases.length} movimientos</p>
                     </button>
                     <button
-	                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+	                      className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "scanned" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
 	                      onClick={() => selectHistoryMode("scanned")}
                     >
                       <NotificationBadge count={unreadCount("scanned")} />
@@ -1034,7 +1049,7 @@
 	                      <p className="mt-1 text-xs font-bold text-slate-400">{latestScannedTickets.length} billetes</p>
 	                    </button>
                     <button
-                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
+                      className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "stock" ? "border-coral/50 bg-coral/15" : "border-white/10 bg-black/20"}`}
                       onClick={() => selectHistoryMode("stock")}
                     >
                       <NotificationBadge count={unreadCount("stock")} />
@@ -1043,7 +1058,7 @@
                       <p className="mt-1 text-xs font-bold text-slate-400">{businessOffers.filter(isOutOfStock).length} agotados</p>
                     </button>
                     <button
-                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "payouts" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "payouts" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                       onClick={() => selectHistoryMode("payouts")}
                     >
                       <NotificationBadge count={unreadCount("payouts")} />
@@ -1052,7 +1067,7 @@
                       <p className="mt-1 text-xs font-bold text-slate-400">{businessPayouts.length} pagos</p>
                     </button>
                     <button
-                      className={`relative rounded-3xl border p-4 text-left transition ${mode === "automation" ? "border-sky-400/50 bg-sky-400/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                      className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "automation" ? "border-sky-400/50 bg-sky-400/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                       onClick={() => selectHistoryMode("automation")}
                     >
                       <NotificationBadge count={unreadCount("automation")} />
@@ -1063,7 +1078,7 @@
 	                  </>
 	                )}
                 <button
-                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
+                  className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "points" ? "border-mint/50 bg-mint/15 shadow-glow" : "border-white/10 bg-black/20"}`}
                   onClick={() => selectHistoryMode("points")}
                 >
                   <NotificationBadge count={unreadCount("points")} />
@@ -1072,7 +1087,7 @@
                   <p className="mt-1 text-xs font-bold text-slate-400">{pointMovements.length} envíos y pedidos</p>
                 </button>
 	                <button
-                  className={`relative rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
+                  className={`history-mode-card relative rounded-3xl border p-4 text-left transition ${mode === "debts" ? "border-sun/50 bg-sun/15" : "border-white/10 bg-black/20"}`}
                   onClick={() => selectHistoryMode("debts")}
                 >
                   <NotificationBadge count={unreadCount("debts")} />

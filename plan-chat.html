@@ -220,10 +220,24 @@
             setPlan(data.plan || null);
             setMessages((current) => mergeMessagesWithPending(data.messages || [], current));
             setStatus("");
-            if (options.markRead || isActiveRef.current) markChatNotificationsRead(accessToken);
+            if (options.markRead || isActiveRef.current) {
+              markChatMessagesRead(accessToken);
+              markChatNotificationsRead(accessToken);
+            }
           } catch (error) {
             if (!silent) setStatus(friendlyChatError(error.message));
           }
+        }
+
+        async function markChatMessagesRead(accessToken = token) {
+          if (!accessToken || !planId || !isActiveRef.current) return;
+          try {
+            await fetch(`/api/social-plans/${planId}/chat/read`, {
+              method: "POST",
+              keepalive: true,
+              headers: { Authorization: `Bearer ${accessToken}` },
+            });
+          } catch (_error) {}
         }
 
         async function markChatNotificationsRead(accessToken = token) {

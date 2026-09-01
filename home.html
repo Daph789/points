@@ -653,12 +653,17 @@
         const [offersStatus, setOffersStatus] = React.useState("");
         const [navBadges, setNavBadges] = React.useState({});
         const [themeMode, setThemeMode] = React.useState(window.donossTheme?.getTheme?.() || "dark");
+        const selectedCategoryRef = React.useRef("");
 
         React.useEffect(() => {
           const syncTheme = (event) => setThemeMode(event.detail?.theme || window.donossTheme?.getTheme?.() || "dark");
           window.addEventListener("donoss:theme-changed", syncTheme);
           return () => window.removeEventListener("donoss:theme-changed", syncTheme);
         }, []);
+
+        React.useEffect(() => {
+          selectedCategoryRef.current = selectedCategory;
+        }, [selectedCategory]);
 
         async function loadNotificationBadges() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
@@ -837,6 +842,16 @@
           };
         }, [loadAccount]);
 
+        React.useEffect(() => {
+          const interval = window.setInterval(() => {
+            if (document.hidden) return;
+            loadFeaturedOffers();
+            loadCategorySummary();
+            if (selectedCategoryRef.current) loadCategoryOffers(selectedCategoryRef.current, { silent: true });
+          }, 10000);
+          return () => window.clearInterval(interval);
+        }, []);
+
         const isBusiness = accountType === "business";
         const toggleThemeMode = () => setThemeMode(window.donossTheme?.toggleTheme?.() || "dark");
         const displayAccountName = accountName || (isBusiness ? "Empresa" : "Usuario");
@@ -854,11 +869,13 @@
           setTimeout(() => setCopyStatus(""), 1400);
         };
 
-        async function loadCategoryOffers(categoryLabel) {
-          setSelectedCategory(categoryLabel);
-          setSelectedOffer(null);
-          setIsLoadingOffers(true);
-          setOffersStatus("");
+        async function loadCategoryOffers(categoryLabel, options = {}) {
+          if (!options.silent) {
+            setSelectedCategory(categoryLabel);
+            setSelectedOffer(null);
+            setIsLoadingOffers(true);
+            setOffersStatus("");
+          }
 
           const { data, error } = await supabaseClient
             .from("business_offers")
@@ -875,7 +892,7 @@
             setOffersStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${categoryLabel}.`);
           }
 
-          setIsLoadingOffers(false);
+          if (!options.silent) setIsLoadingOffers(false);
         }
 
         async function toggleLike(offer) {

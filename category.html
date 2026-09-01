@@ -425,6 +425,15 @@
           return () => window.removeEventListener("message", handleMessage);
         }, [loadOffers]);
 
+        React.useEffect(() => {
+          const interval = window.setInterval(() => {
+            if (document.hidden) return;
+            loadOffers({ silent: true });
+            loadCategorySummary();
+          }, 10000);
+          return () => window.clearInterval(interval);
+        }, [loadOffers]);
+
         const activeCategorySummary = categorySummary.filter((item) => Number(item.count || 0) > 0 && item.category !== category);
         const emptyCategoryText = activeCategorySummary.length
           ? `Todavía no hay ofertas en ${category}, pero puedes explorar estas secciones activas.`

@@ -134,6 +134,40 @@
         return ticket?.offer?.cover_photo_data_url || ticket?.offer?.presentation_image_data_urls?.[0] || "";
       }
 
+      function localExternalTicketsFor(userId) {
+        if (!userId) return [];
+        try {
+          const rows = JSON.parse(localStorage.getItem("donossExternalPurchaseHistory") || "[]");
+          return (Array.isArray(rows) ? rows : [])
+            .filter((row) => row?.buyer_id === userId && row?.offer_id && row?.offer)
+            .map((row) => ({
+              ...row,
+              id: row.id || `external-${userId}-${row.offer_id}`,
+              local_external: true,
+              external_offer_id: row.offer_id,
+              total_points: 0,
+              delivery_method: row.delivery_method || "none",
+              created_at: row.created_at || row.updated_at || new Date().toISOString(),
+            }));
+        } catch (_error) {
+          return [];
+        }
+      }
+
+      function mergePlanTickets(serverTickets, localTickets) {
+        const seen = new Set();
+        const merged = [];
+        [...(serverTickets || []), ...(localTickets || [])].forEach((ticket) => {
+          const offer = ticket.offer || {};
+          const isExternal = Boolean(offer.external_checkout_enabled && offer.external_checkout_url && Number(ticket.total_points || 0) === 0);
+          const key = isExternal ? `external:${ticket.buyer_id || ""}:${ticket.offer_id || offer.id || ticket.external_offer_id || ""}` : `ticket:${ticket.id}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          merged.push(ticket);
+        });
+        return merged.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+      }
+
       function planPhotos(plan) {
         const photos = Array.isArray(plan?.photo_data_urls) ? plan.photo_data_urls : [];
         if (photos.length > 0) return photos;
@@ -315,7 +349,7 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0 }) {
+      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0, chatEvent = null, sideEvent = null, updateEvent = null, updateUnreadCount = 0 }) {
         const free = isFreePlan(plan);
         const image = free ? (plan.free_cover_data_url || "") : ticketImage(plan.purchase);
         const merchant = free ? (plan.free_category || "Plan libre") : offerMerchant(plan.purchase);
@@ -331,14 +365,18 @@
         const sideStatus = ["waiting", "removed"].includes(plan.viewer_member?.status) ? plan.viewer_member.status : "";
         const sideCount = sideStatus ? Number(counts[sideStatus] || 0) : 0;
         const canOpenSideGroup = plan.status === "confirmed" && sideStatus;
+        const hasUnread = chatUnreadCount > 0 || sideUnreadCount > 0 || updateUnreadCount > 0;
+        const visibleEvent = updateEvent || chatEvent || sideEvent;
+        const updateLabel = visibleEvent?.title || "";
+        const updateDetail = visibleEvent?.detail || planTitle(plan);
         return (
-          <article className={`overflow-hidden rounded-[32px] border bg-white/[0.055] shadow-2xl shadow-black/20 ${chatUnreadCount > 0 ? "border-coral/35 ring-1 ring-coral/25" : "border-white/10"}`}>
+          <article className={`overflow-hidden rounded-[32px] border bg-white/[0.055] shadow-2xl shadow-black/20 ${hasUnread ? "border-coral/35 ring-1 ring-coral/25" : "border-white/10"}`}>
             <div className="relative min-h-[210px] bg-gradient-to-br from-mint via-[#17213C] to-violet">
               {image ? <img className="absolute inset-0 h-full w-full object-cover" src={image} alt="" /> : <span className="absolute bottom-5 right-5 text-7xl">{free ? "✨" : "🎟️"}</span>}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
               {photos[0] && <img className="absolute left-4 top-4 h-16 w-16 rounded-3xl border border-white/20 object-cover shadow-2xl" src={photos[0]} alt="" />}
               {photos.length > 1 && <span className="absolute left-14 top-14 rounded-full bg-black/55 px-2 py-1 text-[10px] font-black text-white backdrop-blur">+{photos.length - 1}</span>}
-              {chatUnreadCount > 0 && <span className="absolute right-4 top-4 rounded-full bg-coral px-3 py-1 text-xs font-black text-white shadow-2xl shadow-coral/30">+{chatUnreadCount > 9 ? "9" : chatUnreadCount} chat</span>}
+              {hasUnread && <span className="absolute right-4 top-4 rounded-full bg-coral px-3 py-1 text-xs font-black text-white shadow-2xl shadow-coral/30">+{Math.min(chatUnreadCount + sideUnreadCount + updateUnreadCount, 9)}</span>}
               <div className="absolute bottom-4 left-4 right-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${free ? "bg-violet text-white" : plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{free ? "Plan libre" : statusLabel(plan.status)}</span>
@@ -351,7 +389,14 @@
                 <p className="mt-1 truncate text-sm font-bold text-slate-200">{free ? `${plan.free_category || "Plan libre"} · ${plan.event_date ? formatDate(plan.event_date) : "Fecha abierta"}` : (plan.purchase?.offer?.title || "Billete Donoss")}</p>
               </div>
             </div>
-            <div className="p-4">
+              <div className="p-4">
+              {visibleEvent && (
+                <div className="mb-3 rounded-[24px] border border-coral/25 bg-coral/10 p-3">
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">Actualización</p>
+                  <p className="mt-1 text-sm font-black text-white">{updateLabel}</p>
+                  <p className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-300">{updateDetail}</p>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 <p className="truncate text-sm font-black text-mint">{creatorName}</p>
                 {plan.creator?.is_verified && <VerifiedBadge />}
@@ -454,14 +499,33 @@
         const warmedChatIdsRef = React.useRef(new Set());
         const warmedSideKeysRef = React.useRef(new Set());
         const createFormRef = React.useRef(null);
+        const isSavingRef = React.useRef(false);
 
         React.useEffect(() => {
           bootstrap();
         }, []);
 
         React.useEffect(() => {
+          isSavingRef.current = isSaving;
+        }, [isSaving]);
+
+        React.useEffect(() => {
           warmVisibleChats();
         }, [plans, ownedPlans, joinedPlans, notificationEvents.length, mode]);
+
+        React.useEffect(() => {
+          const interval = window.setInterval(() => {
+            if (!token || document.hidden || isSavingRef.current) return;
+            Promise.allSettled([loadPlans(token), loadMine(token), loadNotifications(token)]);
+          }, 6000);
+          return () => window.clearInterval(interval);
+        }, [token]);
+
+        React.useEffect(() => {
+          if (!detailPlan?.id) return;
+          const fresh = [...ownedPlans, ...joinedPlans, ...plans].find((plan) => plan.id === detailPlan.id);
+          if (fresh) setDetailPlan(fresh);
+        }, [plans, ownedPlans, joinedPlans, detailPlan?.id]);
 
         async function api(path, options = {}) {
           const response = await fetch(path, {
@@ -494,7 +558,7 @@
             await Promise.all([
               loadPlans(accessToken),
               loadMine(accessToken),
-              isBusinessProfile ? Promise.resolve() : loadTickets(accessToken),
+              isBusinessProfile ? Promise.resolve() : loadTickets(accessToken, sessionData.session?.user?.id || profileData.profile?.id || ""),
               isBusinessProfile ? Promise.resolve() : loadPlanProfilePhotos(accessToken),
               loadNotifications(accessToken),
             ]);
@@ -528,11 +592,19 @@
           setJoinedPlans(data.joined || []);
         }
 
-        async function loadTickets(accessToken = token) {
+        async function loadTickets(accessToken = token, currentUserId = profile?.id || "") {
+          const localTickets = localExternalTicketsFor(currentUserId);
           const response = await fetch("/api/me/plan-tickets", { headers: { Authorization: `Bearer ${accessToken}` } });
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || "tickets_failed");
-          setTickets(data.tickets || []);
+          if (response.ok) {
+            setTickets(mergePlanTickets(data.tickets || [], localTickets));
+            return;
+          }
+          if (data.error === "purchases_table_missing") {
+            setTickets(localTickets);
+            return;
+          }
+          throw new Error(data.error || "tickets_failed");
         }
 
         async function loadPlanProfilePhotos(accessToken = token) {
@@ -564,12 +636,36 @@
           return chatUnreadEventsForPlan(planId).length;
         }
 
+        function firstChatUnreadEventForPlan(planId) {
+          return chatUnreadEventsForPlan(planId)[0] || null;
+        }
+
         function sideUnreadEventsForPlan(planId, status) {
           return notificationEvents.filter((event) => event.section === "quedar" && String(event.kind || "").startsWith("side_") && event.plan_id === planId && event.side_status === status && !readKeys.has(event.key));
         }
 
         function sideUnreadCountForPlan(planId, status) {
           return sideUnreadEventsForPlan(planId, status).length;
+        }
+
+        function firstSideUnreadEventForPlan(planId, status) {
+          return sideUnreadEventsForPlan(planId, status)[0] || null;
+        }
+
+        function updateUnreadEventsForPlan(planId) {
+          return notificationEvents.filter((event) => {
+            if (event.section !== "quedar" || event.plan_id !== planId || readKeys.has(event.key)) return false;
+            if (event.kind === "chat" || String(event.kind || "").startsWith("side_")) return false;
+            return true;
+          });
+        }
+
+        function updateUnreadCountForPlan(planId) {
+          return updateUnreadEventsForPlan(planId).length;
+        }
+
+        function firstUpdateEventForPlan(planId) {
+          return updateUnreadEventsForPlan(planId)[0] || null;
         }
 
         function canUseMainChat(plan) {
@@ -621,43 +717,35 @@
             });
         }
 
-        async function markQuedarSubsectionRead(subsection) {
-          const keys = unreadEventsFor(subsection).filter((event) => event.kind !== "chat" && !String(event.kind || "").startsWith("side_")).map((event) => event.key).filter(Boolean);
-          if (keys.length === 0) return;
-          setReadKeys((current) => new Set([...current, ...keys]));
-          const response = await fetch("/api/me/notifications/read", {
+        async function markNotificationsRead(keys) {
+          const cleanKeys = [...new Set((keys || []).filter(Boolean))];
+          if (cleanKeys.length === 0) return;
+          setReadKeys((current) => new Set([...current, ...cleanKeys]));
+          await fetch("/api/me/notifications/read", {
             method: "POST",
             keepalive: true,
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ keys }),
+            body: JSON.stringify({ keys: cleanKeys }),
           });
-          if (response.ok) loadNotifications();
+          loadNotifications();
+        }
+
+        async function markQuedarSubsectionRead(subsection) {
+          const keys = unreadEventsFor(subsection).filter((event) => event.kind !== "chat" && !String(event.kind || "").startsWith("side_")).map((event) => event.key).filter(Boolean);
+          if (keys.length === 0) return;
+          markNotificationsRead(keys);
         }
 
         async function markPlanChatRead(planId) {
           const keys = chatUnreadEventsForPlan(planId).map((event) => event.key).filter(Boolean);
           if (keys.length === 0) return;
-          setReadKeys((current) => new Set([...current, ...keys]));
-          await fetch("/api/me/notifications/read", {
-            method: "POST",
-            keepalive: true,
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ keys }),
-          });
-          loadNotifications();
+          markNotificationsRead(keys);
         }
 
         async function markSideGroupRead(planId, status) {
           const keys = sideUnreadEventsForPlan(planId, status).map((event) => event.key).filter(Boolean);
           if (keys.length === 0) return;
-          setReadKeys((current) => new Set([...current, ...keys]));
-          await fetch("/api/me/notifications/read", {
-            method: "POST",
-            keepalive: true,
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ keys }),
-          });
-          loadNotifications();
+          markNotificationsRead(keys);
         }
 
         function openPlanChat(plan) {
@@ -845,7 +933,8 @@
               method: editingPlanId ? "PATCH" : "POST",
               body: JSON.stringify({
                 planType,
-                purchaseId: planType === "ticket" ? selectedTicketId : "",
+                purchaseId: planType === "ticket" && !selectedTicket?.local_external ? selectedTicketId : "",
+                externalOfferId: planType === "ticket" && selectedTicket?.local_external ? (selectedTicket.external_offer_id || selectedTicket.offer_id || selectedTicket.offer?.id || "") : "",
                 freeCategory: planType === "free" && freeCategory === "Otro" ? customFreeCategory : freeCategory,
                 location: freeLocation,
                 eventDate: freeEventDate,
@@ -996,7 +1085,6 @@
 
         function selectMode(nextMode) {
           setMode(nextMode);
-          if (nextMode === "mine" || nextMode === "joined") markQuedarSubsectionRead(nextMode);
           if (nextMode === "create" && !editingPlanId && photoDataUrls.length === 0 && planProfilePhotos.length > 0) {
             setPhotoDataUrls(planProfilePhotos);
           }
@@ -1005,6 +1093,8 @@
         function openDetailPlan(plan) {
           setMemberFilter("accepted");
           setDetailPlan(plan);
+          const keys = updateUnreadEventsForPlan(plan.id).map((event) => event.key).filter(Boolean);
+          if (keys.length > 0) markNotificationsRead(keys);
         }
 
         async function updateMember(plan, member, nextStatus) {
@@ -1162,7 +1252,7 @@
 
             {mode === "discover" && (
               <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                     <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
@@ -1371,14 +1461,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
