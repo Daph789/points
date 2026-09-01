@@ -165,25 +165,23 @@
 
         React.useEffect(() => {
           async function loadOffer() {
-            const { data, error } = await supabaseClient
-              .from("business_offers")
-              .select("*")
-              .eq("id", id)
-              .maybeSingle();
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
+            const response = await fetch(`/api/offers/${encodeURIComponent(id)}`, { headers });
+            const payload = await response.json().catch(() => ({}));
 
-            if (error || !data) {
-              setStatus("No hemos encontrado esta oferta.");
+            if (!response.ok || !payload.offer) {
+              setStatus(payload.error === "offer_expired" ? "Esta oferta ha caducado." : payload.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
               return;
             }
 
-            const { data: userData } = await supabaseClient.auth.getUser();
-            const isOwner = Boolean(userData.user?.id && userData.user.id === data.business_id);
-            setCanEdit(isOwner);
-            if (data.is_hidden && !isOwner) {
+            const data = payload.offer;
+            setCanEdit(Boolean(payload.can_edit));
+            if (data.is_hidden && !payload.can_edit) {
               setStatus("Esta oferta ya no está disponible.");
               return;
             }
-            if (isOfferExpired(data) && !isOwner) {
+            if (isOfferExpired(data) && !payload.can_edit) {
               setStatus("Esta oferta ha caducado.");
               return;
             }

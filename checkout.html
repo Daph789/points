@@ -229,18 +229,22 @@
             setUserId(session.user.id);
             setAccessToken(session.access_token);
 
-            const [{ data: offerData, error: offerError }, profileResponse] = await Promise.all([
-              supabaseClient.from("business_offers").select("*").eq("id", offerId).maybeSingle(),
+            const [offerResponse, profileResponse] = await Promise.all([
+              fetch(`/api/offers/${encodeURIComponent(offerId)}`, {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              }),
               fetch("/api/me/profile", {
                 headers: { Authorization: `Bearer ${session.access_token}` },
               }),
             ]);
 
+            const offerJson = await offerResponse.json().catch(() => ({}));
             const profileJson = await profileResponse.json().catch(() => ({}));
+            const offerData = offerResponse.ok ? offerJson.offer : null;
             const profileData = profileResponse.ok ? profileJson.profile : null;
 
-            if (offerError || !offerData) {
-              setStatus("No hemos encontrado esta oferta.");
+            if (!offerResponse.ok || !offerData) {
+              setStatus(offerJson.error === "offer_expired" ? "Esta oferta ha caducado." : offerJson.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
               return;
             }
 

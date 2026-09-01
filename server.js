@@ -3279,7 +3279,7 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -3906,6 +3906,74 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
   } catch (error) {
     console.error("Offer category summary fatal error:", error);
     response.status(500).json({ error: "offer_category_summary_failed" });
+  }
+});
+
+app.get("/api/offers/by-category/:category", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const category = String(request.params.category || "").trim();
+  if (!category) return response.status(400).json({ error: "category_missing" });
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("business_offers")
+      .select(publicOfferSelect)
+      .contains("categories", [category])
+      .order("created_at", { ascending: false })
+      .limit(250);
+
+    if (error) throw error;
+    const offers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
+    response.json({ offers });
+  } catch (error) {
+    console.error("Offers by category load error:", error);
+    response.status(500).json({ error: "offers_by_category_failed" });
+  }
+});
+
+app.get("/api/offers/:offerId", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const offerId = String(request.params.offerId || "").trim();
+  if (!offerId) return response.status(400).json({ error: "offer_missing" });
+
+  let viewerId = "";
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (token) {
+    const { data: userData } = await supabaseAdmin.auth.getUser(token);
+    viewerId = userData?.user?.id || "";
+  }
+
+  try {
+    const { data: offer, error } = await supabaseAdmin
+      .from("business_offers")
+      .select(publicOfferSelect)
+      .eq("id", offerId)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!offer) return response.status(404).json({ error: "offer_not_found" });
+
+    const isOwner = Boolean(viewerId && viewerId === offer.business_id);
+    if (!isOwner && offer.is_hidden) return response.status(404).json({ error: "offer_hidden" });
+    if (!isOwner) {
+      const today = todayDateString();
+      const validUntil = offer.qr_valid_until || offer.end_date || null;
+      if (validUntil && String(validUntil).slice(0, 10) < today) {
+        return response.status(404).json({ error: "offer_expired" });
+      }
+    }
+
+    const [enriched] = await enrichOffersWithBusiness([offer]);
+    response.json({ offer: enriched || offer, can_edit: isOwner });
+  } catch (error) {
+    console.error("Offer detail load error:", error);
+    response.status(500).json({ error: "offer_detail_failed" });
   }
 });
 

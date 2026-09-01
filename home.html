@@ -877,17 +877,14 @@
             setOffersStatus("");
           }
 
-          const { data, error } = await supabaseClient
-            .from("business_offers")
-            .select("*")
-            .contains("categories", [categoryLabel])
-            .order("created_at", { ascending: false });
+          const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
+          const data = await response.json().catch(() => ({}));
 
-          if (error) {
+          if (!response.ok) {
             setCategoryOffers([]);
             setOffersStatus("No se han podido cargar las ofertas ahora.");
           } else {
-            const visibleOffers = (data || []).filter(isVisibleForUsers);
+            const visibleOffers = data.offers || [];
             setCategoryOffers(visibleOffers);
             setOffersStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${categoryLabel}.`);
           }
