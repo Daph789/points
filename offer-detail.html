@@ -47,6 +47,7 @@
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
       const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
+      const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
       function goBackFromDetail() {
         if (isEmbeddedDetail && window.parent !== window) {
@@ -162,29 +163,39 @@
         const [likeToast, setLikeToast] = React.useState("");
         const [touchStartX, setTouchStartX] = React.useState(null);
         const [dragDelta, setDragDelta] = React.useState(0);
+        const [detailsLoading, setDetailsLoading] = React.useState(false);
 
         React.useEffect(() => {
           async function loadOffer() {
             try {
               const { data: sessionData } = await supabaseClient.auth.getSession();
               let payload = {};
+              const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
 
-              const { data: directOffer, error } = await supabaseClient
-                .from("business_offers")
-                .select("*")
-                .eq("id", id)
-                .maybeSingle();
+              async function loadDirectOffer(selectColumns) {
+                return supabaseClient
+                  .from("business_offers")
+                  .select(selectColumns)
+                  .eq("id", id)
+                  .maybeSingle();
+              }
+
+              async function loadServerOffer(light = false) {
+                if (window.location.protocol === "file:") return null;
+                const response = await fetch(`/api/offers/${encodeURIComponent(id)}${light ? "?light=1" : ""}`, { headers });
+                const serverPayload = await response.json().catch(() => ({}));
+                if (!response.ok || !serverPayload.offer) {
+                  throw new Error(serverPayload.error || "offer_not_found");
+                }
+                return serverPayload;
+              }
+
+              const { data: directOffer, error } = await loadDirectOffer(offerPreviewSelect);
               if (!error && directOffer) {
                 const viewerId = sessionData.session?.user?.id || "";
                 payload = { offer: directOffer, can_edit: Boolean(viewerId && viewerId === directOffer.business_id) };
               } else if (window.location.protocol !== "file:") {
-                const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
-                const response = await fetch(`/api/offers/${encodeURIComponent(id)}`, { headers });
-                payload = await response.json().catch(() => ({}));
-                if (!response.ok || !payload.offer) {
-                  setStatus(payload.error === "offer_expired" ? "Esta oferta ha caducado." : payload.error === "offer_hidden" ? "Esta oferta ya no está disponible." : "No hemos encontrado esta oferta.");
-                  return;
-                }
+                payload = await loadServerOffer(true);
               } else {
                 setStatus("No hemos encontrado esta oferta.");
                 return;
@@ -200,28 +211,57 @@
                 setStatus("Esta oferta ha caducado.");
                 return;
               }
-              let nextOffer = data;
-              if (data.business_id && window.location.protocol !== "file:") {
-                try {
-                  const profileResponse = await fetch(`/api/businesses/${encodeURIComponent(data.business_id)}/profile`);
-                  const profileData = await profileResponse.json().catch(() => ({}));
-                  if (profileResponse.ok && profileData.business) {
-                    nextOffer = {
-                      ...data,
-                      business_display_name: profileData.business.display_name || data.business_display_name,
-                      business_is_verified: Boolean(profileData.business.is_verified || data.business_is_verified),
-                    };
-                  }
-                } catch (_error) {
-                  nextOffer = data;
-                }
-              }
-              setOffer(nextOffer);
+              setOffer(data);
               setDeliveryChoice(data.delivery_pickup_enabled ? "pickup" : data.delivery_home_enabled ? "home" : "none");
               setStatus("");
+              setDetailsLoading(true);
+
+              try {
+                await new Promise((resolve) => window.setTimeout(resolve, 80));
+                let fullPayload = {};
+                const { data: fullDirectOffer, error: fullError } = await loadDirectOffer("*");
+                if (!fullError && fullDirectOffer) {
+                  const viewerId = sessionData.session?.user?.id || "";
+                  fullPayload = { offer: fullDirectOffer, can_edit: Boolean(viewerId && viewerId === fullDirectOffer.business_id) };
+                } else if (window.location.protocol !== "file:") {
+                  fullPayload = await loadServerOffer(false);
+                }
+
+                if (fullPayload.offer) {
+                  let fullOffer = fullPayload.offer;
+                  if (fullOffer.business_id && window.location.protocol !== "file:") {
+                    try {
+                      const profileResponse = await fetch(`/api/businesses/${encodeURIComponent(fullOffer.business_id)}/profile`);
+                      const profileData = await profileResponse.json().catch(() => ({}));
+                      if (profileResponse.ok && profileData.business) {
+                        fullOffer = {
+                          ...fullOffer,
+                          business_display_name: profileData.business.display_name || fullOffer.business_display_name,
+                          business_is_verified: Boolean(profileData.business.is_verified || fullOffer.business_is_verified),
+                        };
+                      }
+                    } catch (_error) {}
+                  }
+                  setCanEdit(Boolean(fullPayload.can_edit));
+                  setOffer((current) => ({ ...(current || {}), ...fullOffer }));
+                  setDeliveryChoice((current) => current || (fullOffer.delivery_pickup_enabled ? "pickup" : fullOffer.delivery_home_enabled ? "home" : "none"));
+                }
+              } catch (_error) {
+                // La version legere suffit pour acheter; les details secondaires peuvent attendre.
+              } finally {
+                setDetailsLoading(false);
+              }
             } catch (error) {
               console.error("Offer detail load error:", error);
-              setStatus("No se ha podido cargar el detalle. Inténtalo otra vez.");
+              const message =
+                error.message === "offer_expired"
+                  ? "Esta oferta ha caducado."
+                  : error.message === "offer_hidden"
+                    ? "Esta oferta ya no está disponible."
+                    : error.message === "offer_not_found"
+                      ? "No hemos encontrado esta oferta."
+                      : "No se ha podido cargar el detalle. Inténtalo otra vez.";
+              setStatus(message);
             }
           }
 
@@ -488,6 +528,12 @@
                 <section className="mt-7">
                   <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Descripción</p>
                   <p className="mt-3 text-base leading-7 text-slate-300">{offer.description}</p>
+                </section>
+              )}
+
+              {detailsLoading && !offer.description && gallery.length === 0 && additionalLinks.length === 0 && additionalDetails.length === 0 && (
+                <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.045] p-5">
+                  <p className="text-sm font-black text-slate-300">Cargando más detalles...</p>
                 </section>
               )}
 

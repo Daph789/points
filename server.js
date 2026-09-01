@@ -3313,6 +3313,8 @@ async function enrichPurchases(purchases) {
 
 const publicOfferSelect =
   "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+const publicOfferPreviewSelect =
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -3983,9 +3985,10 @@ app.get("/api/offers/:offerId", async (request, response) => {
   }
 
   try {
+    const lightMode = String(request.query?.light || "") === "1";
     const { data: offer, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferSelect)
+      .select(lightMode ? publicOfferPreviewSelect : publicOfferSelect)
       .eq("id", offerId)
       .maybeSingle();
 
