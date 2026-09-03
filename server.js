@@ -23,6 +23,13 @@ const publicAppUrl = process.env.PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_U
 const offerTransferAdminEmail = "donoss.red@gmail.com";
 const notificationCache = new Map();
 const notificationCacheTtlMs = 6000;
+const trafficBuckets = new Map();
+const securityBlockCache = new Map();
+const securityEventLogCache = new Map();
+const trafficWindowMs = 60_000;
+const suspiciousRequestsPerMinute = 240;
+const throttledRequestsPerMinute = 420;
+const securityCacheTtlMs = 15_000;
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -31,6 +38,8 @@ const supabaseAdmin =
         auth: { persistSession: false, autoRefreshToken: false },
       })
     : null;
+
+app.set("trust proxy", true);
 
 const pointPacks = {
   "50": { points: 50, amount: 620, baseAmount: 500, feeAmount: 120, stripeFeeAmount: 45, label: "50 puntos" },
@@ -75,6 +84,100 @@ function safeHttpUrl(value) {
     return ["http:", "https:"].includes(url.protocol) ? url.href : "";
   } catch (_error) {
     return "";
+  }
+}
+
+function clientIpForRequest(request) {
+  const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const realIp = String(request.headers["x-real-ip"] || "").trim();
+  const raw = forwarded || realIp || request.socket?.remoteAddress || request.ip || "";
+  return raw.replace(/^::ffff:/, "").slice(0, 80) || "unknown";
+}
+
+function requestRouteForSecurity(request) {
+  return String(request.originalUrl || request.url || "").split("?")[0].slice(0, 180) || "unknown";
+}
+
+function userIdFromRequestTokenUnsafe(request) {
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  const payload = token.split(".")[1];
+  if (!payload) return null;
+  try {
+    const json = JSON.parse(Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8"));
+    const sub = String(json.sub || "").trim();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sub) ? sub : null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function activeSecurityBlock(block) {
+  if (!block || block.revoked_at) return false;
+  if (!block.expires_at) return true;
+  return new Date(block.expires_at).getTime() > Date.now();
+}
+
+async function loadActiveSecurityBlock(type, value) {
+  if (!supabaseAdmin || !value || value === "unknown") return null;
+  const key = `${type}:${value}`;
+  const cached = securityBlockCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.block;
+
+  try {
+    let query = supabaseAdmin
+      .from("app_security_blocks")
+      .select("id, block_type, ip_address, user_id, reason, expires_at, revoked_at, created_at")
+      .eq("block_type", type)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    query = type === "ip" ? query.eq("ip_address", value) : query.eq("user_id", value);
+    const { data, error } = await query;
+    if (error) {
+      if (!["42P01", "42703"].includes(error.code)) console.error("Security block load error:", error);
+      securityBlockCache.set(key, { expires: Date.now() + securityCacheTtlMs, block: null });
+      return null;
+    }
+
+    const block = (data || []).find(activeSecurityBlock) || null;
+    securityBlockCache.set(key, { expires: Date.now() + securityCacheTtlMs, block });
+    return block;
+  } catch (error) {
+    console.error("Security block fatal error:", error);
+    return null;
+  }
+}
+
+async function logSecurityEvent({ request, eventType, requestCount, windowSeconds = 60, userId = null, metadata = {} }) {
+  if (!supabaseAdmin) return;
+  const ipAddress = clientIpForRequest(request);
+  const route = requestRouteForSecurity(request);
+  const logKey = `${eventType}:${userId || ipAddress}:${route}:${Math.floor(Date.now() / trafficWindowMs)}`;
+  if (securityEventLogCache.has(logKey)) return;
+  securityEventLogCache.set(logKey, Date.now());
+  if (securityEventLogCache.size > 2000) {
+    for (const [key, timestamp] of securityEventLogCache.entries()) {
+      if (Date.now() - timestamp > trafficWindowMs * 3) securityEventLogCache.delete(key);
+    }
+  }
+
+  try {
+    const { error } = await supabaseAdmin.from("app_security_events").insert({
+      user_id: userId,
+      session_key: String(request.body?.sessionKey || request.query?.sessionKey || "").slice(0, 120) || null,
+      ip_address: ipAddress,
+      route,
+      method: String(request.method || "GET").slice(0, 12),
+      event_type: eventType,
+      request_count: Math.max(Number(requestCount || 0), 0),
+      window_seconds: windowSeconds,
+      metadata,
+      user_agent: String(request.headers["user-agent"] || "").slice(0, 500),
+    });
+    if (error && !["42P01", "42703"].includes(error.code)) console.error("Security event insert error:", error);
+  } catch (error) {
+    console.error("Security event fatal error:", error);
   }
 }
 
@@ -773,6 +876,77 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 });
 
 app.use(express.json({ limit: "9mb" }));
+
+app.use(async (request, response, next) => {
+  if (!request.path.startsWith("/api/")) return next();
+  if (request.path === "/api/stripe/webhook") return next();
+
+  const ipAddress = clientIpForRequest(request);
+  const route = requestRouteForSecurity(request);
+  const probableUserId = userIdFromRequestTokenUnsafe(request);
+  const ipBlock = await loadActiveSecurityBlock("ip", ipAddress);
+  if (ipBlock) {
+    await logSecurityEvent({
+      request,
+      eventType: "blocked_ip",
+      requestCount: 0,
+      metadata: { reason: ipBlock.reason || "", block_id: ipBlock.id },
+    });
+    return response.status(403).json({ error: "access_blocked" });
+  }
+  if (probableUserId) {
+    const accountBlock = await loadActiveSecurityBlock("account", probableUserId);
+    if (accountBlock) {
+      await logSecurityEvent({
+        request,
+        eventType: "blocked_account",
+        requestCount: 0,
+        userId: probableUserId,
+        metadata: { reason: accountBlock.reason || "", block_id: accountBlock.id },
+      });
+      return response.status(403).json({ error: "access_blocked" });
+    }
+  }
+
+  const now = Date.now();
+  const key = `${ipAddress}:${route}`;
+  const bucket = trafficBuckets.get(key) || { startedAt: now, count: 0 };
+  if (now - bucket.startedAt > trafficWindowMs) {
+    bucket.startedAt = now;
+    bucket.count = 0;
+  }
+  bucket.count += 1;
+  trafficBuckets.set(key, bucket);
+
+  if (trafficBuckets.size > 5000) {
+    for (const [bucketKey, item] of trafficBuckets.entries()) {
+      if (now - item.startedAt > trafficWindowMs * 3) trafficBuckets.delete(bucketKey);
+    }
+  }
+
+  if (bucket.count > throttledRequestsPerMinute) {
+    await logSecurityEvent({
+      request,
+      eventType: "throttled_ip",
+      requestCount: bucket.count,
+      userId: probableUserId,
+      metadata: { route, limit: throttledRequestsPerMinute },
+    });
+    return response.status(429).json({ error: "too_many_requests" });
+  }
+
+  if (bucket.count > suspiciousRequestsPerMinute) {
+    logSecurityEvent({
+      request,
+      eventType: "suspicious_ip",
+      requestCount: bucket.count,
+      userId: probableUserId,
+      metadata: { route, limit: suspiciousRequestsPerMinute },
+    });
+  }
+
+  return next();
+});
 
 app.get("/api/me/referral-program", async (request, response) => {
   if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -1690,6 +1864,9 @@ app.post("/api/analytics/track", async (request, response) => {
       source,
       metadata,
       user_agent: String(request.headers["user-agent"] || "").slice(0, 500),
+      ip_address: clientIpForRequest(request),
+      route: requestRouteForSecurity(request),
+      method: String(request.method || "POST").slice(0, 12),
       last_seen_at: now,
     });
 
@@ -1714,7 +1891,7 @@ app.post("/api/admin/activity", async (request, response) => {
 
   const { data: events, error } = await supabaseAdmin
     .from("app_activity_events")
-    .select("id, user_id, session_key, page, source, metadata, created_at, last_seen_at")
+    .select("id, user_id, session_key, page, source, metadata, user_agent, ip_address, route, method, created_at, last_seen_at")
     .gte("created_at", startIso)
     .lte("created_at", endIso)
     .order("created_at", { ascending: false })
@@ -1744,6 +1921,7 @@ app.post("/api/admin/activity", async (request, response) => {
   const sessionMap = new Map();
   const pageMap = new Map();
   const accountMap = new Map();
+  const ipMap = new Map();
 
   for (const event of rows) {
     const created = new Date(event.created_at);
@@ -1771,6 +1949,28 @@ app.post("/api/admin/activity", async (request, response) => {
 
     pageMap.set(pageKey, (pageMap.get(pageKey) || 0) + 1);
 
+    const ipAddress = event.ip_address || "unknown";
+    if (ipAddress !== "unknown") {
+      const ipItem = ipMap.get(ipAddress) || {
+        ip_address: ipAddress,
+        events: 0,
+        users: new Set(),
+        sessions: new Set(),
+        routes: new Map(),
+        first_seen_at: event.created_at,
+        last_seen_at: event.created_at,
+        user_agent: event.user_agent || "",
+      };
+      ipItem.events += 1;
+      if (event.user_id) ipItem.users.add(event.user_id);
+      ipItem.sessions.add(key);
+      ipItem.routes.set(pageKey, (ipItem.routes.get(pageKey) || 0) + 1);
+      if (created < new Date(ipItem.first_seen_at)) ipItem.first_seen_at = event.created_at;
+      if (created > new Date(ipItem.last_seen_at)) ipItem.last_seen_at = event.created_at;
+      ipItem.user_agent = ipItem.user_agent || event.user_agent || "";
+      ipMap.set(ipAddress, ipItem);
+    }
+
     const session = sessionMap.get(key) || {
       key,
       user_id: event.user_id || null,
@@ -1780,10 +1980,12 @@ app.post("/api/admin/activity", async (request, response) => {
       last_seen_at: event.created_at,
       events: 0,
       pages: new Set(),
+      ips: new Set(),
       source: event.source || "",
     };
     session.events += 1;
     session.pages.add(pageKey);
+    if (event.ip_address) session.ips.add(event.ip_address);
     if (new Date(event.created_at) < new Date(session.first_seen_at)) session.first_seen_at = event.created_at;
     if (new Date(event.created_at) > new Date(session.last_seen_at)) session.last_seen_at = event.created_at;
     session.profile = session.profile || profile;
@@ -1813,6 +2015,7 @@ app.post("/api/admin/activity", async (request, response) => {
     return {
       ...session,
       pages: Array.from(session.pages),
+      ips: Array.from(session.ips),
       duration_seconds: Math.round(durationMs / 1000),
     };
   });
@@ -1820,6 +2023,114 @@ app.post("/api/admin/activity", async (request, response) => {
   const summaryDurationSeconds = sessions.reduce((sum, session) => sum + Number(session.duration_seconds || 0), 0);
   const landingVisitors = new Set(rows.filter((event) => event.page === "landing").map((event) => event.user_id || event.session_key || event.id)).size;
   const connectedUsers = new Set(rows.map((event) => event.user_id).filter(Boolean)).size;
+  let security = { events: [], blocks: [], suspicious_ips: [], suspicious_accounts: [] };
+
+  try {
+    const [{ data: securityEvents, error: securityEventsError }, { data: securityBlocks, error: securityBlocksError }] = await Promise.all([
+      supabaseAdmin
+        .from("app_security_events")
+        .select("id, user_id, session_key, ip_address, route, method, event_type, request_count, window_seconds, metadata, user_agent, created_at")
+        .gte("created_at", startIso)
+        .lte("created_at", endIso)
+        .order("created_at", { ascending: false })
+        .limit(500),
+      supabaseAdmin
+        .from("app_security_blocks")
+        .select("id, block_type, ip_address, user_id, reason, created_by, expires_at, revoked_at, created_at")
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false })
+        .limit(200),
+    ]);
+
+    if (securityEventsError && !["42P01", "42703"].includes(securityEventsError.code)) console.error("Security events load error:", securityEventsError);
+    if (securityBlocksError && !["42P01", "42703"].includes(securityBlocksError.code)) console.error("Security blocks load error:", securityBlocksError);
+
+    const securityRows = securityEventsError ? [] : (securityEvents || []);
+    const activeBlocks = (securityBlocksError ? [] : (securityBlocks || [])).filter(activeSecurityBlock);
+    const securityProfileIds = [
+      ...new Set([
+        ...securityRows.map((event) => event.user_id).filter(Boolean),
+        ...activeBlocks.map((block) => block.user_id).filter(Boolean),
+      ]),
+    ];
+    let securityProfilesById = profilesById;
+    if (securityProfileIds.some((id) => !securityProfilesById[id])) {
+      const { data: securityProfiles, error: securityProfilesError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, account_type, transaction_id, is_verified")
+        .in("id", securityProfileIds);
+      if (!securityProfilesError) {
+        securityProfilesById = {
+          ...securityProfilesById,
+          ...Object.fromEntries((securityProfiles || []).map((profile) => [profile.id, transferPublicProfile(profile)])),
+        };
+      }
+    }
+
+    const suspiciousIpFromSecurity = new Map();
+    for (const event of securityRows) {
+      if (!event.ip_address) continue;
+      const item = suspiciousIpFromSecurity.get(event.ip_address) || {
+        ip_address: event.ip_address,
+        events: 0,
+        max_request_count: 0,
+        routes: new Map(),
+        last_seen_at: event.created_at,
+        user_agent: event.user_agent || "",
+      };
+      item.events += 1;
+      item.max_request_count = Math.max(item.max_request_count, Number(event.request_count || 0));
+      item.routes.set(event.route || "unknown", (item.routes.get(event.route || "unknown") || 0) + 1);
+      if (new Date(event.created_at) > new Date(item.last_seen_at)) item.last_seen_at = event.created_at;
+      item.user_agent = item.user_agent || event.user_agent || "";
+      suspiciousIpFromSecurity.set(event.ip_address, item);
+    }
+
+    const suspiciousAccountMap = new Map();
+    for (const event of securityRows) {
+      if (!event.user_id) continue;
+      const item = suspiciousAccountMap.get(event.user_id) || {
+        user_id: event.user_id,
+        profile: securityProfilesById[event.user_id] || null,
+        events: 0,
+        max_request_count: 0,
+        routes: new Map(),
+        last_seen_at: event.created_at,
+      };
+      item.events += 1;
+      item.max_request_count = Math.max(item.max_request_count, Number(event.request_count || 0));
+      item.routes.set(event.route || "unknown", (item.routes.get(event.route || "unknown") || 0) + 1);
+      if (new Date(event.created_at) > new Date(item.last_seen_at)) item.last_seen_at = event.created_at;
+      suspiciousAccountMap.set(event.user_id, item);
+    }
+
+    security = {
+      events: securityRows.map((event) => ({
+        ...event,
+        profile: event.user_id ? securityProfilesById[event.user_id] || null : null,
+      })),
+      blocks: activeBlocks.map((block) => ({
+        ...block,
+        profile: block.user_id ? securityProfilesById[block.user_id] || null : null,
+      })),
+      suspicious_ips: Array.from(suspiciousIpFromSecurity.values())
+        .map((item) => ({
+          ...item,
+          routes: Array.from(item.routes.entries()).map(([route, count]) => ({ route, count })).sort((a, b) => b.count - a.count),
+        }))
+        .sort((a, b) => b.max_request_count - a.max_request_count || b.events - a.events)
+        .slice(0, 80),
+      suspicious_accounts: Array.from(suspiciousAccountMap.values())
+        .map((item) => ({
+          ...item,
+          routes: Array.from(item.routes.entries()).map(([route, count]) => ({ route, count })).sort((a, b) => b.count - a.count),
+        }))
+        .sort((a, b) => b.max_request_count - a.max_request_count || b.events - a.events)
+        .slice(0, 80),
+    };
+  } catch (securityError) {
+    console.error("Admin security summary error:", securityError);
+  }
 
   response.json({
     range: { start: startIso, end: endIso },
@@ -1853,7 +2164,88 @@ app.post("/api/admin/activity", async (request, response) => {
         duration_seconds: Math.max(0, Math.round((new Date(account.last_seen_at).getTime() - new Date(account.first_seen_at).getTime()) / 1000)),
       }))
       .sort((a, b) => new Date(b.last_seen_at) - new Date(a.last_seen_at)),
+    security: {
+      ...security,
+      traffic_ips: Array.from(ipMap.values())
+        .map((item) => ({
+          ...item,
+          users: item.users.size,
+          sessions: item.sessions.size,
+          routes: Array.from(item.routes.entries()).map(([route, count]) => ({ route, count })).sort((a, b) => b.count - a.count),
+        }))
+        .sort((a, b) => b.events - a.events)
+        .slice(0, 80),
+    },
   });
+});
+
+app.post("/api/admin/security/block", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const blockType = String(request.body?.blockType || "").trim();
+  const ipAddress = String(request.body?.ipAddress || "").trim().slice(0, 80);
+  const userId = String(request.body?.userId || "").trim();
+  const reason = String(request.body?.reason || "Actividad sospechosa").trim().slice(0, 500);
+  const durationHours = Number(request.body?.durationHours || 0);
+  const expiresAt = Number.isFinite(durationHours) && durationHours > 0 ? new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString() : null;
+
+  if (!["ip", "account"].includes(blockType)) return response.status(400).json({ error: "Tipo de bloqueo inválido" });
+  if (blockType === "ip" && !ipAddress) return response.status(400).json({ error: "Falta la IP" });
+  if (blockType === "account" && !userId) return response.status(400).json({ error: "Falta la cuenta" });
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("app_security_blocks")
+      .insert({
+        block_type: blockType,
+        ip_address: blockType === "ip" ? ipAddress : null,
+        user_id: blockType === "account" ? userId : null,
+        reason,
+        expires_at: expiresAt,
+      })
+      .select("id, block_type, ip_address, user_id, reason, expires_at, revoked_at, created_at")
+      .single();
+
+    if (error) throw error;
+    securityBlockCache.delete(`${blockType}:${blockType === "ip" ? ipAddress : userId}`);
+    response.json({ ok: true, block: data });
+  } catch (error) {
+    console.error("Admin security block error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "Falta ejecutar supabase-security-monitoring.sql." : "No se ha podido bloquear." });
+  }
+});
+
+app.post("/api/admin/security/unblock", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const blockId = String(request.body?.blockId || "").trim();
+  if (!blockId) return response.status(400).json({ error: "Falta el bloqueo" });
+
+  try {
+    const { data: existing } = await supabaseAdmin
+      .from("app_security_blocks")
+      .select("id, block_type, ip_address, user_id")
+      .eq("id", blockId)
+      .maybeSingle();
+
+    const { error } = await supabaseAdmin
+      .from("app_security_blocks")
+      .update({ revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", blockId);
+
+    if (error) throw error;
+    if (existing?.block_type) securityBlockCache.delete(`${existing.block_type}:${existing.block_type === "ip" ? existing.ip_address : existing.user_id}`);
+    response.json({ ok: true });
+  } catch (error) {
+    console.error("Admin security unblock error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "Falta ejecutar supabase-security-monitoring.sql." : "No se ha podido desbloquear." });
+  }
 });
 
 async function enrichBusinessesForSettlement(businesses) {
@@ -2725,6 +3117,18 @@ async function getAuthenticatedUser(request) {
   const user = userData?.user;
 
   if (userError || !user?.id) return { error: "Not authenticated", status: 401 };
+
+  const accountBlock = await loadActiveSecurityBlock("account", user.id);
+  if (accountBlock) {
+    await logSecurityEvent({
+      request,
+      eventType: "blocked_account",
+      requestCount: 0,
+      userId: user.id,
+      metadata: { reason: accountBlock.reason || "", block_id: accountBlock.id },
+    });
+    return { error: "access_blocked", status: 403 };
+  }
 
   return { user };
 }

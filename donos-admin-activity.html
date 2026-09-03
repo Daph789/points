@@ -82,6 +82,7 @@
         const [isLoading, setIsLoading] = React.useState(false);
         const [detail, setDetail] = React.useState(null);
         const [selectedDate, setSelectedDate] = React.useState("");
+        const [securityStatus, setSecurityStatus] = React.useState("");
 
         React.useEffect(() => {
           if (isUnlocked) loadActivity();
@@ -127,6 +128,57 @@
           ].filter(Boolean).join(" ").toLowerCase();
           return text.includes(search.trim().toLowerCase());
         });
+        const security = data.security || {};
+        const suspiciousIps = security.suspicious_ips || [];
+        const trafficIps = security.traffic_ips || [];
+        const suspiciousAccounts = security.suspicious_accounts || [];
+        const activeBlocks = security.blocks || [];
+
+        async function blockSecurity(blockType, target, label) {
+          const reason = window.prompt(`Motivo para bloquear ${label || target}:`, "Actividad sospechosa");
+          if (reason === null) return;
+          const hoursText = window.prompt("Duración en horas. Déjalo vacío para bloqueo sin caducidad:", "24");
+          if (hoursText === null) return;
+          setSecurityStatus("");
+          try {
+            const response = await fetch("/api/admin/security/block", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                password,
+                blockType,
+                ipAddress: blockType === "ip" ? target : "",
+                userId: blockType === "account" ? target : "",
+                reason,
+                durationHours: Number(hoursText || 0),
+              }),
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(json.error || "No se ha podido bloquear.");
+            setSecurityStatus("Bloqueo activado.");
+            loadActivity();
+          } catch (error) {
+            setSecurityStatus(error.message || "No se ha podido bloquear.");
+          }
+        }
+
+        async function unblockSecurity(blockId) {
+          if (!window.confirm("¿Desbloquear ahora?")) return;
+          setSecurityStatus("");
+          try {
+            const response = await fetch("/api/admin/security/unblock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, blockId }),
+            });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(json.error || "No se ha podido desbloquear.");
+            setSecurityStatus("Bloqueo retirado.");
+            loadActivity();
+          } catch (error) {
+            setSecurityStatus(error.message || "No se ha podido desbloquear.");
+          }
+        }
 
         if (!isUnlocked) {
           return (
@@ -192,6 +244,97 @@
               <StatCard label="Sesiones app" value={data.summary.app_sessions || 0} hint="Entradas estimadas de usuarios conectados." />
               <StatCard label="Tiempo medio" value={formatDuration(data.summary.avg_session_seconds)} hint="Aproximado por navegación y heartbeat." />
               <StatCard label="Eventos" value={data.summary.total_events || 0} hint="Páginas vistas y señales de actividad." />
+            </section>
+
+            <section className="mt-6 rounded-[30px] border border-coral/20 bg-coral/[0.055] p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">Seguridad</p>
+                  <h2 className="mt-1 text-2xl font-black text-white">Tráfico sospechoso</h2>
+                  <p className="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-400">
+                    Aquí aparecen IPs o cuentas que han enviado demasiadas peticiones. Puedes bloquear temporalmente sin tocar el resto de la app.
+                  </p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-black ${suspiciousIps.length || suspiciousAccounts.length ? "bg-coral/20 text-coral" : "bg-mint/15 text-mint"}`}>
+                  {suspiciousIps.length || suspiciousAccounts.length ? "Revisar" : "Normal"}
+                </span>
+              </div>
+              {securityStatus && <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm font-black text-sun">{securityStatus}</p>}
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <article className="rounded-[26px] border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-black text-white">IPs sospechosas</h3>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{suspiciousIps.length}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {suspiciousIps.length === 0 && <p className="rounded-2xl bg-white/[0.04] p-3 text-sm font-bold text-slate-500">Sin señales fuertes ahora.</p>}
+                    {suspiciousIps.slice(0, 8).map((item) => (
+                      <SecurityCard
+                        key={item.ip_address}
+                        title={item.ip_address}
+                        subtitle={`${item.max_request_count || item.events} peticiones/min · ${formatDate(item.last_seen_at)}`}
+                        routes={item.routes}
+                        actionLabel="Bloquear IP"
+                        onAction={() => blockSecurity("ip", item.ip_address, item.ip_address)}
+                      />
+                    ))}
+                  </div>
+                </article>
+
+                <article className="rounded-[26px] border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-black text-white">Cuentas sospechosas</h3>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{suspiciousAccounts.length}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {suspiciousAccounts.length === 0 && <p className="rounded-2xl bg-white/[0.04] p-3 text-sm font-bold text-slate-500">Ninguna cuenta marcada.</p>}
+                    {suspiciousAccounts.slice(0, 8).map((item) => (
+                      <SecurityCard
+                        key={item.user_id}
+                        title={accountLabel(item.profile)}
+                        subtitle={`${item.profile?.email || item.profile?.transaction_id || "Cuenta"} · ${item.max_request_count || item.events} peticiones/min`}
+                        routes={item.routes}
+                        actionLabel="Bloquear cuenta"
+                        onAction={() => blockSecurity("account", item.user_id, accountLabel(item.profile))}
+                      />
+                    ))}
+                  </div>
+                </article>
+
+                <article className="rounded-[26px] border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-lg font-black text-white">Bloqueos activos</h3>
+                    <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{activeBlocks.length}</span>
+                  </div>
+                  <div className="mt-3 grid gap-2">
+                    {activeBlocks.length === 0 && <p className="rounded-2xl bg-white/[0.04] p-3 text-sm font-bold text-slate-500">No hay bloqueos activos.</p>}
+                    {activeBlocks.map((block) => (
+                      <div key={block.id} className="rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+                        <p className="text-sm font-black text-white">{block.block_type === "ip" ? block.ip_address : accountLabel(block.profile)}</p>
+                        <p className="mt-1 break-words text-xs font-bold text-slate-500">{block.reason || "Sin motivo"} · {block.expires_at ? `hasta ${formatDate(block.expires_at)}` : "sin caducidad"}</p>
+                        <button className="mt-3 rounded-full bg-mint px-3 py-2 text-xs font-black text-ink" onClick={() => unblockSecurity(block.id)}>Desbloquear</button>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </div>
+
+              <details className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-4">
+                <summary className="cursor-pointer text-sm font-black text-slate-200">Ver IPs con más tráfico normal</summary>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {trafficIps.slice(0, 12).map((item) => (
+                    <div key={item.ip_address} className="rounded-2xl bg-white/[0.045] p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-sm font-black text-white">{item.ip_address}</p>
+                        <span className="text-xs font-black text-mint">{item.events}</span>
+                      </div>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{item.users} cuentas · {item.sessions} sesiones</p>
+                      <button className="mt-2 rounded-full border border-coral/30 px-3 py-1.5 text-xs font-black text-coral" onClick={() => blockSecurity("ip", item.ip_address, item.ip_address)}>Bloquear IP</button>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </section>
 
             <section className="mt-6 grid gap-4 lg:grid-cols-[.95fr_1.05fr]">
@@ -267,7 +410,7 @@
                     <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400 sm:grid-cols-3">
                       <span>Última: {formatDate(session.last_seen_at)}</span>
                       <span>{session.events} eventos</span>
-                      <span>{session.pages?.slice(0, 3).join(", ")}</span>
+                      <span>{session.ips?.[0] || session.pages?.slice(0, 2).join(", ")}</span>
                     </div>
                   </button>
                 ))}
@@ -288,10 +431,29 @@
                   <div className="mt-5 grid gap-3 sm:grid-cols-2">
                     <Info label="Tipo" value={detail.profile?.account_type === "business" ? "Empresa" : detail.profile ? "Usuario" : "Landing"} />
                     <Info label="ID Donoss" value={detail.profile?.transaction_id || "Sin ID"} />
+                    <Info label="Teléfono" value={detail.profile?.phone || "Sin teléfono"} />
+                    <Info label="IP principal" value={detail.ips?.[0] || "No registrada"} />
                     <Info label="Primera señal" value={formatDate(detail.first_seen_at)} />
                     <Info label="Última señal" value={formatDate(detail.last_seen_at)} />
                     <Info label="Duración aprox." value={formatDuration(detail.duration_seconds)} />
                     <Info label="Eventos" value={detail.events} />
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {detail.profile?.id && (
+                      <button className="rounded-full border border-coral/30 bg-coral/10 px-4 py-2 text-sm font-black text-coral" onClick={() => blockSecurity("account", detail.profile.id, accountLabel(detail.profile))}>
+                        Bloquear cuenta
+                      </button>
+                    )}
+                    {detail.ips?.[0] && (
+                      <button className="rounded-full border border-coral/30 bg-coral/10 px-4 py-2 text-sm font-black text-coral" onClick={() => blockSecurity("ip", detail.ips[0], detail.ips[0])}>
+                        Bloquear IP
+                      </button>
+                    )}
+                    {detail.profile?.email && (
+                      <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href={`mailto:${detail.profile.email}`}>
+                        Contactar
+                      </a>
+                    )}
                   </div>
                   <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
                     <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Páginas vistas</p>
@@ -311,6 +473,31 @@
           <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-4">
             <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{label}</p>
             <p className="mt-2 break-words text-lg font-black text-white">{value || "-"}</p>
+          </div>
+        );
+      }
+
+      function SecurityCard({ title, subtitle, routes = [], actionLabel, onAction }) {
+        return (
+          <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-white">{title}</p>
+                <p className="mt-1 break-words text-xs font-bold text-slate-500">{subtitle}</p>
+              </div>
+              <button className="shrink-0 rounded-full border border-coral/30 bg-coral/10 px-3 py-1.5 text-xs font-black text-coral" onClick={onAction}>
+                {actionLabel}
+              </button>
+            </div>
+            {routes?.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {routes.slice(0, 3).map((route) => (
+                  <span key={route.route} className="max-w-full truncate rounded-full bg-black/25 px-2 py-1 text-[10px] font-black text-slate-300">
+                    {route.route} · {route.count}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         );
       }
