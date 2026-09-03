@@ -116,6 +116,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       const categories = [
         {
@@ -345,7 +346,7 @@
               ? {
                   id: preview.id,
                   title: preview.title,
-                  cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+                  cover_photo_data_url: preview.cover_photo_data_url || "",
                   base_price: preview.base_price,
                   reduced_price: preview.reduced_price,
                   required_points: preview.required_points,
@@ -446,7 +447,7 @@
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const outOfStock = isOutOfStock(offer);
         const isExternalCheckout = Boolean(offer.external_checkout_enabled);
-        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
+        const image = offer.cover_photo_data_url || "";
         const categoryIcon = categories.find((category) => category.label === firstCategory)?.icon || "✨";
         return (
           <article
@@ -655,6 +656,7 @@
         const [themeMode, setThemeMode] = React.useState(window.donossTheme?.getTheme?.() || "dark");
         const selectedCategoryRef = React.useRef("");
         const backgroundRefreshRef = React.useRef(false);
+        const categoryLoadRef = React.useRef("");
 
         React.useEffect(() => {
           const syncTheme = (event) => setThemeMode(event.detail?.theme || window.donossTheme?.getTheme?.() || "dark");
@@ -681,7 +683,7 @@
           try {
             const { data, error } = await supabaseClient
               .from("business_offers")
-              .select("*")
+              .select(offerListSelect)
               .order("created_at", { ascending: false })
               .limit(250);
             if (error) throw error;
@@ -722,7 +724,7 @@
           try {
             const { data, error } = await supabaseClient
               .from("business_offers")
-              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
+              .select(offerListSelect)
               .order("created_at", { ascending: false })
               .limit(250);
             if (error) throw error;
@@ -873,6 +875,9 @@
         };
 
         async function loadCategoryOffers(categoryLabel, options = {}) {
+          if (categoryLoadRef.current === categoryLabel) return;
+          categoryLoadRef.current = categoryLabel;
+
           if (!options.silent) {
             setSelectedCategory(categoryLabel);
             setSelectedOffer(null);
@@ -880,31 +885,33 @@
             setOffersStatus("");
           }
 
-          let visibleOffers = [];
-
           try {
-            const { data, error } = await supabaseClient
-              .from("business_offers")
-              .select("*")
-              .contains("categories", [categoryLabel])
-              .order("created_at", { ascending: false });
-            if (error) throw error;
-            visibleOffers = (data || []).filter(isVisibleForUsers);
-          } catch (_directError) {
-            const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) {
-              setCategoryOffers([]);
-              setOffersStatus("No se han podido cargar las ofertas ahora.");
-              if (!options.silent) setIsLoadingOffers(false);
-              return;
+            let visibleOffers = [];
+
+            try {
+              const { data, error } = await supabaseClient
+                .from("business_offers")
+                .select(offerListSelect)
+                .contains("categories", [categoryLabel])
+                .order("created_at", { ascending: false });
+              if (error) throw error;
+              visibleOffers = (data || []).filter(isVisibleForUsers);
+            } catch (_directError) {
+              const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                setCategoryOffers([]);
+                setOffersStatus("No se han podido cargar las ofertas ahora.");
+                return;
+              }
+              visibleOffers = data.offers || [];
             }
-            visibleOffers = data.offers || [];
-          }
             setCategoryOffers(visibleOffers);
             setOffersStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${categoryLabel}.`);
-
-          if (!options.silent) setIsLoadingOffers(false);
+          } finally {
+            categoryLoadRef.current = "";
+            if (!options.silent) setIsLoadingOffers(false);
+          }
         }
 
         async function toggleLike(offer) {

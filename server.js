@@ -3853,7 +3853,7 @@ app.get("/api/offers/featured", async (_request, response) => {
   try {
     const { data, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferSelect)
+      .select(publicOfferPreviewSelect)
       .order("created_at", { ascending: false })
       .limit(250);
 
@@ -3900,7 +3900,7 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
   try {
     const { data, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferSelect)
+      .select(publicOfferPreviewSelect)
       .order("created_at", { ascending: false })
       .limit(300);
 
@@ -3920,7 +3920,7 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
           ? {
               id: preview.id,
               title: preview.title,
-              cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+              cover_photo_data_url: preview.cover_photo_data_url || "",
               required_points: preview.required_points,
               base_price: preview.base_price,
               reduced_price: preview.reduced_price,
@@ -3955,7 +3955,7 @@ app.get("/api/offers/by-category/:category", async (request, response) => {
   try {
     const { data, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferSelect)
+      .select(publicOfferPreviewSelect)
       .contains("categories", [category])
       .order("created_at", { ascending: false })
       .limit(250);

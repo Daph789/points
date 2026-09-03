@@ -49,6 +49,7 @@
 
       const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
       if (isEmbeddedCategory) document.body.classList.add("embedded-category");
+      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       const categories = [
         { label: "Libros", icon: "📚", color: "from-mint/95 to-emerald-300" },
@@ -206,7 +207,7 @@
               ? {
                   id: preview.id,
                   title: preview.title,
-                  cover_photo_data_url: preview.cover_photo_data_url || preview.presentation_image_data_urls?.[0] || "",
+                  cover_photo_data_url: preview.cover_photo_data_url || "",
                   required_points: preview.required_points,
                   business_display_name: preview.business_display_name,
                   business_is_verified: Boolean(preview.business_is_verified),
@@ -307,32 +308,39 @@
         const [status, setStatus] = React.useState("Cargando ofertas...");
         const [categorySummary, setCategorySummary] = React.useState([]);
         const backgroundRefreshRef = React.useRef(false);
+        const offersLoadRef = React.useRef(false);
         const filteredOffers = offers.filter((offer) => matchesSearch(offer, search));
 
         const loadOffers = React.useCallback(async ({ silent = false } = {}) => {
+            if (offersLoadRef.current) return;
+            offersLoadRef.current = true;
             if (!silent) setStatus("Cargando ofertas...");
-            let visibleOffers = [];
-
             try {
-              const { data, error } = await supabaseClient
-                .from("business_offers")
-                .select("*")
-                .contains("categories", [category])
-                .order("created_at", { ascending: false });
-              if (error) throw error;
-              visibleOffers = (data || []).filter(isVisibleForUsers);
-            } catch (_directError) {
-              const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`);
-              const data = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                setStatus("No se han podido cargar las ofertas.");
-                return;
-              }
-              visibleOffers = data.offers || [];
-            }
+              let visibleOffers = [];
 
-            setOffers(visibleOffers);
-            setStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${category}.`);
+              try {
+                const { data, error } = await supabaseClient
+                  .from("business_offers")
+                  .select(offerListSelect)
+                  .contains("categories", [category])
+                  .order("created_at", { ascending: false });
+                if (error) throw error;
+                visibleOffers = (data || []).filter(isVisibleForUsers);
+              } catch (_directError) {
+                const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                  setStatus("No se han podido cargar las ofertas.");
+                  return;
+                }
+                visibleOffers = data.offers || [];
+              }
+
+              setOffers(visibleOffers);
+              setStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${category}.`);
+            } finally {
+              offersLoadRef.current = false;
+            }
         }, [category]);
 
         React.useEffect(() => {
@@ -356,7 +364,7 @@
           try {
             const { data, error } = await supabaseClient
               .from("business_offers")
-              .select("id,title,cover_photo_data_url,presentation_image_data_urls,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,is_hidden,stock_quantity,sold_count,out_of_stock_since,created_at")
+              .select(offerListSelect)
               .order("created_at", { ascending: false })
               .limit(250);
             if (error) throw error;
