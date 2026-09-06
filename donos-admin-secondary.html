@@ -73,6 +73,13 @@
         const [username, setUsername] = React.useState(sessionStorage.getItem("donosSecondaryAdminUsername") || "");
         const [password, setPassword] = React.useState(sessionStorage.getItem("donosSecondaryAdminPassword") || "");
         const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosSecondaryAdminPassword")));
+        const [currentAdmin, setCurrentAdmin] = React.useState(() => {
+          try {
+            return JSON.parse(sessionStorage.getItem("donosSecondaryAdminProfile") || "null") || null;
+          } catch (_error) {
+            return null;
+          }
+        });
         const [data, setData] = React.useState({ summary: {}, accounts: [], businesses: [], recharges: [], payouts: [], transfers: [], purchases: [] });
         const [search, setSearch] = React.useState("");
         const [status, setStatus] = React.useState("");
@@ -100,9 +107,11 @@
           setStatus("");
           setIsLoading(true);
           try {
-            await staffFetch("/api/secondary-admin/login");
+            const json = await staffFetch("/api/secondary-admin/login");
             sessionStorage.setItem("donosSecondaryAdminUsername", username);
             sessionStorage.setItem("donosSecondaryAdminPassword", password);
+            sessionStorage.setItem("donosSecondaryAdminProfile", JSON.stringify(json.admin || null));
+            setCurrentAdmin(json.admin || null);
             setIsUnlocked(true);
           } catch (error) {
             setStatus(error.message || "No se ha podido entrar.");
@@ -117,6 +126,10 @@
           try {
             const json = await staffFetch("/api/secondary-admin/dashboard");
             setData(json);
+            if (json.admin) {
+              setCurrentAdmin(json.admin);
+              sessionStorage.setItem("donosSecondaryAdminProfile", JSON.stringify(json.admin));
+            }
           } catch (error) {
             setStatus(error.message || "No se ha podido cargar.");
           } finally {
@@ -160,7 +173,8 @@
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Donoss staff</p>
-                <h1 className="mt-1 text-3xl font-black sm:text-4xl">Panel secundario</h1>
+                <h1 className="mt-1 text-3xl font-black sm:text-4xl">{currentAdmin?.display_name || username || "Panel secundario"}</h1>
+                <p className="mt-1 text-sm font-bold text-slate-400">Panel secundario Donoss</p>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
                 <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-activity.html?secondary=1">Actividad</a>

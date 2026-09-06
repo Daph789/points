@@ -1,9 +1,9 @@
 (function () {
-  const allowedCountry = "ES";
+  const allowedCountries = new Set(["ES", "DZ"]);
   const cacheKey = "donossCountryCheck";
   const cacheMaxAge = 6 * 60 * 60 * 1000;
   const blockedPage = "country-unavailable.html";
-  const spainTimezones = new Set(["Europe/Madrid", "Atlantic/Canary", "Africa/Ceuta"]);
+  const allowedTimezones = new Set(["Europe/Madrid", "Atlantic/Canary", "Africa/Ceuta", "Africa/Algiers"]);
 
   function isBlockedPage() {
     return window.location.pathname.endsWith(blockedPage);
@@ -71,9 +71,10 @@
     }
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (spainTimezones.has(timezone)) {
-      writeCache(allowedCountry, "timezone");
-      return { country: allowedCountry, source: "timezone" };
+    if (allowedTimezones.has(timezone)) {
+      const country = timezone === "Africa/Algiers" ? "DZ" : "ES";
+      writeCache(country, "timezone");
+      return { country, source: "timezone" };
     }
 
     return { country: "", source: "unknown" };
@@ -81,7 +82,7 @@
 
   async function requireSpainAccess() {
     const result = await detectCountry();
-    if (result.country && result.country !== allowedCountry) {
+    if (result.country && !allowedCountries.has(result.country)) {
       redirectBlocked(result.country);
       return false;
     }

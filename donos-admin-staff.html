@@ -49,6 +49,8 @@
         const [status, setStatus] = React.useState("");
         const [isLoading, setIsLoading] = React.useState(false);
         const [form, setForm] = React.useState({ username: "", displayName: "", staffPassword: "" });
+        const [editingStaff, setEditingStaff] = React.useState(null);
+        const [editForm, setEditForm] = React.useState({ username: "", displayName: "", staffPassword: "" });
 
         React.useEffect(() => {
           if (isUnlocked) loadStaff();
@@ -110,6 +112,38 @@
             loadStaff();
           } catch (error) {
             setStatus(error.message || "No se ha podido actualizar.");
+          }
+        }
+
+        function openEditStaff(item) {
+          setStatus("");
+          setEditingStaff(item);
+          setEditForm({
+            username: item.username || "",
+            displayName: item.display_name || "",
+            staffPassword: "",
+          });
+        }
+
+        async function saveEditStaff(event) {
+          event.preventDefault();
+          if (!editingStaff) return;
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const data = await adminFetch("/api/admin/secondary-admins/update", {
+              staffId: editingStaff.id,
+              ...editForm,
+            });
+            setStaff((current) => current.map((row) => (row.id === editingStaff.id ? data.staff : row)));
+            setEditingStaff(null);
+            setEditForm({ username: "", displayName: "", staffPassword: "" });
+            setStatus("Acceso modificado correctamente.");
+            loadStaff();
+          } catch (error) {
+            setStatus(error.message || "No se ha podido modificar.");
+          } finally {
+            setIsLoading(false);
           }
         }
 
@@ -183,15 +217,52 @@
                           <p className="mt-1 font-mono text-xs font-black text-slate-400">{item.username}</p>
                           <p className="mt-2 text-xs font-bold text-slate-500">Dernière connexion: {formatDate(item.last_login_at)}</p>
                         </div>
-                        <button className={`rounded-full px-4 py-2 text-sm font-black ${item.is_active ? "border border-coral/25 bg-coral/10 text-coral" : "bg-mint text-ink"}`} onClick={() => toggleStaff(item)}>
-                          {item.is_active ? "Désactiver" : "Réactiver"}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" onClick={() => openEditStaff(item)}>
+                            Modifier
+                          </button>
+                          <button className={`rounded-full px-4 py-2 text-sm font-black ${item.is_active ? "border border-coral/25 bg-coral/10 text-coral" : "bg-mint text-ink"}`} onClick={() => toggleStaff(item)}>
+                            {item.is_active ? "Désactiver" : "Réactiver"}
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}
                 </div>
               </section>
             </section>
+
+            {editingStaff && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl" onClick={() => setEditingStaff(null)}>
+                <form className="w-full max-w-lg rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50" onSubmit={saveEditStaff} onClick={(event) => event.stopPropagation()}>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Acceso staff</p>
+                  <h2 className="mt-2 text-3xl font-black text-white">Modifier l’admin</h2>
+                  <p className="mt-3 text-sm font-bold leading-6 text-slate-300">
+                    Tu peux corriger son identifiant, son nom visible ou lui mettre un nouveau mot de passe.
+                  </p>
+                  <label className="mt-4 grid gap-2 text-sm font-black text-white">
+                    Identifiant
+                    <input className="h-12 rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none focus:border-mint/70" value={editForm.username} onChange={(event) => setEditForm((current) => ({ ...current, username: event.target.value }))} required />
+                  </label>
+                  <label className="mt-4 grid gap-2 text-sm font-black text-white">
+                    Nom visible
+                    <input className="h-12 rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none focus:border-mint/70" value={editForm.displayName} onChange={(event) => setEditForm((current) => ({ ...current, displayName: event.target.value }))} required />
+                  </label>
+                  <label className="mt-4 grid gap-2 text-sm font-black text-white">
+                    Nouveau mot de passe
+                    <input className="h-12 rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none focus:border-mint/70" type="password" value={editForm.staffPassword} onChange={(event) => setEditForm((current) => ({ ...current, staffPassword: event.target.value }))} placeholder="Laisse vide pour ne pas changer" />
+                  </label>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" type="button" onClick={() => setEditingStaff(null)}>
+                      Cancelar
+                    </button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isLoading}>
+                      Guardar
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
 
             <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-sun">Journal</p>

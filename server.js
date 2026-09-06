@@ -1660,6 +1660,49 @@ app.post("/api/admin/secondary-admins/toggle", async (request, response) => {
   }
 });
 
+app.post("/api/admin/secondary-admins/update", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request);
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  const staffId = String(request.body?.staffId || "").trim();
+  const username = String(request.body?.username || "").trim().toLowerCase();
+  const displayName = String(request.body?.displayName || "").trim().replace(/\s+/g, " ");
+  const staffPassword = String(request.body?.staffPassword || "");
+
+  if (!staffId) return response.status(400).json({ error: "Falta el admin secundario." });
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) return response.status(400).json({ error: "Identifiant non valide. Utilise 3 à 32 caractères." });
+  if (displayName.length < 2 || displayName.length > 60) return response.status(400).json({ error: "Nom non valide." });
+  if (staffPassword && (staffPassword.length < 8 || staffPassword.length > 120)) return response.status(400).json({ error: "Le nouveau mot de passe doit faire au moins 8 caractères." });
+
+  const payload = {
+    username,
+    display_name: displayName,
+    updated_at: new Date().toISOString(),
+  };
+  if (staffPassword) payload.password_hash = hashSecondaryAdminPassword(staffPassword);
+
+  try {
+    const { data: staff, error } = await supabaseAdmin
+      .from("secondary_admins")
+      .update(payload)
+      .eq("id", staffId)
+      .select("id, username, display_name, is_active, created_at, updated_at, last_login_at")
+      .maybeSingle();
+
+    if (error || !staff) throw error || new Error("not_found");
+    await recordAdminAudit(request, adminAuth.actor, "secondary_admin_updated", "secondary_admin", staff.id, {
+      username,
+      display_name: displayName,
+      password_changed: Boolean(staffPassword),
+    });
+    response.json({ staff });
+  } catch (error) {
+    console.error("Secondary admin update error:", error);
+    const message = error.code === "23505" ? "Cet identifiant existe déjà." : "No se ha podido modificar el admin secundario.";
+    response.status(error.code === "23505" ? 409 : 500).json({ error: message });
+  }
+});
+
 app.post("/api/secondary-admin/login", async (request, response) => {
   const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
   if (adminAuth.error || adminAuth.actor?.type !== "secondary") return response.status(adminAuth.status || 401).json({ error: adminAuth.error || "Identifiants incorrects" });
