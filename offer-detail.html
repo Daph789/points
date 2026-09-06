@@ -48,6 +48,7 @@
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
       const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
       const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+      const legacyOfferPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
       function goBackFromDetail() {
         if (isEmbeddedDetail && window.parent !== window) {
@@ -173,11 +174,19 @@
               const headers = sessionData.session?.access_token ? { Authorization: `Bearer ${sessionData.session.access_token}` } : {};
 
               async function loadDirectOffer(selectColumns) {
-                return supabaseClient
+                const result = await supabaseClient
                   .from("business_offers")
                   .select(selectColumns)
                   .eq("id", id)
                   .maybeSingle();
+                if (result.error?.code === "42703" && selectColumns === offerPreviewSelect) {
+                  return supabaseClient
+                    .from("business_offers")
+                    .select(legacyOfferPreviewSelect)
+                    .eq("id", id)
+                    .maybeSingle();
+                }
+                return result;
               }
 
               async function loadServerOffer(light = false) {

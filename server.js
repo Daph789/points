@@ -4033,6 +4033,10 @@ const publicOfferSelect =
   "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const publicOfferPreviewSelect =
   "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+const legacyPublicOfferSelect =
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+const legacyPublicOfferPreviewSelect =
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -4575,11 +4579,21 @@ app.get("/api/offers/featured", async (_request, response) => {
   const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("business_offers")
       .select(publicOfferPreviewSelect)
       .order("created_at", { ascending: false })
       .limit(250);
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("business_offers")
+        .select(legacyPublicOfferPreviewSelect)
+        .order("created_at", { ascending: false })
+        .limit(250);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Featured offers error:", error);
@@ -4622,11 +4636,21 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
   const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("business_offers")
       .select(publicOfferPreviewSelect)
       .order("created_at", { ascending: false })
       .limit(300);
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("business_offers")
+        .select(legacyPublicOfferPreviewSelect)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Offer category summary error:", error);
@@ -4677,12 +4701,23 @@ app.get("/api/offers/by-category/:category", async (request, response) => {
   if (!category) return response.status(400).json({ error: "category_missing" });
 
   try {
-    const { data, error } = await supabaseAdmin
+    let { data, error } = await supabaseAdmin
       .from("business_offers")
       .select(publicOfferPreviewSelect)
       .contains("categories", [category])
       .order("created_at", { ascending: false })
       .limit(250);
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("business_offers")
+        .select(legacyPublicOfferPreviewSelect)
+        .contains("categories", [category])
+        .order("created_at", { ascending: false })
+        .limit(250);
+      data = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
     const offers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
@@ -4710,11 +4745,21 @@ app.get("/api/offers/:offerId", async (request, response) => {
 
   try {
     const lightMode = String(request.query?.light || "") === "1";
-    const { data: offer, error } = await supabaseAdmin
+    let { data: offer, error } = await supabaseAdmin
       .from("business_offers")
       .select(lightMode ? publicOfferPreviewSelect : publicOfferSelect)
       .eq("id", offerId)
       .maybeSingle();
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("business_offers")
+        .select(lightMode ? legacyPublicOfferPreviewSelect : legacyPublicOfferSelect)
+        .eq("id", offerId)
+        .maybeSingle();
+      offer = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) throw error;
     if (!offer) return response.status(404).json({ error: "offer_not_found" });
