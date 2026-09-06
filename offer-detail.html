@@ -47,7 +47,7 @@
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
       const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
-      const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+      const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
       function goBackFromDetail() {
         if (isEmbeddedDetail && window.parent !== window) {
@@ -660,7 +660,9 @@
                           </p>
                         )}
                         <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">
-                          Días: {reservationDaysLabel(offer.reservation_available_weekdays)}
+                          {offer.reservation_date_mode === "single" && offer.reservation_single_date
+                            ? `Fecha: ${new Date(`${offer.reservation_single_date}T12:00:00`).toLocaleDateString("es-ES", { dateStyle: "medium" })}`
+                            : `Días: ${reservationDaysLabel(offer.reservation_available_weekdays)}`}
                         </p>
                         <p className="mt-1 text-xs font-bold text-slate-400">
                           Podrás elegir fecha, hora y personas en el pago.

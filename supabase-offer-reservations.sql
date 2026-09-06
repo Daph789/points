@@ -14,6 +14,19 @@ alter table public.business_offers
   add column if not exists reservation_available_weekdays jsonb not null default '[1,2,3,4,5,6,0]'::jsonb;
 
 alter table public.business_offers
+  add column if not exists reservation_date_mode text not null default 'range';
+
+alter table public.business_offers
+  add column if not exists reservation_single_date date;
+
+alter table public.business_offers
+  drop constraint if exists business_offers_reservation_date_mode_check;
+
+alter table public.business_offers
+  add constraint business_offers_reservation_date_mode_check
+  check (reservation_date_mode in ('range', 'single'));
+
+alter table public.business_offers
   add column if not exists reservation_price_mode text not null default 'per_person';
 
 alter table public.business_offers

@@ -251,6 +251,8 @@
         const [reservationMaxPeople, setReservationMaxPeople] = React.useState("");
         const [reservationDaysAhead, setReservationDaysAhead] = React.useState("0");
         const [reservationAvailableWeekdays, setReservationAvailableWeekdays] = React.useState(defaultReservationWeekdays);
+        const [reservationDateMode, setReservationDateMode] = React.useState("range");
+        const [reservationSingleDate, setReservationSingleDate] = React.useState("");
         const [reservationPriceMode, setReservationPriceMode] = React.useState("per_person");
         const [reservationExtraPointsPerPerson, setReservationExtraPointsPerPerson] = React.useState("");
         const [stockQuantity, setStockQuantity] = React.useState("");
@@ -326,6 +328,8 @@
             setReservationMaxPeople(draft.reservationMaxPeople || "");
             setReservationDaysAhead(draft.reservationDaysAhead || "0");
             setReservationAvailableWeekdays(normalizeReservationWeekdays(draft.reservationAvailableWeekdays));
+            setReservationDateMode(draft.reservationDateMode || "range");
+            setReservationSingleDate(draft.reservationSingleDate || "");
             setReservationPriceMode(draft.reservationPriceMode || "per_person");
             setReservationExtraPointsPerPerson(draft.reservationExtraPointsPerPerson || "");
             setStockQuantity(draft.stockQuantity || "");
@@ -390,6 +394,8 @@
             setReservationMaxPeople(data.reservation_max_people === null || data.reservation_max_people === undefined ? "" : String(data.reservation_max_people));
             setReservationDaysAhead(data.reservation_days_ahead === null || data.reservation_days_ahead === undefined ? "0" : String(data.reservation_days_ahead));
             setReservationAvailableWeekdays(normalizeReservationWeekdays(data.reservation_available_weekdays));
+            setReservationDateMode(data.reservation_date_mode || "range");
+            setReservationSingleDate(data.reservation_single_date || "");
             setReservationPriceMode(data.reservation_price_mode || "per_person");
             setReservationExtraPointsPerPerson(data.reservation_extra_points_per_person === null || data.reservation_extra_points_per_person === undefined ? "" : String(data.reservation_extra_points_per_person));
             setStockQuantity(data.stock_quantity === null || data.stock_quantity === undefined ? "" : String(Math.max(Number(data.stock_quantity || 0) - Number(data.sold_count || 0), 0)));
@@ -501,6 +507,8 @@
             reservationMaxPeople,
             reservationDaysAhead,
             reservationAvailableWeekdays,
+            reservationDateMode,
+            reservationSingleDate,
             reservationPriceMode,
             reservationExtraPointsPerPerson,
             stockQuantity,
@@ -544,6 +552,8 @@
           reservationMaxPeople,
           reservationDaysAhead,
           reservationAvailableWeekdays,
+          reservationDateMode,
+          reservationSingleDate,
           reservationPriceMode,
           reservationExtraPointsPerPerson,
           stockQuantity,
@@ -715,12 +725,20 @@
               setStatus({ type: "error", message: "La reserva es para grupos: indica mínimo 2 personas máximas por reserva." });
               return;
             }
+            if (reservationEnabled && reservationDateMode === "single" && !reservationSingleDate) {
+              setStatus({ type: "error", message: "Elige la fecha única disponible para reservar." });
+              return;
+            }
+            if (reservationEnabled && reservationDateMode === "single" && reservationSingleDate < today) {
+              setStatus({ type: "error", message: "La fecha única de reserva no puede ser anterior a hoy." });
+              return;
+            }
             if (reservationEnabled && reservationPriceMode === "custom_extra" && parsedReservationExtraPoints <= 0) {
               setStatus({ type: "error", message: "Indica cuántos puntos suma cada persona extra." });
               return;
             }
             const availableReservationWeekdays = normalizeReservationWeekdays(reservationAvailableWeekdays, []);
-            if (reservationEnabled && availableReservationWeekdays.length === 0) {
+            if (reservationEnabled && reservationDateMode !== "single" && availableReservationWeekdays.length === 0) {
               setStatus({ type: "error", message: "Elige al menos un día de la semana para aceptar reservas." });
               return;
             }
@@ -772,6 +790,8 @@
               reservation_max_people: reservationEnabled ? parsedReservationMaxPeople : null,
               reservation_days_ahead: reservationEnabled ? parsedReservationDaysAhead : 0,
               reservation_available_weekdays: reservationEnabled ? availableReservationWeekdays : defaultReservationWeekdays,
+              reservation_date_mode: reservationEnabled ? reservationDateMode : "range",
+              reservation_single_date: reservationEnabled && reservationDateMode === "single" ? reservationSingleDate : null,
               reservation_price_mode: reservationEnabled ? reservationPriceMode : "per_person",
               reservation_extra_points_per_person: reservationEnabled && reservationPriceMode === "custom_extra" ? parsedReservationExtraPoints : null,
               stock_quantity: stockQuantity === "" ? null : soldItemsCount + Math.max(Number.parseInt(stockQuantity, 10) || 0, 0),
@@ -1296,51 +1316,90 @@
                             placeholder="Ej. 4"
                           />
                         </Field>
-                        <Field label="Días de antelación permitidos">
-                          <input
-                            className={inputClass}
-                            inputMode="numeric"
-                            type="number"
-                            min="0"
-                            value={reservationDaysAhead}
-                            onChange={(event) => setReservationDaysAhead(event.target.value.replace(/[^0-9]/g, ""))}
-                            placeholder="0 = solo hoy"
-                          />
-                        </Field>
                       </div>
-                      <div>
-                        <p className="mb-2 text-sm font-medium text-slate-300">Días disponibles para reservar</p>
-                        <div className="flex flex-wrap gap-2">
-                          {reservationWeekdays.map((day) => {
-                            const isActive = reservationAvailableWeekdays.includes(day.value);
-                            return (
-                              <button
-                                key={day.value}
-                                type="button"
-                                className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
-                                  isActive
-                                    ? "bg-mint text-ink shadow-glow"
-                                    : "bg-white/[0.055] text-slate-400 ring-1 ring-white/10"
-                                }`}
-                                onClick={() => setReservationAvailableWeekdays((current) =>
-                                  current.includes(day.value)
-                                    ? current.filter((item) => item !== day.value)
-                                    : [...current, day.value]
-                                )}
-                                aria-pressed={isActive}
-                              >
-                                {day.label}
-                              </button>
-                            );
-                          })}
+                      <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+                        <p className="text-sm font-black text-white">Fechas disponibles</p>
+                        <div className="mt-3 grid gap-2 min-[430px]:grid-cols-2">
+                          <button
+                            type="button"
+                            className={`rounded-2xl border p-3 text-left transition ${reservationDateMode === "range" ? "border-mint/40 bg-mint/10 text-mint" : "border-white/10 bg-white/[0.045] text-slate-300"}`}
+                            onClick={() => setReservationDateMode("range")}
+                          >
+                            <span className="block text-sm font-black">Varias fechas</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">Restaurante, mesa, actividad con varios días.</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`rounded-2xl border p-3 text-left transition ${reservationDateMode === "single" ? "border-mint/40 bg-mint/10 text-mint" : "border-white/10 bg-white/[0.045] text-slate-300"}`}
+                            onClick={() => setReservationDateMode("single")}
+                          >
+                            <span className="block text-sm font-black">Fecha única</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">Concierto, evento o plan con un solo día.</span>
+                          </button>
                         </div>
-                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-                          Si el restaurante no trabaja el viernes, desactiva “Vie”. El cliente no podrá reservar ese día.
-                        </p>
+                        {reservationDateMode === "single" ? (
+                          <Field label="Fecha única para reservar">
+                            <input
+                              className={inputClass}
+                              type="date"
+                              min={todayDateString()}
+                              value={reservationSingleDate}
+                              onChange={(event) => setReservationSingleDate(event.target.value)}
+                            />
+                          </Field>
+                        ) : (
+                          <div className="mt-4 grid gap-4">
+                            <Field label="Días de antelación permitidos">
+                              <input
+                                className={inputClass}
+                                inputMode="numeric"
+                                type="number"
+                                min="0"
+                                value={reservationDaysAhead}
+                                onChange={(event) => setReservationDaysAhead(event.target.value.replace(/[^0-9]/g, ""))}
+                                placeholder="0 = solo hoy"
+                              />
+                            </Field>
+                            <div>
+                              <p className="mb-2 text-sm font-medium text-slate-300">Días disponibles para reservar</p>
+                              <div className="flex flex-wrap gap-2">
+                                {reservationWeekdays.map((day) => {
+                                  const isActive = reservationAvailableWeekdays.includes(day.value);
+                                  return (
+                                    <button
+                                      key={day.value}
+                                      type="button"
+                                      className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                                        isActive
+                                          ? "bg-mint text-ink shadow-glow"
+                                          : "bg-white/[0.055] text-slate-400 ring-1 ring-white/10"
+                                      }`}
+                                      onClick={() => setReservationAvailableWeekdays((current) =>
+                                        current.includes(day.value)
+                                          ? current.filter((item) => item !== day.value)
+                                          : [...current, day.value]
+                                      )}
+                                      aria-pressed={isActive}
+                                    >
+                                      {day.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
+                                Si el restaurante no trabaja el viernes, desactiva “Vie”. El cliente no podrá reservar ese día.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <div className="rounded-2xl border border-mint/20 bg-mint/10 p-3">
                         <p className="text-sm font-black text-mint">
-                          {parsedReservationDaysAhead === 0 ? "El cliente solo podrá reservar para hoy." : `El cliente podrá reservar desde hoy hasta dentro de ${parsedReservationDaysAhead} día${parsedReservationDaysAhead === 1 ? "" : "s"}.`}
+                          {reservationDateMode === "single"
+                            ? `El cliente solo podrá reservar para ${reservationSingleDate || "la fecha elegida"}.`
+                            : parsedReservationDaysAhead === 0
+                              ? "El cliente solo podrá reservar para hoy."
+                              : `El cliente podrá reservar desde hoy hasta dentro de ${parsedReservationDaysAhead} día${parsedReservationDaysAhead === 1 ? "" : "s"}.`}
                         </p>
                         <p className="mt-1 text-xs font-semibold text-slate-400">
                           La reserva empieza desde 2 personas. Si solo compra una persona, no se muestra como reserva de grupo.

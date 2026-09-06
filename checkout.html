@@ -119,6 +119,21 @@
         return dates;
       }
 
+      function buildOfferReservableDates(offerData) {
+        if (offerData?.reservation_date_mode === "single" && offerData.reservation_single_date) {
+          const date = parseLocalDate(offerData.reservation_single_date);
+          if (!date) return [];
+          return [{
+            value: offerData.reservation_single_date,
+            weekday: reservationWeekdayLabels[date.getDay()],
+            day: date.getDate(),
+            month: date.toLocaleDateString("es-ES", { month: "short" }).replace(".", ""),
+          }];
+        }
+        const allowedWeekdays = normalizeReservationWeekdays(offerData?.reservation_available_weekdays);
+        return buildReservableDates(Math.max(Number(offerData?.reservation_days_ahead || 0), 0), allowedWeekdays);
+      }
+
       function App() {
         const params = new URLSearchParams(window.location.search);
         const offerId = params.get("id");
@@ -273,12 +288,11 @@
               setProfile(profileData);
               setDeliveryAddress(profileData?.address || "");
               if (offerData.reservation_enabled) {
-                const allowedWeekdays = normalizeReservationWeekdays(offerData.reservation_available_weekdays);
-                const availableDates = buildReservableDates(Math.max(Number(offerData.reservation_days_ahead || 0), 0), allowedWeekdays);
+                const availableDates = buildOfferReservableDates(offerData);
                 setReservationDate(availableDates[0]?.value || "");
                 const slots = Array.isArray(offerData.reservation_time_slots) ? offerData.reservation_time_slots.filter(Boolean) : [];
                 setReservationTime(slots[0] || "");
-                setReservationPeople("1");
+                setReservationPeople("2");
               }
               setStatus("");
             } catch (error) {
@@ -321,7 +335,7 @@
         const reservationMaxPeople = Math.max(Number(offer.reservation_max_people || 0), 0);
         const reservationDaysAhead = Math.max(Number(offer.reservation_days_ahead || 0), 0);
         const reservationAvailableWeekdays = normalizeReservationWeekdays(offer.reservation_available_weekdays);
-        const reservableDates = buildReservableDates(reservationDaysAhead, reservationAvailableWeekdays);
+        const reservableDates = buildOfferReservableDates(offer);
         const todayString = localDateString(new Date());
         const maxReservationDate = new Date();
         maxReservationDate.setDate(maxReservationDate.getDate() + reservationDaysAhead);
@@ -345,9 +359,9 @@
         const hasEnoughPoints = isExternalCheckout || userPoints >= totalPoints;
         const hasValidReservation = isExternalCheckout || !wantsReservation || (
           offer.reservation_enabled &&
-          reservationDate >= todayString &&
-          reservationDate <= maxReservationDateString &&
-          isReservationDateAllowed(reservationDate, reservationAvailableWeekdays) &&
+          (offer.reservation_date_mode === "single"
+            ? reservationDate === offer.reservation_single_date && reservationDate >= todayString
+            : reservationDate >= todayString && reservationDate <= maxReservationDateString && isReservationDateAllowed(reservationDate, reservationAvailableWeekdays)) &&
           reservationSlots.includes(reservationTime) &&
           reservationPeopleNumber >= 2 &&
           (!reservationMaxPeople || reservationPeopleNumber <= reservationMaxPeople)
@@ -671,7 +685,7 @@
                               className="h-12 w-full rounded-2xl border border-white/10 bg-[#060914]/70 px-4 text-sm font-bold text-white outline-none focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
                               type="date"
                               min={todayString}
-                              max={maxReservationDateString}
+                              max={offer.reservation_date_mode === "single" ? offer.reservation_single_date : maxReservationDateString}
                               value={reservationDate}
                               onChange={(event) => setReservationDate(event.target.value)}
                             />
@@ -706,7 +720,12 @@
                             La reserva es para grupos. Elige al menos 2 personas.
                           </p>
                         )}
-                        {reservationDate && !isReservationDateAllowed(reservationDate, reservationAvailableWeekdays) && (
+                        {offer.reservation_date_mode === "single" && reservationDate && reservationDate !== offer.reservation_single_date && (
+                          <p className="rounded-2xl border border-coral/20 bg-coral/10 p-3 text-xs font-bold leading-5 text-coral">
+                            Esta oferta solo permite reservar el día {offer.reservation_single_date}.
+                          </p>
+                        )}
+                        {offer.reservation_date_mode !== "single" && reservationDate && !isReservationDateAllowed(reservationDate, reservationAvailableWeekdays) && (
                           <p className="rounded-2xl border border-coral/20 bg-coral/10 p-3 text-xs font-bold leading-5 text-coral">
                             Este día está cerrado para reservas. Elige uno de los días disponibles.
                           </p>

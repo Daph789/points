@@ -3985,7 +3985,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -4030,9 +4030,9 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const publicOfferPreviewSelect =
-  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -6634,12 +6634,22 @@ app.post("/api/purchases/offer", async (request, response) => {
       const maxDate = new Date(`${today}T00:00:00.000Z`);
       maxDate.setUTCDate(maxDate.getUTCDate() + daysAhead);
       const maxDateString = maxDate.toISOString().slice(0, 10);
+      const reservationDateMode = String(offer.reservation_date_mode || "range");
+      const reservationSingleDate = String(offer.reservation_single_date || "").slice(0, 10);
 
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(reservationDate) || reservationDate < today || reservationDate > maxDateString) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(reservationDate) || reservationDate < today) {
         return response.status(400).json({ error: "reservation_date_not_allowed" });
       }
 
-      if (!isReservationWeekdayAllowed(reservationDate, normalizeReservationWeekdays(offer.reservation_available_weekdays))) {
+      if (reservationDateMode === "single") {
+        if (!reservationSingleDate || reservationDate !== reservationSingleDate) {
+          return response.status(400).json({ error: "reservation_date_not_allowed" });
+        }
+      } else if (reservationDate > maxDateString) {
+        return response.status(400).json({ error: "reservation_date_not_allowed" });
+      }
+
+      if (reservationDateMode !== "single" && !isReservationWeekdayAllowed(reservationDate, normalizeReservationWeekdays(offer.reservation_available_weekdays))) {
         return response.status(400).json({ error: "reservation_day_unavailable" });
       }
 

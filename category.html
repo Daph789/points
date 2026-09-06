@@ -273,12 +273,17 @@
 
               <div className="p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold leading-5 text-slate-400">{offer.address || "Donostia"}</p>
-                  <div className="text-right">
-                    {isExternalCheckout ? (
-                      <p className="text-xl font-black text-white">{formatEuro(offer.reduced_price || offer.base_price)}</p>
-                    ) : offer.base_price !== null && <p className="text-xl font-black text-slate-400 line-through">{formatEuro(offer.base_price)}</p>}
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-sm font-semibold leading-5 text-slate-400">{offer.address || "Donostia"}</p>
+                    {isExternalCheckout && (
+                      <p className="mt-2 text-sm font-black text-sun">{formatEuro(offer.reduced_price || offer.base_price)}</p>
+                    )}
                   </div>
+                  {!isExternalCheckout && offer.base_price !== null && offer.base_price !== undefined && (
+                    <p className="shrink-0 max-w-[5.8rem] break-words text-right text-lg font-black leading-none text-slate-500 line-through decoration-slate-500 sm:max-w-[7rem] sm:text-xl">
+                      {formatEuro(offer.base_price)}
+                    </p>
+                  )}
                 </div>
                 {businessName && (
                   <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-black text-slate-200">

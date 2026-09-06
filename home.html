@@ -497,9 +497,12 @@
 
             <div className="p-4">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black text-white">{offer.title || "Oferta sin título"}</h3>
-                  <p className="mt-1 text-sm font-medium text-slate-400">{offer.address || "Donostia"}</p>
+                <div className="min-w-0 flex-1">
+                  <h3 className="break-words text-base font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h3>
+                  <p className="mt-1 break-words text-sm font-medium leading-5 text-slate-400">{offer.address || "Donostia"}</p>
+                  {isExternalCheckout && (
+                    <p className="mt-2 text-sm font-black text-sun">{formatEuro(offer.reduced_price || offer.base_price)}</p>
+                  )}
                   {businessName && (
                     <p className="mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/[0.07] px-2.5 py-1 text-xs font-black text-slate-200 ring-1 ring-white/10">
                       <span className="truncate">{businessName}</span>
@@ -507,13 +510,11 @@
                     </p>
                   )}
                 </div>
-                <div className="text-right">
-                  {isExternalCheckout ? (
-                    <p className="text-xl font-black text-white">{formatEuro(offer.reduced_price || offer.base_price)}</p>
-                  ) : offer.base_price !== null && (
-                    <p className="text-xl font-black text-slate-400 line-through">{formatEuro(offer.base_price)}</p>
-                  )}
-                </div>
+                {!isExternalCheckout && offer.base_price !== null && offer.base_price !== undefined && (
+                  <p className="shrink-0 max-w-[5.8rem] break-words text-right text-lg font-black leading-none text-slate-500 line-through decoration-slate-500 sm:max-w-[7rem] sm:text-xl">
+                    {formatEuro(offer.base_price)}
+                  </p>
+                )}
               </div>
               <button
                 className={`mt-4 h-11 w-full rounded-2xl text-sm font-black ring-1 transition ${
