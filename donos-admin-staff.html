@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Admin secundarios</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 16% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(255, 107, 107, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      * { box-sizing: border-box; min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function formatDate(value) {
+        if (!value) return "-";
+        return new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
+        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const [staff, setStaff] = React.useState([]);
+        const [audits, setAudits] = React.useState([]);
+        const [status, setStatus] = React.useState("");
+        const [isLoading, setIsLoading] = React.useState(false);
+        const [form, setForm] = React.useState({ username: "", displayName: "", staffPassword: "" });
+
+        React.useEffect(() => {
+          if (isUnlocked) loadStaff();
+        }, [isUnlocked]);
+
+        async function adminFetch(url, payload = {}) {
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password, ...payload }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || "No se ha podido completar la acción.");
+          return data;
+        }
+
+        async function loadStaff(event) {
+          event?.preventDefault();
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const data = await adminFetch("/api/admin/secondary-admins/list");
+            sessionStorage.setItem("donosAdminPassword", password);
+            setIsUnlocked(true);
+            setStaff(data.staff || []);
+            setAudits(data.audits || []);
+          } catch (error) {
+            setStatus(error.message || "No se ha podido cargar.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        async function createStaff(event) {
+          event.preventDefault();
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const data = await adminFetch("/api/admin/secondary-admins/create", form);
+            setStaff((current) => [data.staff, ...current]);
+            setForm({ username: "", displayName: "", staffPassword: "" });
+            setStatus("Admin secundario creado.");
+            loadStaff();
+          } catch (error) {
+            setStatus(error.message || "No se ha podido crear.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        async function toggleStaff(item) {
+          const nextState = !item.is_active;
+          if (!window.confirm(`${nextState ? "Activar" : "Desactivar"} a ${item.display_name || item.username}?`)) return;
+          setStatus("");
+          try {
+            const data = await adminFetch("/api/admin/secondary-admins/toggle", { staffId: item.id, isActive: nextState });
+            setStaff((current) => current.map((row) => (row.id === item.id ? data.staff : row)));
+            setStatus(nextState ? "Admin activado." : "Admin desactivado.");
+            loadStaff();
+          } catch (error) {
+            setStatus(error.message || "No se ha podido actualizar.");
+          }
+        }
+
+        if (!isUnlocked) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadStaff}>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin principal</p>
+                <h1 className="mt-2 text-3xl font-black text-white">Admins secundarios</h1>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Solo el admin principal puede crear o cortar accesos secundarios.</p>
+                <input className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Contraseña principal" />
+                {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
+                <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-base font-black text-ink shadow-glow" disabled={isLoading}>{isLoading ? "Entrando..." : "Entrar"}</button>
+              </form>
+            </main>
+          );
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin principal</p>
+                <h1 className="mt-1 text-3xl font-black sm:text-4xl">Equipo admin</h1>
+              </div>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
+                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-secondary.html">Entrada secundaria</a>
+                <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadStaff} disabled={isLoading}>{isLoading ? "Cargando..." : "Actualizar"}</button>
+              </div>
+            </header>
+
+            {status && <p className="mt-5 rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-sm font-black text-sun">{status}</p>}
+
+            <section className="mt-6 grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+              <form className="rounded-[32px] border border-mint/20 bg-mint/10 p-5 shadow-glow" onSubmit={createStaff}>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Nuevo acceso</p>
+                <h2 className="mt-2 text-2xl font-black">Crear admin secundario</h2>
+                <div className="mt-5 grid gap-3">
+                  <label className="grid gap-2 text-sm font-black text-white">
+                    Identifiant
+                    <input className="h-12 rounded-2xl border border-line bg-black/25 px-4 text-white outline-none focus:border-mint/70" value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} placeholder="ex: sam-admin" required />
+                  </label>
+                  <label className="grid gap-2 text-sm font-black text-white">
+                    Nombre visible
+                    <input className="h-12 rounded-2xl border border-line bg-black/25 px-4 text-white outline-none focus:border-mint/70" value={form.displayName} onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} placeholder="Sam" required />
+                  </label>
+                  <label className="grid gap-2 text-sm font-black text-white">
+                    Mot de passe
+                    <input className="h-12 rounded-2xl border border-line bg-black/25 px-4 text-white outline-none focus:border-mint/70" type="password" value={form.staffPassword} onChange={(event) => setForm((current) => ({ ...current, staffPassword: event.target.value }))} placeholder="Minimum 8 caractères" required />
+                  </label>
+                </div>
+                <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isLoading}>Crear acceso</button>
+              </form>
+
+              <section className="rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Accesos</p>
+                    <h2 className="mt-2 text-2xl font-black">Admins secundarios</h2>
+                  </div>
+                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{staff.length}</span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {staff.length === 0 && <p className="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-400">Todavía no hay admins secundarios.</p>}
+                  {staff.map((item) => (
+                    <article key={item.id} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-lg font-black text-white">{item.display_name}</p>
+                          <p className="mt-1 font-mono text-xs font-black text-slate-400">{item.username}</p>
+                          <p className="mt-2 text-xs font-bold text-slate-500">Dernière connexion: {formatDate(item.last_login_at)}</p>
+                        </div>
+                        <button className={`rounded-full px-4 py-2 text-sm font-black ${item.is_active ? "border border-coral/25 bg-coral/10 text-coral" : "bg-mint text-ink"}`} onClick={() => toggleStaff(item)}>
+                          {item.is_active ? "Désactiver" : "Réactiver"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </section>
+
+            <section className="mt-6 rounded-[32px] border border-white/10 bg-white/[0.055] p-5">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-sun">Journal</p>
+              <h2 className="mt-2 text-2xl font-black">Actions admin</h2>
+              <div className="mt-4 grid gap-3">
+                {audits.length === 0 && <p className="rounded-3xl bg-black/20 p-4 text-sm font-bold text-slate-400">Aucune action enregistrée pour le moment.</p>}
+                {audits.map((audit) => (
+                  <article key={audit.id} className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-black text-white">{audit.actor_username || audit.actor_type} · {audit.action}</p>
+                        <p className="mt-1 break-words text-sm font-bold text-slate-400">{audit.target_type || "acción"} {audit.target_id ? `· ${audit.target_id}` : ""}</p>
+                      </div>
+                      <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">{formatDate(audit.created_at)}</span>
+                    </div>
+                    {audit.ip_address && <p className="mt-2 font-mono text-xs font-bold text-slate-500">IP: {audit.ip_address}</p>}
+                  </article>
+                ))}
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

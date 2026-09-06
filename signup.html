@@ -487,23 +487,10 @@
         }
 
         async function handleSocialLogin(provider) {
-          setStatus({ type: "", message: "" });
-          const canAccess = await window.donossCountryGuard?.requireSpainAccess?.();
-          if (canAccess === false) return;
-          localStorage.setItem("donosAccountType", accountType || "user");
-          const { error } = await supabaseClient.auth.signInWithOAuth({
-            provider,
-            options: {
-              redirectTo: window.location.origin + "/app.html#inicio",
-            },
+          setStatus({
+            type: "info",
+            message: `Ahora ${provider === "apple" ? "Apple" : "Google"} no está disponible. Crea tu cuenta con correo y contraseña.`,
           });
-
-          if (error) {
-            setStatus({
-              type: "error",
-              message: error.message || "No se ha podido abrir el acceso social.",
-            });
-          }
         }
 
         const profileCards = (

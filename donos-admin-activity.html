@@ -72,8 +72,10 @@
       }
 
       function App() {
-        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
-        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const isSecondaryMode = new URLSearchParams(window.location.search).get("secondary") === "1";
+        const [username, setUsername] = React.useState(isSecondaryMode ? sessionStorage.getItem("donosSecondaryAdminUsername") || "" : "");
+        const [password, setPassword] = React.useState(isSecondaryMode ? sessionStorage.getItem("donosSecondaryAdminPassword") || "" : sessionStorage.getItem("donosAdminPassword") || "");
+        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(isSecondaryMode ? sessionStorage.getItem("donosSecondaryAdminPassword") : sessionStorage.getItem("donosAdminPassword")));
         const [startDate, setStartDate] = React.useState(isoDay(sevenDaysAgo));
         const [endDate, setEndDate] = React.useState(isoDay(today));
         const [data, setData] = React.useState({ summary: {}, days: [], pages: [], sessions: [], accounts: [] });
@@ -96,11 +98,16 @@
             const response = await fetch("/api/admin/activity", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password, startDate, endDate }),
+              body: JSON.stringify({ username, password, startDate, endDate }),
             });
             const json = await response.json();
             if (!response.ok) throw new Error(json.error || "No se ha podido cargar la actividad.");
-            sessionStorage.setItem("donosAdminPassword", password);
+            if (isSecondaryMode) {
+              sessionStorage.setItem("donosSecondaryAdminUsername", username);
+              sessionStorage.setItem("donosSecondaryAdminPassword", password);
+            } else {
+              sessionStorage.setItem("donosAdminPassword", password);
+            }
             setIsUnlocked(true);
             setData(json);
           } catch (error) {
@@ -149,6 +156,7 @@
                 blockType,
                 ipAddress: blockType === "ip" ? target : "",
                 userId: blockType === "account" ? target : "",
+                username,
                 reason,
                 durationHours: Number(hoursText || 0),
               }),
@@ -169,7 +177,7 @@
             const response = await fetch("/api/admin/security/unblock", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ password, blockId }),
+              body: JSON.stringify({ username, password, blockId }),
             });
             const json = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(json.error || "No se ha podido desbloquear.");
@@ -184,11 +192,19 @@
           return (
             <main className="grid min-h-screen place-items-center px-4">
               <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadActivity}>
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">{isSecondaryMode ? "Donoss staff" : "Admin Donoss"}</p>
                 <h1 className="mt-2 text-3xl font-black text-white">Actividad</h1>
                 <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Zona privada para ver visitas, conexiones y tiempo aproximado de uso.</p>
+                {isSecondaryMode && (
+                  <input
+                    className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="Identifiant"
+                  />
+                )}
                 <input
-                  className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                  className={`${isSecondaryMode ? "mt-3" : "mt-5"} h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10`}
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -207,12 +223,18 @@
           <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
             <header className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">{isSecondaryMode ? "Donoss staff" : "Admin Donoss"}</p>
                 <h1 className="mt-1 break-words text-3xl font-black text-white sm:text-4xl">Actividad y conexiones</h1>
               </div>
               <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
-                <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
+                {isSecondaryMode ? (
+                  <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-secondary.html">Panel staff</a>
+                ) : (
+                  <>
+                    <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-accounts.html">Cuentas</a>
+                    <a className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-center text-sm font-black text-slate-200 sm:flex-none" href="donos-admin-payments.html">Pagos</a>
+                  </>
+                )}
                 <button className="flex-1 rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow sm:flex-none" onClick={loadActivity}>
                   {isLoading ? "Cargando..." : "Actualizar"}
                 </button>

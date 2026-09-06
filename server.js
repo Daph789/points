@@ -5,7 +5,7 @@ import Stripe from "stripe";
 import { createClient } from "@supabase/supabase-js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomInt, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 
 dotenv.config({ path: ".env.local" });
 
@@ -30,6 +30,7 @@ const trafficWindowMs = 60_000;
 const suspiciousRequestsPerMinute = 240;
 const throttledRequestsPerMinute = 420;
 const securityCacheTtlMs = 15_000;
+const secondaryAdminHashPrefix = "sha256";
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
 const supabaseAdmin =
@@ -178,6 +179,93 @@ async function logSecurityEvent({ request, eventType, requestCount, windowSecond
     if (error && !["42P01", "42703"].includes(error.code)) console.error("Security event insert error:", error);
   } catch (error) {
     console.error("Security event fatal error:", error);
+  }
+}
+
+function hashSecondaryAdminPassword(password, salt = randomBytes(16).toString("hex")) {
+  const cleanPassword = String(password || "");
+  const digest = createHash("sha256").update(`${salt}:${cleanPassword}`).digest("hex");
+  return `${secondaryAdminHashPrefix}:${salt}:${digest}`;
+}
+
+function verifySecondaryAdminPassword(password, storedHash) {
+  const [prefix, salt, expectedDigest] = String(storedHash || "").split(":");
+  if (prefix !== secondaryAdminHashPrefix || !salt || !expectedDigest) return false;
+  const digest = createHash("sha256").update(`${salt}:${String(password || "")}`).digest("hex");
+  try {
+    return timingSafeEqual(Buffer.from(digest), Buffer.from(expectedDigest));
+  } catch (_error) {
+    return false;
+  }
+}
+
+function adminActorLabel(actor) {
+  if (!actor) return "admin";
+  if (actor.type === "secondary") return `staff:${actor.username || actor.display_name || actor.id}`;
+  return "admin principal";
+}
+
+async function recordAdminAudit(request, actor, action, targetType = "", targetId = "", metadata = {}) {
+  if (!supabaseAdmin || !action) return;
+  try {
+    const { error } = await supabaseAdmin.from("admin_audit_logs").insert({
+      actor_type: actor?.type || "primary",
+      actor_id: actor?.type === "secondary" ? actor.id : null,
+      actor_username: adminActorLabel(actor),
+      action: String(action).slice(0, 120),
+      target_type: String(targetType || "").slice(0, 80) || null,
+      target_id: String(targetId || "").slice(0, 160) || null,
+      metadata,
+      ip_address: clientIpForRequest(request),
+      user_agent: String(request.headers["user-agent"] || "").slice(0, 500),
+    });
+    if (error && error.code !== "42P01" && error.code !== "42703") console.error("Admin audit insert error:", error);
+  } catch (error) {
+    console.error("Admin audit fatal error:", error);
+  }
+}
+
+async function authenticateAdminAccess(request, { allowSecondary = false } = {}) {
+  if (!supabaseAdmin) return { error: "Supabase admin is not configured", status: 500 };
+  const password = String(request.body?.password || "");
+  if (adminPassword && password === adminPassword) {
+    return { actor: { type: "primary", username: "admin principal", display_name: "Admin principal" } };
+  }
+
+  if (!allowSecondary) return { error: "Mot de passe incorrect", status: 401 };
+
+  const username = String(request.body?.username || request.body?.secondaryUsername || "").trim().toLowerCase();
+  if (!username || !password) return { error: "Identifiants incorrects", status: 401 };
+
+  try {
+    const { data: staff, error } = await supabaseAdmin
+      .from("secondary_admins")
+      .select("id, username, display_name, password_hash, is_active")
+      .eq("username", username)
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === "42P01") return { error: "Falta ejecutar supabase-secondary-admins.sql.", status: 500 };
+      console.error("Secondary admin auth error:", error);
+      return { error: "No se ha podido verificar el acceso", status: 500 };
+    }
+
+    if (!staff?.is_active || !verifySecondaryAdminPassword(password, staff.password_hash)) {
+      await recordAdminAudit(request, { type: "secondary", username }, "secondary_login_failed", "secondary_admin", username);
+      return { error: "Identifiants incorrects", status: 401 };
+    }
+
+    return {
+      actor: {
+        type: "secondary",
+        id: staff.id,
+        username: staff.username,
+        display_name: staff.display_name,
+      },
+    };
+  } catch (error) {
+    console.error("Secondary admin auth fatal error:", error);
+    return { error: "No se ha podido verificar el acceso", status: 500 };
   }
 }
 
@@ -1488,6 +1576,232 @@ app.post("/api/admin/accounts", async (request, response) => {
   });
 });
 
+app.post("/api/admin/secondary-admins/list", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request);
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  try {
+    const [{ data: staff, error: staffError }, { data: audits, error: auditsError }] = await Promise.all([
+      supabaseAdmin
+        .from("secondary_admins")
+        .select("id, username, display_name, is_active, created_at, updated_at, last_login_at")
+        .order("created_at", { ascending: false }),
+      supabaseAdmin
+        .from("admin_audit_logs")
+        .select("id, actor_type, actor_id, actor_username, action, target_type, target_id, metadata, ip_address, created_at")
+        .order("created_at", { ascending: false })
+        .limit(120),
+    ]);
+
+    if (staffError) throw staffError;
+    if (auditsError && auditsError.code !== "42P01") console.error("Admin audit list error:", auditsError);
+    response.json({ staff: staff || [], audits: auditsError ? [] : audits || [] });
+  } catch (error) {
+    console.error("Secondary admins list error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "Falta ejecutar supabase-secondary-admins.sql." : "No se han podido cargar los admins secundarios." });
+  }
+});
+
+app.post("/api/admin/secondary-admins/create", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request);
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  const username = String(request.body?.username || "").trim().toLowerCase();
+  const displayName = String(request.body?.displayName || "").trim().replace(/\s+/g, " ");
+  const staffPassword = String(request.body?.staffPassword || "");
+
+  if (!/^[a-z0-9._-]{3,32}$/.test(username)) return response.status(400).json({ error: "Identifiant non valide. Utilise 3 à 32 caractères." });
+  if (displayName.length < 2 || displayName.length > 60) return response.status(400).json({ error: "Nom non valide." });
+  if (staffPassword.length < 8 || staffPassword.length > 120) return response.status(400).json({ error: "Le mot de passe doit faire au moins 8 caractères." });
+
+  try {
+    const { data: staff, error } = await supabaseAdmin
+      .from("secondary_admins")
+      .insert({
+        username,
+        display_name: displayName,
+        password_hash: hashSecondaryAdminPassword(staffPassword),
+      })
+      .select("id, username, display_name, is_active, created_at, updated_at, last_login_at")
+      .single();
+
+    if (error) throw error;
+    await recordAdminAudit(request, adminAuth.actor, "secondary_admin_created", "secondary_admin", staff.id, { username, display_name: displayName });
+    response.json({ staff });
+  } catch (error) {
+    console.error("Secondary admin create error:", error);
+    const message = error.code === "23505" ? "Cet identifiant existe déjà." : error.code === "42P01" ? "Falta ejecutar supabase-secondary-admins.sql." : "No se ha podido crear el admin secundario.";
+    response.status(error.code === "23505" ? 409 : 500).json({ error: message });
+  }
+});
+
+app.post("/api/admin/secondary-admins/toggle", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request);
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  const staffId = String(request.body?.staffId || "").trim();
+  const isActive = Boolean(request.body?.isActive);
+  if (!staffId) return response.status(400).json({ error: "Falta el admin secundario." });
+
+  try {
+    const { data: staff, error } = await supabaseAdmin
+      .from("secondary_admins")
+      .update({ is_active: isActive, updated_at: new Date().toISOString() })
+      .eq("id", staffId)
+      .select("id, username, display_name, is_active, created_at, updated_at, last_login_at")
+      .maybeSingle();
+
+    if (error || !staff) throw error || new Error("not_found");
+    await recordAdminAudit(request, adminAuth.actor, isActive ? "secondary_admin_enabled" : "secondary_admin_disabled", "secondary_admin", staff.id, { username: staff.username });
+    response.json({ staff });
+  } catch (error) {
+    console.error("Secondary admin toggle error:", error);
+    response.status(500).json({ error: "No se ha podido actualizar el admin secundario." });
+  }
+});
+
+app.post("/api/secondary-admin/login", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error || adminAuth.actor?.type !== "secondary") return response.status(adminAuth.status || 401).json({ error: adminAuth.error || "Identifiants incorrects" });
+
+  await Promise.all([
+    supabaseAdmin.from("secondary_admins").update({ last_login_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", adminAuth.actor.id),
+    recordAdminAudit(request, adminAuth.actor, "secondary_login", "secondary_admin", adminAuth.actor.id),
+  ]);
+
+  response.json({ ok: true, admin: adminAuth.actor });
+});
+
+app.post("/api/secondary-admin/dashboard", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  try {
+    await recordAdminAudit(request, adminAuth.actor, "secondary_dashboard_view", "dashboard", "secondary-admin");
+    const [
+      { data: accounts, error: accountsError },
+      { data: recharges, error: rechargesError },
+      { data: payouts, error: payoutsError },
+      { data: transfers, error: transfersError },
+      { data: purchases, error: purchasesError },
+      { data: businesses, error: businessesError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified, premium_status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(800),
+      supabaseAdmin
+        .from("stripe_point_recharges")
+        .select("id, user_id, points, amount_total, stripe_fee_amount, net_amount, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(150),
+      supabaseAdmin
+        .from("business_payouts")
+        .select("id, business_id, points, amount_cents, bank_fee_cents, note, created_at")
+        .order("created_at", { ascending: false })
+        .limit(150),
+      supabaseAdmin
+        .from("point_transfers")
+        .select("id, sender_id, receiver_id, points, status, created_at, paid_at")
+        .order("created_at", { ascending: false })
+        .limit(150),
+      supabaseAdmin
+        .from("purchases")
+        .select("id, buyer_id, receiver_profile_id, offer_id, total_points, created_at")
+        .order("created_at", { ascending: false })
+        .limit(150),
+      supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, account_type, transaction_id, points, is_verified, created_at")
+        .eq("account_type", "business")
+        .order("created_at", { ascending: false })
+        .limit(300),
+    ]);
+
+    if (accountsError) throw accountsError;
+    if (rechargesError && rechargesError.code !== "42P01") console.error("Secondary dashboard recharges error:", rechargesError);
+    if (payoutsError && payoutsError.code !== "42P01") console.error("Secondary dashboard payouts error:", payoutsError);
+    if (transfersError && transfersError.code !== "42P01") console.error("Secondary dashboard transfers error:", transfersError);
+    if (purchasesError && purchasesError.code !== "42P01") console.error("Secondary dashboard purchases error:", purchasesError);
+    if (businessesError && businessesError.code !== "42P01") console.error("Secondary dashboard businesses error:", businessesError);
+
+    const accountRows = accounts || [];
+    const rechargeRows = rechargesError ? [] : (recharges || []).map(enrichRechargeAccounting);
+    const payoutRows = payoutsError ? [] : payouts || [];
+    const purchaseRows = purchasesError ? [] : purchases || [];
+    const businessRows = businessesError ? [] : businesses || [];
+    const businessSettlements = await enrichBusinessesForSettlement(businessRows);
+    const totalPoints = accountRows.reduce((sum, account) => sum + Number(account.points || 0), 0);
+    const totalNet = rechargeRows.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+    const paidOut = payoutRows.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+
+    response.json({
+      admin: adminAuth.actor,
+      accounts: accountRows,
+      recharges: rechargeRows,
+      payouts: payoutRows,
+      transfers: transfersError ? [] : transfers || [],
+      purchases: purchaseRows,
+      businesses: businessSettlements,
+      summary: {
+        total_accounts: accountRows.length,
+        total_users: accountRows.filter((account) => account.account_type !== "business").length,
+        total_businesses: accountRows.filter((account) => account.account_type === "business").length,
+        total_points: totalPoints,
+        total_point_value_cents: totalPoints * 10,
+        total_net_cents: totalNet,
+        business_payouts_paid_cents: paidOut,
+        estimated_cash_cents: totalNet - paidOut,
+        total_sales_points: purchaseRows.reduce((sum, item) => sum + Number(item.total_points || 0), 0),
+      },
+    });
+  } catch (error) {
+    console.error("Secondary dashboard error:", error);
+    response.status(500).json({ error: error.code === "42P01" ? "Falta ejecutar supabase-secondary-admins.sql." : "No se ha podido cargar el panel secundario." });
+  }
+});
+
+app.post("/api/secondary-admin/account-detail", async (request, response) => {
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
+
+  const profileId = String(request.body?.profileId || "").trim();
+  if (!profileId) return response.status(400).json({ error: "Falta la cuenta." });
+
+  try {
+    const [
+      { data: profile, error: profileError },
+      { data: purchases, error: purchasesError },
+      { data: recharges, error: rechargesError },
+      { data: sentTransfers, error: sentError },
+      { data: receivedTransfers, error: receivedError },
+      { data: offers, error: offersError },
+    ] = await Promise.all([
+      supabaseAdmin.from("profiles").select("*").eq("id", profileId).maybeSingle(),
+      supabaseAdmin.from("purchases").select("id, offer_id, total_points, delivery_method, created_at, verified_at").eq("buyer_id", profileId).order("created_at", { ascending: false }).limit(80),
+      supabaseAdmin.from("stripe_point_recharges").select("id, points, amount_total, status, created_at").eq("user_id", profileId).order("created_at", { ascending: false }).limit(80),
+      supabaseAdmin.from("point_transfers").select("id, receiver_id, points, status, created_at, paid_at").eq("sender_id", profileId).order("created_at", { ascending: false }).limit(80),
+      supabaseAdmin.from("point_transfers").select("id, sender_id, points, status, created_at, paid_at").eq("receiver_id", profileId).order("created_at", { ascending: false }).limit(80),
+      supabaseAdmin.from("business_offers").select("id, title, category, points, status, is_hidden, created_at").eq("business_id", profileId).order("created_at", { ascending: false }).limit(80),
+    ]);
+
+    if (profileError || !profile) return response.status(404).json({ error: "Cuenta no encontrada." });
+    await recordAdminAudit(request, adminAuth.actor, "secondary_account_detail_view", "profile", profileId, { email: profile.email || "" });
+    response.json({
+      profile,
+      purchases: purchasesError ? [] : purchases || [],
+      recharges: rechargesError ? [] : recharges || [],
+      sent_transfers: sentError ? [] : sentTransfers || [],
+      received_transfers: receivedError ? [] : receivedTransfers || [],
+      offers: offersError ? [] : offers || [],
+    });
+  } catch (error) {
+    console.error("Secondary account detail error:", error);
+    response.status(500).json({ error: "No se ha podido cargar la ficha." });
+  }
+});
+
 app.post("/api/admin/accounts/verify", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -1885,13 +2199,8 @@ app.post("/api/analytics/track", async (request, response) => {
 });
 
 app.post("/api/admin/activity", async (request, response) => {
-  if (!supabaseAdmin) {
-    return response.status(500).json({ error: "Supabase admin is not configured" });
-  }
-
-  if (!adminPassword || request.body?.password !== adminPassword) {
-    return response.status(401).json({ error: "Mot de passe incorrect" });
-  }
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
 
   const { startIso, endIso } = analyticsDateRange(request.body || {});
 
@@ -2186,10 +2495,8 @@ app.post("/api/admin/activity", async (request, response) => {
 });
 
 app.post("/api/admin/security/block", async (request, response) => {
-  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
-  if (!adminPassword || request.body?.password !== adminPassword) {
-    return response.status(401).json({ error: "Mot de passe incorrect" });
-  }
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
 
   const blockType = String(request.body?.blockType || "").trim();
   const ipAddress = String(request.body?.ipAddress || "").trim().slice(0, 80);
@@ -2210,6 +2517,7 @@ app.post("/api/admin/security/block", async (request, response) => {
         ip_address: blockType === "ip" ? ipAddress : null,
         user_id: blockType === "account" ? userId : null,
         reason,
+        created_by: adminActorLabel(adminAuth.actor),
         expires_at: expiresAt,
       })
       .select("id, block_type, ip_address, user_id, reason, expires_at, revoked_at, created_at")
@@ -2217,6 +2525,7 @@ app.post("/api/admin/security/block", async (request, response) => {
 
     if (error) throw error;
     securityBlockCache.delete(`${blockType}:${blockType === "ip" ? ipAddress : userId}`);
+    await recordAdminAudit(request, adminAuth.actor, "security_block_created", blockType, blockType === "ip" ? ipAddress : userId, { reason, expires_at: expiresAt });
     response.json({ ok: true, block: data });
   } catch (error) {
     console.error("Admin security block error:", error);
@@ -2225,10 +2534,8 @@ app.post("/api/admin/security/block", async (request, response) => {
 });
 
 app.post("/api/admin/security/unblock", async (request, response) => {
-  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
-  if (!adminPassword || request.body?.password !== adminPassword) {
-    return response.status(401).json({ error: "Mot de passe incorrect" });
-  }
+  const adminAuth = await authenticateAdminAccess(request, { allowSecondary: true });
+  if (adminAuth.error) return response.status(adminAuth.status || 401).json({ error: adminAuth.error });
 
   const blockId = String(request.body?.blockId || "").trim();
   if (!blockId) return response.status(400).json({ error: "Falta el bloqueo" });
@@ -2247,6 +2554,7 @@ app.post("/api/admin/security/unblock", async (request, response) => {
 
     if (error) throw error;
     if (existing?.block_type) securityBlockCache.delete(`${existing.block_type}:${existing.block_type === "ip" ? existing.ip_address : existing.user_id}`);
+    await recordAdminAudit(request, adminAuth.actor, "security_block_revoked", existing?.block_type || "block", existing?.ip_address || existing?.user_id || blockId);
     response.json({ ok: true });
   } catch (error) {
     console.error("Admin security unblock error:", error);

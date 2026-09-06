@@ -52,6 +52,10 @@ supabase-open-business-offers-no-rls.sql
    - surveillance admin du trafic suspect, IP/comptes bloques et evenements de securite.
    - a executer une fois pour activer la section Seguridad dans `donos-admin-activity.html`.
 
+12. `supabase-secondary-admins.sql`
+   - admins secondaires, acces limite staff et journal des actions admin.
+   - a executer une fois pour activer `donos-admin-staff.html` et `donos-admin-secondary.html`.
+
 ## Fichier a ne plus utiliser comme base
 
 `supabase-disable-offers-rls-dev.sql` est garde uniquement pour compatibilite. Il ne duplique plus le schema. Pour un lancement propre, prefere `supabase-open-business-offers-no-rls.sql`.
