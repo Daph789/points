@@ -6647,7 +6647,7 @@ app.post("/api/purchases/offer", async (request, response) => {
         return response.status(400).json({ error: "reservation_time_not_allowed" });
       }
 
-      if (reservationPeople < 1 || (maxPeople > 0 && reservationPeople > maxPeople)) {
+      if (reservationPeople < 2 || (maxPeople > 0 && reservationPeople > maxPeople)) {
         return response.status(400).json({ error: "reservation_people_not_allowed" });
       }
     }
@@ -6693,7 +6693,16 @@ app.post("/api/purchases/offer", async (request, response) => {
 
 	    const offerPoints = usesExternalCheckout ? 0 : Math.max(Number(offer.required_points || 0), 0);
     const deliveryPoints = usesExternalCheckout ? 0 : (deliveryMethod === "home" ? Math.max(Number(offer.delivery_home_points || 0), 0) : 0);
-    const totalPoints = offerPoints + deliveryPoints;
+    const reservationPriceMode = String(offer.reservation_price_mode || "per_person");
+    const reservationExtraBase = Math.max(reservationPeople - 1, 0);
+    const reservationExtraPoints = !usesExternalCheckout && reservationRequested
+      ? reservationPriceMode === "no_extra"
+        ? 0
+        : reservationPriceMode === "custom_extra"
+          ? Math.max(Number(offer.reservation_extra_points_per_person || 0), 0) * reservationExtraBase
+          : offerPoints * reservationExtraBase
+      : 0;
+    const totalPoints = offerPoints + deliveryPoints + reservationExtraPoints;
     const buyerPoints = Number(buyerProfile?.points || 0);
 
     if (!usesExternalCheckout && buyerPoints < totalPoints) {
