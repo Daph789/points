@@ -48,6 +48,7 @@
         social: true,
         notifications: true,
         analytics: false,
+        security: false,
       };
 
       const groups = [
@@ -62,6 +63,7 @@
         ["social", "Borrar Quedar", "Elimina planes sociales, participantes, chats y grupos alternativos."],
         ["notifications", "Borrar notificaciones leídas", "Reinicia el estado de lectura de notificaciones."],
         ["analytics", "Borrar actividad analytics", "Opcional: elimina sesiones y visitas registradas para estadísticas."],
+        ["security", "Borrar logs de seguridad", "Opcional: elimina avisos de tráfico sospechoso. No afecta a usuarios ni publicaciones."],
       ];
 
       const onlyPointsOptions = Object.fromEntries(Object.keys(defaultOptions).map((key) => [key, key === "points"]));
@@ -234,11 +236,14 @@
 
             {result && (
               <section className="mt-5 rounded-[34px] border border-mint/25 bg-mint/10 p-5 sm:p-6">
-                <h2 className="text-2xl font-black text-white">Resultado</h2>
+                <h2 className="text-2xl font-black text-white">Resultado del borrado</h2>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
+                  Estos números son datos eliminados durante el reset, no datos que quedan en la app.
+                </p>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {Object.entries(result).map(([key, value]) => (
                     <div key={key} className="rounded-2xl bg-black/20 p-3 text-sm font-bold text-slate-300">
-                      <span className="text-mint">{key}</span>: {Number(value || 0).toLocaleString("es-ES")}
+                      <span className="text-mint">{key}</span>: {Number(value || 0).toLocaleString("es-ES")} eliminados
                     </div>
                   ))}
                 </div>

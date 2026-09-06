@@ -1764,6 +1764,8 @@ app.post("/api/admin/launch-reset/preview", async (request, response) => {
       "social_plan_side_group_merges",
       "notification_reads",
       "app_activity_events",
+      "app_security_events",
+      "app_security_blocks",
     ];
     const counts = {};
     for (const table of tables) counts[table] = await countAdminTable(table);
@@ -1817,6 +1819,10 @@ app.post("/api/admin/launch-reset", async (request, response) => {
     if (options.payouts !== false) deleted.business_payouts = await deleteAdminTable("business_payouts");
     if (options.notifications !== false) deleted.notification_reads = await deleteAdminTable("notification_reads", "profile_id");
     if (options.analytics === true) deleted.app_activity_events = await deleteAdminTable("app_activity_events");
+    if (options.security === true) {
+      deleted.app_security_events = await deleteAdminTable("app_security_events");
+      deleted.app_security_blocks = await deleteAdminTable("app_security_blocks");
+    }
     if (options.points !== false) deleted.profiles_reset = await resetLaunchProfiles(options.premium !== false);
 
     response.json({ ok: true, deleted });
