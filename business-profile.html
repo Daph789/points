@@ -92,7 +92,7 @@
       }
 
       function OfferCard({ offer, isLiked, onLike, onOpen }) {
-        const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0] || "";
+        const image = offer.cover_photo_data_url || "";
         const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
         const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         return (

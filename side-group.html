@@ -128,6 +128,7 @@
         const [showMembers, setShowMembers] = React.useState(false);
         const [selectedMessage, setSelectedMessage] = React.useState(null);
         const [readListMessage, setReadListMessage] = React.useState(null);
+        const [readListStatus, setReadListStatus] = React.useState("");
         const [editingMessage, setEditingMessage] = React.useState(null);
         const [editDraft, setEditDraft] = React.useState("");
         const [messageToDelete, setMessageToDelete] = React.useState(null);
@@ -213,12 +214,30 @@
             setStatus("");
             if (options.markRead || isActiveRef.current) {
               markSideMessagesRead(accessToken);
-              markSideNotificationsRead(accessToken);
+              markSideNotificationsRead(accessToken, data.messages || [], data.profile?.id);
             }
           } catch (error) {
             if (!silent) setStatus(error.message === "side_groups_sql_missing" ? "Falta ejecutar supabase-side-groups.sql en Supabase." : "No se ha podido cargar este grupo.");
           } finally {
             loadingGroupRef.current = false;
+          }
+        }
+
+        async function openReadList(message) {
+          setSelectedMessage(null);
+          setReadListMessage(message);
+          setReadListStatus("Cargando lecturas...");
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/messages/${message.id}/reads`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "message_reads_failed");
+            setReadListMessage(data.message || message);
+            setMessages((current) => current.map((item) => item.id === message.id ? { ...item, read_by: data.message?.read_by || item.read_by || [] } : item));
+            setReadListStatus("");
+          } catch (_error) {
+            setReadListStatus("No se han podido cargar las lecturas.");
           }
         }
 
@@ -233,15 +252,12 @@
           } catch (_error) {}
         }
 
-        async function markSideNotificationsRead(accessToken = token) {
+        async function markSideNotificationsRead(accessToken = token, groupMessages = messages, profileId = profile?.id) {
           if (!accessToken || !planId || !sideStatus) return;
           try {
-            const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${accessToken}` } });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) return;
-            const keys = (data.events || [])
-              .filter((event) => event.section === "quedar" && String(event.kind || "").startsWith("side_") && event.plan_id === planId && event.side_status === sideStatus && !event.read)
-              .map((event) => event.key)
+            const keys = (groupMessages || [])
+              .filter((message) => message.id && message.sender_id !== profileId)
+              .map((message) => `quedar:side-chat:${message.id}:${profileId}`)
               .filter(Boolean);
             if (keys.length === 0) return;
             await fetch("/api/me/notifications/read", {
@@ -463,10 +479,7 @@
                   <p className="text-sm font-black text-white">Opciones del mensaje</p>
                   <p className="mt-1 text-xs font-bold text-slate-500">Puedes modificarlo solo durante 15 minutos.</p>
                   <div className="mt-4 grid gap-2">
-                    <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => {
-                      setReadListMessage(selectedMessage);
-                      setSelectedMessage(null);
-                    }}>
+                    <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => openReadList(selectedMessage)}>
                       Ver quién lo ha leído
                     </button>
                     {canEditMessage(selectedMessage) && (
@@ -500,6 +513,7 @@
                     </div>
                     <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setReadListMessage(null)}>×</button>
                   </div>
+                  {readListStatus && <p className="mt-3 rounded-2xl bg-white/[0.055] p-3 text-sm font-bold text-slate-300">{readListStatus}</p>}
                   <div className="mt-4 max-h-[55vh] space-y-2 overflow-y-auto pr-1">
                     {(readListMessage.read_by || []).filter((read) => read.reader?.id !== readListMessage.sender_id).map((read) => (
                       <div key={`${read.reader?.id}-${read.read_at}`} className="flex items-center gap-3 rounded-3xl bg-white/[0.055] p-3 ring-1 ring-white/10">

@@ -4024,7 +4024,8 @@ async function markPlanChatReadForProfile(planId, readerId) {
   return messages?.length || 0;
 }
 
-async function enrichPlanChatMessages(messages = []) {
+async function enrichPlanChatMessages(messages = [], options = {}) {
+  const includeReadProfiles = options.includeReadProfiles !== false;
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
   const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
@@ -4059,7 +4060,7 @@ async function enrichPlanChatMessages(messages = []) {
     } else {
       const readerIds = [...new Set((reads || []).map((read) => read.reader_id).filter(Boolean))];
       let readersById = {};
-      if (readerIds.length > 0) {
+      if (includeReadProfiles && readerIds.length > 0) {
         let { data: readers, error: readersError } = await supabaseAdmin
           .from("profiles")
           .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
@@ -4082,7 +4083,9 @@ async function enrichPlanChatMessages(messages = []) {
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
-          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" },
+          reader: includeReadProfiles
+            ? readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" }
+            : { id: read.reader_id },
         });
       }
     }
@@ -4144,7 +4147,8 @@ async function getAcceptedSideMerge(planId) {
   return merge || null;
 }
 
-async function enrichSideMessages(messages = []) {
+async function enrichSideMessages(messages = [], options = {}) {
+  const includeReadProfiles = options.includeReadProfiles !== false;
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
   const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
@@ -4179,7 +4183,7 @@ async function enrichSideMessages(messages = []) {
     } else {
       const readerIds = [...new Set((reads || []).map((read) => read.reader_id).filter(Boolean))];
       let readersById = {};
-      if (readerIds.length > 0) {
+      if (includeReadProfiles && readerIds.length > 0) {
         let { data: readers, error: readersError } = await supabaseAdmin
           .from("profiles")
           .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
@@ -4202,7 +4206,9 @@ async function enrichSideMessages(messages = []) {
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
-          reader: readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" },
+          reader: includeReadProfiles
+            ? readersById[read.reader_id] || { id: read.reader_id, display_name: "Usuario Donoss" }
+            : { id: read.reader_id },
         });
       }
     }
@@ -4556,7 +4562,7 @@ app.get("/api/businesses/:businessId/profile", async (request, response) => {
 
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferSelect)
+      .select(publicOfferPreviewSelect)
       .eq("business_id", business.id)
       .order("created_at", { ascending: false })
       .limit(300);
@@ -4567,28 +4573,38 @@ app.get("/api/businesses/:businessId/profile", async (request, response) => {
 
     let totalLikes = 0;
     if (offerIds.length > 0) {
-      const { data: likes, error: likesError } = await supabaseAdmin
+      const { count: likesCount, error: likesError } = await supabaseAdmin
         .from("liked_offers")
-        .select("offer_id")
+        .select("offer_id", { count: "exact", head: true })
         .in("offer_id", offerIds);
       if (likesError && likesError.code !== "42P01") console.error("Business likes count error:", likesError);
-      totalLikes = (likes || []).length;
+      totalLikes = Number(likesCount || 0);
     }
 
     let followersCount = 0;
     let isFollowing = false;
     let followsSqlMissing = false;
-    const { data: followers, error: followersError } = await supabaseAdmin
+    const { count: followersCountValue, error: followersError } = await supabaseAdmin
       .from("business_follows")
-      .select("follower_id")
+      .select("follower_id", { count: "exact", head: true })
       .eq("business_id", business.id);
 
     if (followersError) {
       followsSqlMissing = followersError.code === "42P01";
       if (!followsSqlMissing) console.error("Business followers count error:", followersError);
     } else {
-      followersCount = (followers || []).length;
-      isFollowing = Boolean(viewerProfile?.id && (followers || []).some((follow) => follow.follower_id === viewerProfile.id));
+      followersCount = Number(followersCountValue || 0);
+      if (viewerProfile?.id) {
+        const { data: followRow, error: followError } = await supabaseAdmin
+          .from("business_follows")
+          .select("id")
+          .eq("business_id", business.id)
+          .eq("follower_id", viewerProfile.id)
+          .limit(1)
+          .maybeSingle();
+        if (followError && followError.code !== "42P01") console.error("Business follow self check error:", followError);
+        isFollowing = Boolean(followRow?.id);
+      }
     }
 
     response.json({
@@ -5240,7 +5256,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
     response.json({
       profile: privatePlanProfile(profile),
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
-      messages: await enrichPlanChatMessages(messages || []),
+      messages: await enrichPlanChatMessages(messages || [], { includeReadProfiles: false }),
     });
   } catch (error) {
     console.error("Social plan chat list fatal error:", error);
@@ -5263,6 +5279,34 @@ app.post("/api/social-plans/:id/chat/read", async (request, response) => {
   } catch (error) {
     console.error("Social plan chat read fatal error:", error);
     response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_read_failed" });
+  }
+});
+
+app.get("/api/social-plans/:id/chat/:messageId/reads", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+
+    const { data: message, error: messageError } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (messageError) throw messageError;
+    if (!message) return response.status(404).json({ error: "message_not_found" });
+
+    const [enriched] = await enrichPlanChatMessages([message], { includeReadProfiles: true });
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Social plan reads fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "message_reads_failed" });
   }
 });
 
@@ -5441,7 +5485,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       other_count: Number(otherCount || 0),
       merged: isMerged,
       members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
-      messages: await enrichSideMessages(messages || []),
+      messages: await enrichSideMessages(messages || [], { includeReadProfiles: false }),
       merge_requests: mergeRequests || [],
     });
   } catch (error) {
@@ -5467,6 +5511,34 @@ app.post("/api/social-plans/:id/side-group/:status/read", async (request, respon
   } catch (error) {
     console.error("Side group read fatal error:", error);
     response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_group_read_failed" });
+  }
+});
+
+app.get("/api/social-plans/:id/side-group/:status/messages/:messageId/reads", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
+
+    const { data: message, error: messageError } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .eq("id", request.params.messageId)
+      .eq("plan_id", access.plan.id)
+      .maybeSingle();
+    if (messageError) throw messageError;
+    if (!message) return response.status(404).json({ error: "message_not_found" });
+
+    const [enriched] = await enrichSideMessages([message], { includeReadProfiles: true });
+    response.json({ message: enriched });
+  } catch (error) {
+    console.error("Side group reads fatal error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "message_reads_failed" });
   }
 });
 

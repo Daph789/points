@@ -42,6 +42,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,author,description,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "";
@@ -256,7 +257,7 @@
 
             const [{ data: profile }, { data, error }] = await Promise.all([
               supabaseClient.from("profiles").select("display_name, account_type").eq("id", userId).maybeSingle(),
-              supabaseClient.from("business_offers").select("*").eq("business_id", userId).order("created_at", { ascending: false }),
+              supabaseClient.from("business_offers").select(myOfferListSelect).eq("business_id", userId).order("created_at", { ascending: false }),
             ]);
 
             if (profile?.display_name) setBusinessName(profile.display_name);
