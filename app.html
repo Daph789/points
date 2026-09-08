@@ -232,10 +232,10 @@
   <body>
     <main class="spa-root" aria-live="polite">
       <iframe class="spa-frame is-active" data-route="inicio" data-index="0" title="Inicio Donoss" src="home.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donoss" src="about:blank" data-src="historial.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donoss" src="about:blank" data-src="historial.html?embedded=1" data-guest-src="guest-required.html?embedded=1&section=historial"></iframe>
       <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donoss" src="plans.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donoss" src="about:blank" data-src="transfer.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donoss" src="about:blank" data-src="profile.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donoss" src="about:blank" data-src="transfer.html?embedded=1" data-guest-src="guest-required.html?embedded=1&section=transfer"></iframe>
+      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donoss" src="about:blank" data-src="profile.html?embedded=1" data-guest-src="guest-required.html?embedded=1&section=perfil"></iframe>
     </main>
 
     <div id="spa-boot" class="spa-boot" aria-hidden="true">
@@ -288,10 +288,15 @@
         const updateMessage = document.getElementById("donos-update-message");
         const updateButton = document.getElementById("donos-update-button");
         const seenUpdateKey = "donossSeenAppUpdateId";
+        const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
+        const supabaseAnonKey =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
+        const protectedRoutes = new Set(["historial", "transfer", "perfil"]);
         let activeIndex = 0;
         let activeRoute = "inicio";
         let activeCategoryKey = "";
         let inicioReady = false;
+        let sessionCheckPromise = null;
 
         function currentTheme() {
           return window.donossTheme?.getTheme?.() || "dark";
@@ -336,9 +341,6 @@
         async function hydrateNotificationBadges() {
           const badges = Array.from(nav.querySelectorAll("[data-nav-badge]"));
           if (badges.length === 0 || !window.supabase?.createClient) return;
-          const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
-          const supabaseAnonKey =
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
           try {
             const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
             const { data: auth } = await client.auth.getSession();
@@ -432,7 +434,55 @@
           const frame = baseFrames.find((item) => item.dataset.route === route);
           if (!frame || !frame.dataset.src || frame.dataset.loaded === "1") return;
           frame.dataset.loaded = "1";
+          if (protectedRoutes.has(route) && !hasSupabaseSessionHint()) {
+            frame.dataset.guest = "1";
+            frame.src = frame.dataset.guestSrc || frame.dataset.src;
+            confirmSession().then((signedIn) => {
+              if (!signedIn || frame.dataset.route !== route) return;
+              frame.dataset.guest = "0";
+              frame.src = frame.dataset.src;
+            });
+            return;
+          }
+          frame.dataset.guest = "0";
           frame.src = frame.dataset.src;
+        }
+
+        function hasSupabaseSessionHint() {
+          try {
+            for (let index = 0; index < localStorage.length; index += 1) {
+              const key = localStorage.key(index) || "";
+              if (key.startsWith("sb-") && key.endsWith("-auth-token") && localStorage.getItem(key)) return true;
+            }
+          } catch (_error) {}
+          return false;
+        }
+
+        function confirmSession() {
+          if (sessionCheckPromise) return sessionCheckPromise;
+          sessionCheckPromise = new Promise((resolve) => {
+            const startedAt = Date.now();
+            const check = async () => {
+              if (!window.supabase?.createClient) {
+                if (Date.now() - startedAt > 1800) return resolve(false);
+                window.setTimeout(check, 80);
+                return;
+              }
+              try {
+                const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+                const { data } = await client.auth.getSession();
+                resolve(Boolean(data?.session?.access_token));
+              } catch (_error) {
+                resolve(false);
+              }
+            };
+            check();
+          }).finally(() => {
+            window.setTimeout(() => {
+              sessionCheckPromise = null;
+            }, 1000);
+          });
+          return sessionCheckPromise;
         }
 
         function categoryKey(category) {

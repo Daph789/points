@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Donoss | Modo visitante</title>
+    <link rel="stylesheet" href="theme.css" />
+    <script src="theme.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap");
+
+      * { box-sizing: border-box; min-width: 0; }
+      html { min-height: 100%; overflow-x: hidden; background: #060914; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        overflow-x: hidden;
+        color: white;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at 18% -8%, rgba(66, 242, 179, 0.20), transparent 30%),
+          radial-gradient(circle at 88% 8%, rgba(167, 139, 250, 0.14), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 52%, #050711 100%);
+      }
+      main {
+        width: min(100%, 980px);
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: 18px 14px 128px;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: inherit;
+        text-decoration: none;
+      }
+      .logo {
+        display: grid;
+        width: 48px;
+        height: 48px;
+        place-items: center;
+        border-radius: 18px;
+        background: #42f2b3;
+        color: #060914;
+        font-size: 24px;
+        font-weight: 900;
+        box-shadow: 0 18px 48px rgba(66, 242, 179, 0.22);
+      }
+      .brand strong { display: block; font-size: 20px; line-height: 1; }
+      .brand span { display: block; margin-top: 4px; color: #94a3b8; font-size: 13px; font-weight: 800; }
+      .card {
+        margin-top: 22px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 34px;
+        background: rgba(255, 255, 255, 0.055);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.28);
+      }
+      .hero {
+        position: relative;
+        min-height: 230px;
+        padding: 26px;
+        background:
+          linear-gradient(135deg, rgba(66, 242, 179, 0.18), rgba(167, 139, 250, 0.13)),
+          #101522;
+      }
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -45% 30%;
+        height: 210px;
+        border-radius: 999px;
+        background: rgba(66, 242, 179, 0.16);
+        filter: blur(46px);
+      }
+      .eyebrow {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        color: #42f2b3;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+      h1 {
+        position: relative;
+        z-index: 1;
+        max-width: 760px;
+        margin: 14px 0 0;
+        font-size: clamp(36px, 8vw, 76px);
+        line-height: 0.96;
+        font-weight: 900;
+      }
+      .subtitle {
+        position: relative;
+        z-index: 1;
+        max-width: 620px;
+        margin: 18px 0 0;
+        color: #cbd5e1;
+        font-size: 16px;
+        font-weight: 800;
+        line-height: 1.55;
+      }
+      .body {
+        padding: 18px;
+      }
+      .features {
+        display: grid;
+        gap: 10px;
+      }
+      .feature {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 78px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        background: rgba(0, 0, 0, 0.18);
+        padding: 14px;
+      }
+      .icon {
+        display: grid;
+        flex: 0 0 48px;
+        height: 48px;
+        place-items: center;
+        border-radius: 18px;
+        background: rgba(66, 242, 179, 0.13);
+        color: #42f2b3;
+        font-size: 24px;
+        font-weight: 900;
+      }
+      .feature strong { display: block; font-size: 15px; font-weight: 900; }
+      .feature span { display: block; margin-top: 4px; color: #94a3b8; font-size: 13px; font-weight: 800; line-height: 1.35; }
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .button {
+        display: grid;
+        min-height: 52px;
+        place-items: center;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        color: white;
+        text-align: center;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 900;
+      }
+      .button.primary {
+        border-color: transparent;
+        background: #42f2b3;
+        color: #060914;
+        box-shadow: 0 18px 48px rgba(66, 242, 179, 0.18);
+      }
+      @media (min-width: 720px) {
+        main { padding: 24px 24px 140px; }
+        .body { padding: 22px; }
+        .features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .feature { align-items: flex-start; flex-direction: column; min-height: 160px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="top">
+        <a class="brand" href="home.html">
+          <span class="logo">D</span>
+          <span><strong>Donoss</strong><span id="sectionLabel">Modo visitante</span></span>
+        </a>
+      </header>
+
+      <section class="card">
+        <div class="hero">
+          <p class="eyebrow">Modo visitante</p>
+          <h1 id="title">Descubre Donoss sin crear cuenta.</h1>
+          <p class="subtitle" id="subtitle">Puedes mirar ofertas, planes y comercios. Cuando quieras guardar algo o usar tus puntos, te pediremos entrar.</p>
+        </div>
+        <div class="body">
+          <div class="features" id="features"></div>
+          <div class="actions">
+            <a class="button primary" id="signupLink" href="signup.html">Crear cuenta</a>
+            <a class="button" id="loginLink" href="login.html">Entrar</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get("section") || "inicio";
+      const copy = {
+        historial: {
+          label: "Historial",
+          title: "Tu historial se activa al crear cuenta.",
+          subtitle: "Aquí guardarás compras, me gusta, solicitudes, automatizaciones y movimientos importantes.",
+          features: [
+            ["🛍", "Compras guardadas", "Tus billetes y redirecciones externas quedarán ordenados aquí."],
+            ["♡", "Me gusta", "Guarda ofertas para volver luego sin perderlas."],
+            ["↔", "Movimientos", "Consulta puntos enviados, recibidos o pedidos."],
+          ],
+        },
+        transfer: {
+          label: "Transferencias",
+          title: "Recarga puntos cuando quieras aprovechar.",
+          subtitle: "Con una cuenta podrás recargar, enviar puntos y pedir puntos a otra persona.",
+          features: [
+            ["+", "Recargar puntos", "Compra puntos para pagar ofertas dentro de Donoss."],
+            ["↗", "Enviar", "Manda puntos a otra cuenta Donoss."],
+            ["↙", "Pedir", "Solicita puntos con tu ID Donoss."],
+          ],
+        },
+        perfil: {
+          label: "Perfil",
+          title: "Crea tu perfil para participar.",
+          subtitle: "Tu perfil permite comprar, apuntarte a planes, chatear y guardar tus preferencias.",
+          features: [
+            ["D", "ID Donoss", "Tu identificador para puntos, compras y planes."],
+            ["✓", "Certificación", "Opción premium para ganar confianza con otras personas."],
+            ["☺", "Quedar", "Fotos y bio para que sepan con quién van a quedar."],
+          ],
+        },
+      };
+      const data = copy[section] || copy.perfil;
+      document.getElementById("sectionLabel").textContent = data.label;
+      document.getElementById("title").textContent = data.title;
+      document.getElementById("subtitle").textContent = data.subtitle;
+      document.getElementById("features").innerHTML = data.features.map(([icon, title, text]) => `
+        <article class="feature">
+          <span class="icon">${icon}</span>
+          <span><strong>${title}</strong><span>${text}</span></span>
+        </article>
+      `).join("");
+      const next = `app.html#${section}`;
+      document.getElementById("signupLink").href = `signup.html?next=${encodeURIComponent(next)}`;
+      document.getElementById("loginLink").href = `login.html?next=${encodeURIComponent(next)}`;
+    </script>
+  </body>
+</html>
