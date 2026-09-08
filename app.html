@@ -232,10 +232,10 @@
   <body>
     <main class="spa-root" aria-live="polite">
       <iframe class="spa-frame is-active" data-route="inicio" data-index="0" title="Inicio Donoss" src="home.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donoss" src="historial.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="historial" data-index="1" title="Historial Donoss" src="about:blank" data-src="historial.html?embedded=1"></iframe>
       <iframe class="spa-frame" data-route="quedar" data-index="2" title="Quedar Donoss" src="plans.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donoss" src="transfer.html?embedded=1"></iframe>
-      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donoss" src="profile.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="transfer" data-index="3" title="Transferencias Donoss" src="about:blank" data-src="transfer.html?embedded=1"></iframe>
+      <iframe class="spa-frame" data-route="perfil" data-index="4" title="Perfil Donoss" src="about:blank" data-src="profile.html?embedded=1"></iframe>
     </main>
 
     <div id="spa-boot" class="spa-boot" aria-hidden="true">
@@ -375,6 +375,7 @@
         function setRoute(route, options = {}) {
           const isExternalInicioRoute = route === "categoria" || route === "detalle" || route === "empresa";
           const navRoute = route === "chat" || route === "side" ? "quedar" : isExternalInicioRoute ? "inicio" : route;
+          ensureBaseRouteLoaded(navRoute);
           const nextIndex = Math.max(bottomRoutes.indexOf(navRoute), 0);
           const direction = nextIndex < activeIndex ? "left" : "right";
           activeIndex = nextIndex;
@@ -425,6 +426,13 @@
 
         function allFrames() {
           return [...baseFrames, ...categoryFrames.values(), ...offerFrames.values(), ...businessFrames.values(), ...chatFrames.values(), ...sideGroupFrames.values()];
+        }
+
+        function ensureBaseRouteLoaded(route) {
+          const frame = baseFrames.find((item) => item.dataset.route === route);
+          if (!frame || !frame.dataset.src || frame.dataset.loaded === "1") return;
+          frame.dataset.loaded = "1";
+          frame.src = frame.dataset.src;
         }
 
         function categoryKey(category) {
