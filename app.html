@@ -445,6 +445,11 @@
             try {
               const childUrl = new URL(frame.contentWindow.location.href);
               if (childUrl.pathname.endsWith("/login.html") || childUrl.pathname.endsWith("login.html")) {
+                if (!frame.classList.contains("is-active")) {
+                  frame.dataset.loaded = "";
+                  frame.src = "about:blank";
+                  return;
+                }
                 window.location.href = childUrl.pathname + childUrl.search.replace(/[?&]embedded=1\b/, "");
                 return;
               }
