@@ -5174,10 +5174,9 @@ app.get("/api/social-plans", async (request, response) => {
   if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
 
   const auth = await getAuthenticatedUser(request);
-  if (auth.error) return response.status(auth.status).json({ error: auth.error });
 
   try {
-    const viewer = await ensureProfileForUser(auth.user);
+    const viewer = auth.error ? null : await ensureProfileForUser(auth.user);
     const { data: plans, error } = await supabaseAdmin
       .from("social_plans")
       .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
@@ -5190,8 +5189,9 @@ app.get("/api/social-plans", async (request, response) => {
       return response.status(500).json({ error: error.code === "42P01" ? "social_plans_table_missing" : error.code === "42703" ? "free_social_plans_sql_missing" : "social_plans_failed" });
     }
 
-    const enriched = await enrichSocialPlans(plans || [], viewer.id);
-    response.json({ plans: filterPublicSocialPlans(enriched, viewer.id) });
+    const viewerId = viewer?.id || "";
+    const enriched = await enrichSocialPlans(plans || [], viewerId);
+    response.json({ plans: filterPublicSocialPlans(enriched, viewerId), guest: !viewerId });
   } catch (error) {
     console.error("Social plans list fatal error:", error);
     response.status(500).json({ error: "social_plans_failed" });

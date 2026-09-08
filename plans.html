@@ -109,6 +109,10 @@
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
       }
 
+      function authHeaders(accessToken) {
+        return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      }
+
       function formatDate(value) {
         if (!value) return "";
         return new Date(value).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" });
@@ -458,6 +462,7 @@
       function App() {
         const [profile, setProfile] = React.useState(null);
         const [token, setToken] = React.useState("");
+        const [isGuest, setIsGuest] = React.useState(false);
         const initialMode = new URLSearchParams(window.location.search).get("tab");
         const [mode, setMode] = React.useState(["discover", "create", "mine", "joined"].includes(initialMode) ? initialMode : "discover");
         const [plans, setPlans] = React.useState([]);
@@ -534,6 +539,10 @@
         }, [plans, ownedPlans, joinedPlans, detailPlan?.id]);
 
         async function api(path, options = {}) {
+          if (!token) {
+            redirectToLogin();
+            throw new Error("not_authenticated");
+          }
           const response = await fetch(path, {
             ...options,
             headers: {
@@ -550,7 +559,13 @@
         async function bootstrap() {
           const { data: sessionData } = await supabaseClient.auth.getSession();
           const accessToken = sessionData.session?.access_token;
-          if (!accessToken) return redirectToLogin();
+          if (!accessToken) {
+            setIsGuest(true);
+            setMode("discover");
+            await loadPlans("");
+            return;
+          }
+          setIsGuest(false);
           setToken(accessToken);
           try {
             const profileResponse = await fetch("/api/me/profile", { headers: { Authorization: `Bearer ${accessToken}` } });
@@ -574,7 +589,8 @@
         }
 
         async function loadNotifications(accessToken = token) {
-          const response = await fetch("/api/me/notifications", { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!accessToken) return;
+          const response = await fetch("/api/me/notifications", { headers: authHeaders(accessToken) });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) return;
           setNotificationEvents(data.events || []);
@@ -583,7 +599,7 @@
         }
 
         async function loadPlans(accessToken = token) {
-          const response = await fetch("/api/social-plans", { headers: { Authorization: `Bearer ${accessToken}` } });
+          const response = await fetch("/api/social-plans", { headers: authHeaders(accessToken) });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.error || "plans_failed");
           setPlans(data.plans || []);
@@ -591,6 +607,7 @@
         }
 
         async function loadMine(accessToken = token) {
+          if (!accessToken) return;
           const response = await fetch("/api/social-plans/me", { headers: { Authorization: `Bearer ${accessToken}` } });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.error || "mine_failed");
@@ -599,6 +616,7 @@
         }
 
         async function loadTickets(accessToken = token, currentUserId = profile?.id || "") {
+          if (!accessToken) return;
           const localTickets = localExternalTicketsFor(currentUserId);
           const response = await fetch("/api/me/plan-tickets", { headers: { Authorization: `Bearer ${accessToken}` } });
           const data = await response.json().catch(() => ({}));
@@ -614,6 +632,7 @@
         }
 
         async function loadPlanProfilePhotos(accessToken = token) {
+          if (!accessToken) return;
           const response = await fetch("/api/me/plan-photos", { headers: { Authorization: `Bearer ${accessToken}` } });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.error || "plan_photos_failed");
@@ -623,6 +642,10 @@
         }
 
         async function reloadAll() {
+          if (!token) {
+            await loadPlans("");
+            return;
+          }
           await Promise.all([loadPlans(), loadMine(), loadTickets(), loadPlanProfilePhotos(), loadNotifications()]);
         }
 
@@ -726,6 +749,7 @@
         }
 
         async function markNotificationsRead(keys) {
+          if (!token) return;
           const cleanKeys = [...new Set((keys || []).filter(Boolean))];
           if (cleanKeys.length === 0) return;
           setReadKeys((current) => new Set([...current, ...cleanKeys]));
@@ -897,6 +921,7 @@
         }
 
         async function createPlan() {
+          if (!token) return redirectToLogin();
           const today = new Date().toISOString().slice(0, 10);
           if (planType === "ticket" && !selectedTicketId) {
             setStatus("Elige un billete para crear el plan.");
@@ -981,6 +1006,7 @@
         }
 
         async function submitJoin() {
+          if (!token) return redirectToLogin();
           if (!joinPlan) return;
           setIsSaving(true);
           setStatus("");
@@ -1015,6 +1041,7 @@
         }
 
         async function savePhotosAndJoin() {
+          if (!token) return redirectToLogin();
           const saved = await savePlanProfilePhotos();
           if (!saved || !photoGatePlan) return;
           setJoinPlan(photoGatePlan);
@@ -1029,6 +1056,7 @@
         }
 
         function openJoinFlow(plan) {
+          if (!token) return redirectToLogin();
           if (!hasPurchasedOffer(plan)) {
             setPurchaseRequiredPlan(plan);
             return;
@@ -1045,6 +1073,7 @@
         }
 
         function startEditPlan(plan) {
+          if (!token) return redirectToLogin();
           const women = Number(plan.wanted_women || 0);
           const men = Number(plan.wanted_men || 0);
           const open = Number(plan.wanted_open || 0);
@@ -1092,6 +1121,10 @@
         }
 
         function selectMode(nextMode) {
+          if (!token && nextMode !== "discover") {
+            redirectToLogin();
+            return;
+          }
           setMode(nextMode);
           if (nextMode === "create" && !editingPlanId && photoDataUrls.length === 0 && planProfilePhotos.length > 0) {
             setPhotoDataUrls(planProfilePhotos);
@@ -1233,6 +1266,18 @@
               </a>
               <button className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-mint" onClick={reloadAll}>↻</button>
             </header>
+
+            {isGuest && (
+              <section className="mt-4 rounded-[28px] border border-mint/20 bg-mint/10 p-4 shadow-glow">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Modo visitante</p>
+                <h2 className="mt-2 text-xl font-black text-white">Mira planes reales antes de crear tu cuenta.</h2>
+                <p className="mt-2 text-sm font-bold leading-6 text-slate-300">Para apuntarte, publicar, chatear o guardar tus datos, Donoss te pedirá entrar o registrarte.</p>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <a className="grid h-11 place-items-center rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" href={`signup.html?next=${encodeURIComponent("plans.html")}`}>Crear cuenta</a>
+                  <a className="grid h-11 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" href={`login.html?next=${encodeURIComponent("plans.html")}`}>Entrar</a>
+                </div>
+              </section>
+            )}
 
             <div className="sticky top-0 z-30 -mx-3 mt-3 overflow-x-auto border-y border-white/5 bg-[#060914]/72 px-3 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
               <div className="flex w-max min-w-full gap-2">
