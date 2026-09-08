@@ -40,9 +40,11 @@
         gap: 12px;
         color: inherit;
         text-decoration: none;
+        min-width: 0;
       }
       .logo {
         display: grid;
+        flex: 0 0 48px;
         width: 48px;
         height: 48px;
         place-items: center;
@@ -53,7 +55,8 @@
         font-weight: 900;
         box-shadow: 0 18px 48px rgba(66, 242, 179, 0.22);
       }
-      .brand strong { display: block; font-size: 20px; line-height: 1; }
+      .brand-text { display: block; min-width: 0; }
+      .brand strong { display: block; color: #fff; font-size: 20px; line-height: 1; }
       .brand span { display: block; margin-top: 4px; color: #94a3b8; font-size: 13px; font-weight: 800; }
       .card {
         margin-top: 22px;
@@ -129,13 +132,21 @@
       .icon {
         display: grid;
         flex: 0 0 48px;
+        width: 48px;
         height: 48px;
         place-items: center;
         border-radius: 18px;
         background: rgba(66, 242, 179, 0.13);
         color: #42f2b3;
-        font-size: 24px;
-        font-weight: 900;
+      }
+      .icon svg {
+        width: 24px;
+        height: 24px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
       .feature strong { display: block; font-size: 15px; font-weight: 900; }
       .feature span { display: block; margin-top: 4px; color: #94a3b8; font-size: 13px; font-weight: 800; line-height: 1.35; }
@@ -169,6 +180,11 @@
         .features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .feature { align-items: flex-start; flex-direction: column; min-height: 160px; }
       }
+      @media (max-width: 380px) {
+        main { padding-inline: 10px; }
+        .hero { padding: 22px; }
+        h1 { font-size: 34px; }
+      }
     </style>
   </head>
   <body>
@@ -176,7 +192,7 @@
       <header class="top">
         <a class="brand" href="home.html">
           <span class="logo">D</span>
-          <span><strong>Donoss</strong><span id="sectionLabel">Modo visitante</span></span>
+          <span class="brand-text"><strong>Donoss</strong><span id="sectionLabel">Modo visitante</span></span>
         </a>
       </header>
 
@@ -197,6 +213,17 @@
     </main>
 
     <script>
+      const icons = {
+        purchases: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 8a3 3 0 0 1 6 0"/><path d="M8 13h8"/></svg>',
+        heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 0 0-7.4 7.4L12 21l8.8-8a5.2 5.2 0 0 0 0-7.4Z"/></svg>',
+        transfer: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h12m0 0-4-4m4 4-4 4"/><path d="M17 17H5m0 0 4 4m-4-4 4-4"/></svg>',
+        plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/><path d="M19 12a7 7 0 1 1-7-7"/></svg>',
+        send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>',
+        request: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 22 13 11"/><path d="M2 22l7-20 4 9 9 4-20 7Z"/></svg>',
+        id: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 10h5M8 14h8"/></svg>',
+        verified: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/><path d="M21 12a9 9 0 1 1-3-6.7"/></svg>',
+        user: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><path d="M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/></svg>',
+      };
       const params = new URLSearchParams(window.location.search);
       const section = params.get("section") || "inicio";
       const copy = {
@@ -205,9 +232,9 @@
           title: "Tu historial se activa al crear cuenta.",
           subtitle: "Aquí guardarás compras, me gusta, solicitudes, automatizaciones y movimientos importantes.",
           features: [
-            ["🛍", "Compras guardadas", "Tus billetes y redirecciones externas quedarán ordenados aquí."],
-            ["♡", "Me gusta", "Guarda ofertas para volver luego sin perderlas."],
-            ["↔", "Movimientos", "Consulta puntos enviados, recibidos o pedidos."],
+            ["purchases", "Compras guardadas", "Tus billetes y redirecciones externas quedarán ordenados aquí."],
+            ["heart", "Me gusta", "Guarda ofertas para volver luego sin perderlas."],
+            ["transfer", "Movimientos", "Consulta puntos enviados, recibidos o pedidos."],
           ],
         },
         transfer: {
@@ -215,9 +242,9 @@
           title: "Recarga puntos cuando quieras aprovechar.",
           subtitle: "Con una cuenta podrás recargar, enviar puntos y pedir puntos a otra persona.",
           features: [
-            ["+", "Recargar puntos", "Compra puntos para pagar ofertas dentro de Donoss."],
-            ["↗", "Enviar", "Manda puntos a otra cuenta Donoss."],
-            ["↙", "Pedir", "Solicita puntos con tu ID Donoss."],
+            ["plus", "Recargar puntos", "Compra puntos para pagar ofertas dentro de Donoss."],
+            ["send", "Enviar", "Manda puntos a otra cuenta Donoss."],
+            ["request", "Pedir", "Solicita puntos con tu ID Donoss."],
           ],
         },
         perfil: {
@@ -225,9 +252,9 @@
           title: "Crea tu perfil para participar.",
           subtitle: "Tu perfil permite comprar, apuntarte a planes, chatear y guardar tus preferencias.",
           features: [
-            ["D", "ID Donoss", "Tu identificador para puntos, compras y planes."],
-            ["✓", "Certificación", "Opción premium para ganar confianza con otras personas."],
-            ["☺", "Quedar", "Fotos y bio para que sepan con quién van a quedar."],
+            ["id", "ID Donoss", "Tu identificador para puntos, compras y planes."],
+            ["verified", "Certificación", "Opción premium para ganar confianza con otras personas."],
+            ["user", "Quedar", "Fotos y bio para que sepan con quién van a quedar."],
           ],
         },
       };
@@ -237,7 +264,7 @@
       document.getElementById("subtitle").textContent = data.subtitle;
       document.getElementById("features").innerHTML = data.features.map(([icon, title, text]) => `
         <article class="feature">
-          <span class="icon">${icon}</span>
+          <span class="icon">${icons[icon] || icons.user}</span>
           <span><strong>${title}</strong><span>${text}</span></span>
         </article>
       `).join("");
