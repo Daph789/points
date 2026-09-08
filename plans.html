@@ -109,6 +109,11 @@
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
       }
 
+      function initialPlanSearch() {
+        const params = new URLSearchParams(window.location.search);
+        return String(params.get("q") || "").trim().slice(0, 80);
+      }
+
       function authHeaders(accessToken) {
         return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
       }
@@ -465,6 +470,7 @@
         const [isGuest, setIsGuest] = React.useState(false);
         const initialMode = new URLSearchParams(window.location.search).get("tab");
         const [mode, setMode] = React.useState(["discover", "create", "mine", "joined"].includes(initialMode) ? initialMode : "discover");
+        const [planQuery, setPlanQuery] = React.useState(initialPlanSearch);
         const [plans, setPlans] = React.useState([]);
         const [ownedPlans, setOwnedPlans] = React.useState([]);
         const [joinedPlans, setJoinedPlans] = React.useState([]);
@@ -509,6 +515,19 @@
 
         React.useEffect(() => {
           bootstrap();
+        }, []);
+
+        React.useEffect(() => {
+          function handleMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type !== "donos:plans-search-apply") return;
+            const query = String(event.data.query || "").trim().slice(0, 80);
+            setPlanQuery(query);
+            setMode("discover");
+          }
+
+          window.addEventListener("message", handleMessage);
+          return () => window.removeEventListener("message", handleMessage);
         }, []);
 
         React.useEffect(() => {
@@ -1230,7 +1249,57 @@
           }
         }
 
-        const visiblePlans = plans.filter((plan) => !plan.is_owner);
+        function setSharedPlanQuery(value) {
+          const query = String(value || "").slice(0, 80);
+          setPlanQuery(query);
+          if (mode !== "discover") setMode("discover");
+          if (isEmbeddedPlans && window.parent !== window) {
+            window.parent.postMessage({ type: "donos:plans-search", query }, window.location.origin);
+          } else {
+            const hash = query.trim() ? `#quedar=${encodeURIComponent(query.trim())}` : "#quedar";
+            window.history.replaceState({ route: "quedar", query: query.trim() }, "", hash);
+          }
+        }
+
+        async function sharePlanSearch() {
+          const query = planQuery.trim();
+          if (!query) return;
+          const shareUrl = `${window.location.origin}${window.location.pathname.replace(/plans\.html$/, "app.html")}#quedar=${encodeURIComponent(query)}`;
+          const payload = {
+            title: "Quedar en Donoss",
+            text: `Planes Donoss sobre ${query}`,
+            url: shareUrl,
+          };
+          try {
+            if (navigator.share) {
+              await navigator.share(payload);
+            } else {
+              await navigator.clipboard.writeText(shareUrl);
+              setActionToast({ type: "success", title: "Link copiado", message: "Tu búsqueda se ha copiado para compartirla." });
+              window.setTimeout(() => setActionToast(null), 2200);
+            }
+          } catch (_error) {}
+        }
+
+        function planMatchesQuery(plan, query) {
+          const clean = query.trim().toLowerCase();
+          if (!clean) return true;
+          const offer = plan.purchase?.offer || {};
+          return [
+            planTitle(plan),
+            plan.message,
+            plan.free_category,
+            plan.location,
+            offer.title,
+            offer.address,
+            offer.business_display_name,
+            offer.receiver_display_name,
+            plan.creator?.display_name,
+            formatDate(plan.event_date || offer.start_date || offer.end_date),
+          ].filter(Boolean).join(" ").toLowerCase().includes(clean);
+        }
+
+        const visiblePlans = plans.filter((plan) => !plan.is_owner && planMatchesQuery(plan, planQuery));
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
         const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
         const isBusinessAccount = profile?.account_type === "business";
@@ -1256,7 +1325,7 @@
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-52 pt-4 sm:px-6 lg:px-8">
-            <header className="flex items-center justify-between gap-3">
+            <header className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[auto_1fr_auto]">
               <a href="home.html" className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow">D</div>
                 <div>
@@ -1264,6 +1333,23 @@
                   <p className="text-xs font-semibold text-slate-400">Quedar</p>
                 </div>
               </a>
+              <label className="col-span-2 flex h-12 items-center gap-3 rounded-[24px] border border-white/10 bg-white/[0.06] px-4 shadow-glow sm:col-span-1">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-2xl bg-mint/12 text-mint"><NavIcon name="search" /></span>
+                <input
+                  className="h-full flex-1 bg-transparent text-sm font-black text-white outline-none placeholder:text-slate-500"
+                  value={planQuery}
+                  onChange={(event) => setSharedPlanQuery(event.target.value)}
+                  placeholder="Buscar un quedar..."
+                />
+                {planQuery && (
+                  <>
+                    <button className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mint text-sm font-black text-ink" type="button" onClick={sharePlanSearch} aria-label="Compartir búsqueda">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/></svg>
+                    </button>
+                    <button className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-sm font-black text-slate-300" type="button" onClick={() => setSharedPlanQuery("")}>×</button>
+                  </>
+                )}
+              </label>
               <button className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-mint" onClick={reloadAll}>↻</button>
             </header>
 
@@ -1308,8 +1394,8 @@
                 {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {visiblePlans.length === 0 && (
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                    <p className="text-base font-black text-white">Todavía no hay planes de otros usuarios.</p>
-                    <p className="mt-2 leading-6 text-slate-400">Tus publicaciones aparecen en <span className="text-mint">Míos</span>. En <span className="text-mint">Planes</span> verás los planes creados por otras personas para poder apuntarte.</p>
+                    <p className="text-base font-black text-white">{planQuery.trim() ? "No hay planes para esta búsqueda." : "Todavía no hay planes de otros usuarios."}</p>
+                    <p className="mt-2 leading-6 text-slate-400">{planQuery.trim() ? "Prueba con otra palabra, categoría, sitio o nombre." : <>Tus publicaciones aparecen en <span className="text-mint">Míos</span>. En <span className="text-mint">Planes</span> verás los planes creados por otras personas para poder apuntarte.</>}</p>
                   </div>
                 )}
               </section>

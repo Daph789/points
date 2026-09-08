@@ -369,6 +369,7 @@
           if (clean.startsWith("categoria=")) return "categoria";
           if (clean.startsWith("detalle=")) return "detalle";
           if (clean.startsWith("empresa=")) return "empresa";
+          if (clean.startsWith("quedar=")) return "quedar";
           if (clean.startsWith("chat=")) return "chat";
           if (clean.startsWith("side=")) return "side";
           return routeNames.includes(clean) ? clean : "inicio";
@@ -446,6 +447,20 @@
           }
           frame.dataset.guest = "0";
           frame.src = frame.dataset.src;
+        }
+
+        function applyPlanSearch(query) {
+          const cleanQuery = String(query || "").trim().slice(0, 80);
+          const frame = baseFrames.find((item) => item.dataset.route === "quedar");
+          if (!frame) return;
+          const encoded = encodeURIComponent(cleanQuery);
+          if (cleanQuery && frame.src.includes("plans.html") && !frame.src.includes("q=")) {
+            frame.src = `plans.html?embedded=1&q=${encoded}`;
+            return;
+          }
+          try {
+            frame.contentWindow?.postMessage({ type: "donos:plans-search-apply", query: cleanQuery }, window.location.origin);
+          } catch (_error) {}
         }
 
         function hasSupabaseSessionHint() {
@@ -690,6 +705,10 @@
             openOfferDetail(decodeURIComponent(clean.slice("detalle=".length)), { skipHash: true });
           } else if (clean.startsWith("empresa=")) {
             openBusinessProfile(decodeURIComponent(clean.slice("empresa=".length)), { skipHash: true });
+          } else if (clean.startsWith("quedar=")) {
+            const query = decodeURIComponent(clean.slice("quedar=".length));
+            setRoute("quedar", { skipHash: true });
+            applyPlanSearch(query);
           } else if (clean.startsWith("chat=")) {
             openPlanChat(decodeURIComponent(clean.slice("chat=".length)), { skipHash: true });
           } else if (clean.startsWith("side=")) {
@@ -743,6 +762,12 @@
           }
           if (event.data?.type === "donos:side-group") {
             openSideGroup(event.data.id, event.data.status);
+            return;
+          }
+          if (event.data?.type === "donos:plans-search") {
+            const query = String(event.data.query || "").trim().slice(0, 80);
+            const hash = query ? `#quedar=${encodeURIComponent(query)}` : "#quedar";
+            if (window.location.hash !== hash) history.replaceState({ route: "quedar", query }, "", hash);
             return;
           }
           if (event.data?.type === "donos:prefetch-side-group") {
