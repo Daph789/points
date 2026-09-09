@@ -2,6 +2,14 @@ body {
   padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
 }
 
+.donoss-brand-mark {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 body.donos-embedded .donos-static-nav,
 body.donos-embedded .donos-page-loader {
   display: none !important;
@@ -169,8 +177,9 @@ body.donos-embedded .donos-page-loader {
   height: 58px;
   place-items: center;
   border-radius: 20px;
-  background: #42f2b3;
-  color: #060914;
+  overflow: hidden;
+  background: #fff url("assets/donoss-infinity-logo.jpeg") center / cover no-repeat;
+  color: transparent;
   font: 900 28px/1 Inter, system-ui, sans-serif;
   box-shadow: 0 18px 48px rgba(66, 242, 179, 0.24);
 }
