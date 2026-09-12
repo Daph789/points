@@ -1299,7 +1299,11 @@
           ].filter(Boolean).join(" ").toLowerCase().includes(clean);
         }
 
+        const hasActivePlanSearch = Boolean(planQuery.trim());
         const visiblePlans = plans.filter((plan) => !plan.is_owner && planMatchesQuery(plan, planQuery));
+        const otherDiscoverPlans = hasActivePlanSearch
+          ? plans.filter((plan) => !plan.is_owner && !planMatchesQuery(plan, planQuery)).slice(0, 6)
+          : [];
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
         const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
         const isBusinessAccount = profile?.account_type === "business";
@@ -1391,15 +1395,49 @@
             )}
 
             {mode === "discover" && (
-              <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
-                {visiblePlans.length === 0 && (
-                  <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                    <p className="text-base font-black text-white">{planQuery.trim() ? "No hay planes para esta búsqueda." : "Todavía no hay planes de otros usuarios."}</p>
-                    <p className="mt-2 leading-6 text-slate-400">{planQuery.trim() ? "Prueba con otra palabra, categoría, sitio o nombre." : <>Tus publicaciones aparecen en <span className="text-mint">Míos</span>. En <span className="text-mint">Planes</span> verás los planes creados por otras personas para poder apuntarte.</>}</p>
-                  </div>
+              <>
+                {hasActivePlanSearch && (
+                  <section className="mt-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 shadow-glow">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Búsqueda compartida</p>
+                    <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <h2 className="break-words text-2xl font-black leading-tight text-white">Planes sobre “{planQuery.trim()}”</h2>
+                        <p className="mt-1 text-sm font-bold text-slate-300">{visiblePlans.length} resultado{visiblePlans.length === 1 ? "" : "s"} encontrado{visiblePlans.length === 1 ? "" : "s"}.</p>
+                      </div>
+                      <button className="h-11 rounded-2xl border border-white/10 bg-white/[0.08] px-4 text-sm font-black text-white transition hover:bg-white/[0.12]" type="button" onClick={() => setSharedPlanQuery("")}>
+                        Ver todos
+                      </button>
+                    </div>
+                  </section>
                 )}
-              </section>
+
+                <section className="mt-4 grid gap-4 sm:grid-cols-2">
+                  {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                  {visiblePlans.length === 0 && (
+                    <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
+                      <p className="text-base font-black text-white">{hasActivePlanSearch ? "No hay planes para esta búsqueda." : "Todavía no hay planes de otros usuarios."}</p>
+                      <p className="mt-2 leading-6 text-slate-400">{hasActivePlanSearch ? "Prueba con otra palabra, categoría, sitio o nombre. También puedes mirar otros planes abajo." : <>Tus publicaciones aparecen en <span className="text-mint">Míos</span>. En <span className="text-mint">Planes</span> verás los planes creados por otras personas para poder apuntarte.</>}</p>
+                    </div>
+                  )}
+                </section>
+
+                {otherDiscoverPlans.length > 0 && (
+                  <section className="mt-8">
+                    <div className="mb-4 flex items-end justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">Explorar más</p>
+                        <h2 className="mt-1 text-2xl font-black text-white">Otros planes que pueden gustarte</h2>
+                      </div>
+                      <button className="hidden rounded-2xl bg-mint px-4 py-3 text-sm font-black text-ink shadow-glow sm:block" type="button" onClick={() => setSharedPlanQuery("")}>
+                        Ver todos
+                      </button>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {otherDiscoverPlans.map((plan) => <PlanCard key={`other-${plan.id}`} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                    </div>
+                  </section>
+                )}
+              </>
             )}
 
             {mode === "create" && (
