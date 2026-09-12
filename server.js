@@ -663,6 +663,23 @@ function todayDateString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function dateOnly(value) {
+  return value ? String(value).slice(0, 10) : "";
+}
+
+function hasPastDate(...values) {
+  const today = todayDateString();
+  return values.some((value) => {
+    const clean = dateOnly(value);
+    return clean && clean < today;
+  });
+}
+
+function earliestDateString(...values) {
+  const dates = values.map(dateOnly).filter(Boolean).sort();
+  return dates[0] || null;
+}
+
 const defaultReservationWeekdays = [1, 2, 3, 4, 5, 6, 0];
 
 function normalizeReservationWeekdays(value) {
@@ -4088,9 +4105,7 @@ function remainingOfferStock(offer) {
 
 function isOfferVisibleForPublic(offer) {
   if (!offer || offer.is_hidden) return false;
-  const today = todayDateString();
-  const validUntil = offer.qr_valid_until || offer.end_date || null;
-  if (validUntil && String(validUntil).slice(0, 10) < today) return false;
+  if (hasPastDate(offer.end_date)) return false;
   const remaining = remainingOfferStock(offer);
   if (remaining === null || remaining > 0) return true;
   if (!offer.out_of_stock_since) return true;
@@ -4172,10 +4187,7 @@ function isSocialPlanExpired(plan) {
     if (!eventDate) return false;
     return String(eventDate).slice(0, 10) < todayDateString();
   }
-  const validUntil = plan?.purchase?.qr_valid_until || plan?.purchase?.offer?.qr_valid_until || plan?.purchase?.offer?.end_date || null;
-  if (!validUntil) return false;
-  const today = todayDateString();
-  return String(validUntil).slice(0, 10) < today;
+  return hasPastDate(plan?.purchase?.qr_valid_until, plan?.purchase?.offer?.qr_valid_until);
 }
 
 function filterPublicSocialPlans(plans, viewerId) {
@@ -4810,9 +4822,7 @@ app.get("/api/offers/:offerId", async (request, response) => {
     const isOwner = Boolean(viewerId && viewerId === offer.business_id);
     if (!isOwner && offer.is_hidden) return response.status(404).json({ error: "offer_hidden" });
     if (!isOwner) {
-      const today = todayDateString();
-      const validUntil = offer.qr_valid_until || offer.end_date || null;
-      if (validUntil && String(validUntil).slice(0, 10) < today) {
+      if (hasPastDate(offer.end_date)) {
         return response.status(404).json({ error: "offer_expired" });
       }
     }
@@ -6473,7 +6483,7 @@ app.post("/api/business/tickets/verify", async (request, response) => {
 
     const today = todayDateString();
     const validFrom = purchase.qr_valid_from || offer.qr_valid_from || offer.start_date || null;
-    const validUntil = purchase.qr_valid_until || offer.qr_valid_until || offer.end_date || null;
+    const validUntil = purchase.qr_valid_until || offer.qr_valid_until || null;
     const notStarted = validFrom && today < validFrom;
     const expired = validUntil && today > validUntil;
     const alreadyVerified = Boolean(purchase.verified_at);
@@ -6687,8 +6697,7 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     const usesExternalCheckout = Boolean(offer.external_checkout_enabled && safeHttpUrl(offer.external_checkout_url));
 
-    const validUntil = offer.qr_valid_until || offer.end_date || null;
-    if (validUntil && String(validUntil).slice(0, 10) < todayDateString()) {
+    if (hasPastDate(offer.end_date)) {
       return response.status(400).json({ error: "offer_expired" });
     }
 
@@ -6958,7 +6967,7 @@ app.post("/api/purchases/offer", async (request, response) => {
           security_code: generateTicketSecurityCode(),
           qr_token: randomUUID(),
           qr_valid_from: offer.qr_valid_from || offer.start_date || todayDateString(),
-          qr_valid_until: offer.qr_valid_until || offer.end_date || null,
+          qr_valid_until: offer.qr_valid_until || null,
           reservation_requested: reservationRequested,
           reservation_date: reservationRequested ? reservationDate : null,
           reservation_time: reservationRequested ? reservationTime : null,

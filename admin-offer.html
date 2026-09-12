@@ -1071,11 +1071,17 @@
                     <input className={inputClass} type="date" min={startDate || todayDateString()} value={endDate} onChange={(event) => setEndDate(event.target.value)} />
                   </Field>
                 </div>
+                <div className="rounded-2xl border border-sun/20 bg-sun/10 p-4">
+                  <p className="text-sm font-black text-sun">Fecha de fin = último día de venta</p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+                    Después de esta fecha, la oferta deja de aparecer para los usuarios y ya no se puede comprar. Los billetes comprados antes podrán seguir validándose si el QR sigue vigente.
+                  </p>
+                </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/[0.045] p-4">
                   <p className="text-sm font-black text-white">Validez del QR de compra</p>
                   <p className="mt-1 text-xs font-semibold leading-5 text-slate-400">
-                    Se generará un QR único para cada compra. Si tu producto no caduca, activa la opción sin caducidad.
+                    Se generará un QR único para cada compra. Esta fecha controla hasta cuándo se puede escanear un billete ya comprado, incluso si la venta ya terminó.
                   </p>
                   <button
                     type="button"
@@ -1116,6 +1122,12 @@
                         onChange={(event) => setQrValidUntil(event.target.value)}
                       />
                     </Field>
+                  </div>
+                  <div className="mt-4 rounded-2xl border border-mint/20 bg-mint/10 p-4">
+                    <p className="text-sm font-black text-mint">QR válido hasta = último día para escanear</p>
+                    <p className="mt-1 text-xs font-semibold leading-5 text-slate-300">
+                      Puede ser posterior a la fecha de fin. Ejemplo: vendes hasta el día 10, pero el QR se puede validar el día 12 en la entrada del evento.
+                    </p>
                   </div>
                 </div>
 

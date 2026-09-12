@@ -128,8 +128,8 @@
 
       function isOfferExpired(offer) {
         const today = new Date().toISOString().slice(0, 10);
-        const validUntil = offer?.qr_valid_until || offer?.end_date || null;
-        return Boolean(validUntil && String(validUntil).slice(0, 10) < today);
+        const endDate = offer?.end_date ? String(offer.end_date).slice(0, 10) : "";
+        return Boolean(endDate && endDate < today);
       }
 
       function VerifiedBadge() {
