@@ -414,7 +414,8 @@
               <div className="mt-3 grid gap-2 text-xs font-bold text-slate-400">
                 {address && <p className="rounded-2xl bg-black/20 px-3 py-2">Dirección: <span className="text-slate-200">{address}</span></p>}
                 {free && plan.event_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Es para el día: {formatDate(plan.event_date)}</p>}
-                {!free && (offer.start_date || offer.end_date) && <p className="rounded-2xl bg-black/20 px-3 py-2">{offer.start_date ? `Inicio: ${formatDate(offer.start_date)}` : ""}{offer.start_date && offer.end_date ? " · " : ""}{offer.end_date ? `Fin: ${formatDate(offer.end_date)}` : ""}</p>}
+                {!free && offer.start_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Evento: {formatDate(offer.start_date)}</p>}
+                {!free && offer.end_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Compra disponible hasta: {formatDate(offer.end_date)}</p>}
               </div>
               {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
@@ -1858,8 +1859,8 @@
                     </div>
                     <div className="grid gap-3 p-4 sm:grid-cols-2">
                       {free && detailPlan.event_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Es para el día</p><p className="mt-1 text-sm font-black text-white">{formatDate(detailPlan.event_date)}</p></div>}
-                      {!free && offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de inicio</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
-                      {!free && offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha de fin</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
+                      {!free && offer.start_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Evento / actividad</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.start_date)}</p></div>}
+                      {!free && offer.end_date && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Compra disponible hasta</p><p className="mt-1 text-sm font-black text-white">{formatDate(offer.end_date)}</p></div>}
                       {!free && !offer.start_date && !offer.end_date && dateRange && <div className="rounded-2xl bg-black/20 p-3"><p className="text-xs font-bold text-slate-500">Fecha</p><p className="mt-1 text-sm font-black text-white">{dateRange}</p></div>}
                       {!free && <div className="rounded-2xl bg-black/20 p-3">
                         <p className="text-xs font-bold text-slate-500">Comercio</p>

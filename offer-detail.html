@@ -349,7 +349,8 @@
         const mapsUrl = offer.address
           ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${offer.address} Donostia`)}`
           : "";
-        const dateRange = [offer.start_date, offer.end_date].filter(Boolean).join(" - ");
+        const eventDate = offer.start_date || "";
+        const purchaseLimitDate = offer.end_date || "";
         const isExternalCheckout = Boolean(offer.external_checkout_enabled && safeExternalUrl(offer.external_checkout_url));
         const basePoints = isExternalCheckout ? 0 : Number(offer.required_points || 0);
         const hasDeliveryOptions = Boolean(offer.delivery_pickup_enabled || offer.delivery_home_enabled);
@@ -612,11 +613,21 @@
                       <p className="mt-2 text-base font-black leading-snug text-white">{offer.hours}</p>
                     </div>
                   )}
-                  {dateRange && (
+                  {(eventDate || purchaseLimitDate) && (
                     <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                       <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-xl ring-1 ring-coral/20">⌁</div>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Fechas</p>
-                      <p className="mt-2 text-base font-black leading-snug text-white">{dateRange}</p>
+                      {eventDate && (
+                        <>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Evento / actividad</p>
+                          <p className="mt-2 text-base font-black leading-snug text-white">{eventDate}</p>
+                        </>
+                      )}
+                      {purchaseLimitDate && (
+                        <div className={eventDate ? "mt-4 border-t border-white/10 pt-4" : ""}>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Compra disponible hasta</p>
+                          <p className="mt-2 text-base font-black leading-snug text-white">{purchaseLimitDate}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                   {offer.age && (
