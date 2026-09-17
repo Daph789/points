@@ -50,6 +50,15 @@
         return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
       }
 
+      function formatCents(value) {
+        return `${(Number(value || 0) / 100).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}€`;
+      }
+
+      function formatDateTime(value) {
+        if (!value) return "";
+        return new Date(value).toLocaleString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+      }
+
       function getDiscountPercent(basePrice, reducedPrice) {
         const base = Number(basePrice);
         const reduced = Number(reducedPrice);
@@ -106,7 +115,7 @@
         window.location.href = `login.html?next=${encodeURIComponent(next)}`;
       }
 
-      function OfferRow({ offer, onToggleHidden, onDelete, onTransfer, canTransfer }) {
+      function OfferRow({ offer, onToggleHidden, onDelete, onTransfer, canTransfer, promotion }) {
         const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
         const remainingStock = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
@@ -133,6 +142,7 @@
                     {outOfStock && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Agotado</span>}
                     {expiredReason && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Caducada</span>}
                     {hidden && <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">Oculta</span>}
+                    {promotion && <span className="rounded-full bg-sky-400 px-3 py-1 text-xs font-black text-ink">Promocionada</span>}
                   </div>
               </div>
 
@@ -152,6 +162,11 @@
                       {expiredReason && (
                         <p className="mt-2 inline-flex rounded-full bg-coral/10 px-3 py-1 text-xs font-black text-coral ring-1 ring-coral/20">
                           {expiredReason}
+                        </p>
+                      )}
+                      {promotion && (
+                        <p className="mt-2 inline-flex rounded-full bg-sky-400/10 px-3 py-1 text-xs font-black text-sky-200 ring-1 ring-sky-400/20">
+                          Promocionada hasta {formatDateTime(promotion.ends_at)}
                         </p>
                       )}
 	                  </div>
@@ -220,6 +235,28 @@
         const [selectedTransferBusinessId, setSelectedTransferBusinessId] = React.useState("");
         const [isLoadingTransferBusinesses, setIsLoadingTransferBusinesses] = React.useState(false);
         const [isTransferring, setIsTransferring] = React.useState(false);
+        const [profilePoints, setProfilePoints] = React.useState(Number(localStorage.getItem("donosPoints") || 0));
+        const [isAdminFreePromotion, setIsAdminFreePromotion] = React.useState(false);
+        const [activePromotions, setActivePromotions] = React.useState([]);
+        const [promotionOpen, setPromotionOpen] = React.useState(false);
+        const [promotionIntroOpen, setPromotionIntroOpen] = React.useState(() => localStorage.getItem("donossPromotionIntroHidden") !== "1");
+        const [promotionSearch, setPromotionSearch] = React.useState("");
+        const [selectedPromotionOfferIds, setSelectedPromotionOfferIds] = React.useState([]);
+        const [promotionHours, setPromotionHours] = React.useState(24);
+        const [isPromoting, setIsPromoting] = React.useState(false);
+        const promotionOptions = Array.from({ length: 7 }, (_, index) => {
+          const hours = (index + 1) * 24;
+          return { hours, days: index + 1, cents: (index + 1) * 1599 };
+        });
+        const promotionOffers = offers.filter((offer) => !isOfferExpired(offer) && !offer.is_hidden);
+        const filteredPromotionOffers = promotionOffers.filter((offer) => matchesSearch(offer, promotionSearch));
+        const activePromotionByOfferId = Object.fromEntries(activePromotions.map((promotion) => [promotion.offer_id, promotion]));
+        const selectedPromotionCount = selectedPromotionOfferIds.length;
+        const promotionDays = promotionHours / 24;
+        const promotionUnitCents = promotionDays * 1599;
+        const promotionTotalCents = selectedPromotionCount * promotionUnitCents;
+        const promotionTotalPoints = Math.ceil(promotionTotalCents / 10);
+        const hasEnoughPromotionPoints = isAdminFreePromotion || profilePoints >= promotionTotalPoints;
         const activeFilteredOffers = offers.filter((offer) => !isOfferExpired(offer) && matchesSearch(offer, search));
         const expiredFilteredOffers = offers.filter((offer) => isOfferExpired(offer) && matchesSearch(offer, search));
         const filteredTransferBusinesses = transferBusinesses.filter((business) => {
@@ -256,12 +293,20 @@
             setAccessToken(session?.access_token || "");
             setCanTransferOffers(String(userData.user?.email || "").trim().toLowerCase() === "donoss.red@gmail.com");
 
-            const [{ data: profile }, { data, error }] = await Promise.all([
-              supabaseClient.from("profiles").select("display_name, account_type").eq("id", userId).maybeSingle(),
+            const [{ data: profile }, { data, error }, promotionsResponse] = await Promise.all([
+              supabaseClient.from("profiles").select("display_name, account_type, points, email").eq("id", userId).maybeSingle(),
               supabaseClient.from("business_offers").select(myOfferListSelect).eq("business_id", userId).order("created_at", { ascending: false }),
+              session?.access_token
+                ? fetch("/api/me/offer-promotions", { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null)
+                : null,
             ]);
 
             if (profile?.display_name) setBusinessName(profile.display_name);
+            if (typeof profile?.points !== "undefined") {
+              setProfilePoints(Number(profile.points || 0));
+              localStorage.setItem("donosPoints", String(Number(profile.points || 0)));
+            }
+            setIsAdminFreePromotion(String(userData.user?.email || profile?.email || "").trim().toLowerCase() === "donoss.red@gmail.com");
 
             if (profile?.account_type && profile.account_type !== "business") {
               setStatus("Esta zona es solo para cuentas empresa.");
@@ -274,11 +319,88 @@
             }
 
             setOffers(data || []);
+            if (promotionsResponse?.ok) {
+              const promotionsData = await promotionsResponse.json().catch(() => ({}));
+              setActivePromotions(promotionsData.promotions || []);
+            }
             setStatus(data?.length ? "" : "Todavía no has publicado ninguna oferta.");
           }
 
           loadOffers();
         }, []);
+
+        function openPromotionPanel() {
+          setPromotionOpen(true);
+          setPromotionSearch("");
+          setSelectedPromotionOfferIds([]);
+          setPromotionHours(24);
+          setDeleteStatus({ type: "", message: "" });
+        }
+
+        function hidePromotionIntro() {
+          localStorage.setItem("donossPromotionIntroHidden", "1");
+          setPromotionIntroOpen(false);
+        }
+
+        function togglePromotionOffer(offerId) {
+          setSelectedPromotionOfferIds((current) => (
+            current.includes(offerId)
+              ? current.filter((id) => id !== offerId)
+              : [...current, offerId]
+          ));
+        }
+
+        async function submitPromotion() {
+          if (!accessToken) return redirectToLogin();
+          if (selectedPromotionOfferIds.length === 0) {
+            setDeleteStatus({ type: "error", message: "Elige al menos una publicación para promocionar." });
+            return;
+          }
+          if (!hasEnoughPromotionPoints) {
+            setDeleteStatus({ type: "error", message: "No tienes puntos suficientes para esta promoción." });
+            return;
+          }
+
+          setIsPromoting(true);
+          setDeleteStatus({ type: "", message: "" });
+          try {
+            const response = await fetch("/api/me/offer-promotions", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ offerIds: selectedPromotionOfferIds, durationHours: promotionHours }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "promotion_failed");
+            setActivePromotions((current) => [...(data.promotions || []), ...current]);
+            if (typeof data.profile_points !== "undefined") {
+              setProfilePoints(Number(data.profile_points || 0));
+              localStorage.setItem("donosPoints", String(Number(data.profile_points || 0)));
+            }
+            setPromotionOpen(false);
+            setSelectedPromotionOfferIds([]);
+            setDeleteStatus({
+              type: "success",
+              message: data.admin_free
+                ? "Promoción activada sin coste para la cuenta Donoss."
+                : "Promoción activada correctamente.",
+            });
+          } catch (error) {
+            const message = error.message || "";
+            setDeleteStatus({
+              type: "error",
+              message: message.includes("offer_promotions_sql_missing")
+                ? "Falta ejecutar supabase-offer-promotions.sql en Supabase."
+                : message.includes("insufficient_points")
+                  ? "No tienes puntos suficientes para esta promoción."
+                  : "No se ha podido activar la promoción.",
+            });
+          } finally {
+            setIsPromoting(false);
+          }
+        }
 
         React.useEffect(() => {
           if (!transferOffer || !accessToken || transferBusinesses.length > 0) return;
@@ -461,7 +583,12 @@
                   <p className="text-xs font-semibold text-slate-400">Panel empresa</p>
                 </div>
               </a>
-              <a className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" href="create-offer.html">Crear</a>
+              <div className="flex shrink-0 items-center gap-2">
+                <button className="rounded-full border border-sky-400/25 bg-sky-400/10 px-4 py-2 text-sm font-black text-sky-100 shadow-glow" type="button" onClick={openPromotionPanel}>
+                  Promocionar
+                </button>
+                <a className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" href="create-offer.html">Crear</a>
+              </div>
             </header>
 
             <section className="mt-8 rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow sm:p-8">
@@ -573,6 +700,7 @@
                           <OfferRow
                             key={offer.id}
                             offer={offer}
+                            promotion={activePromotionByOfferId[offer.id]}
                             onToggleHidden={toggleHiddenOffer}
                             onDelete={deleteOffer}
                             onTransfer={openTransferModal}
@@ -593,6 +721,7 @@
                         <OfferRow
                           key={offer.id}
                           offer={offer}
+                          promotion={activePromotionByOfferId[offer.id]}
                           onToggleHidden={toggleHiddenOffer}
                           onDelete={deleteOffer}
                           onTransfer={openTransferModal}
@@ -604,6 +733,165 @@
                 </div>
               )}
             </section>
+            {promotionOpen && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-6 backdrop-blur-xl">
+                <section className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl shadow-black/50">
+                  <div className="border-b border-white/10 p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.16em] text-sky-200">Promocionar</p>
+                        <h2 className="mt-2 text-3xl font-black text-white">Impulsa tus publicaciones</h2>
+                        <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-400">
+                          Elige una o varias publicaciones, define la duración y paga con puntos Donoss.
+                        </p>
+                      </div>
+                      <button
+                        className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/10 text-xl font-black text-white ring-1 ring-white/10"
+                        onClick={() => setPromotionOpen(false)}
+                        disabled={isPromoting}
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    {promotionIntroOpen && (
+                      <div className="mt-5 rounded-[28px] border border-mint/20 bg-mint/10 p-4">
+                        <p className="text-sm font-black text-white">Cada recarga fortalece tu posición en Donoss</p>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                          Con Donoss, cada recarga refuerza tu posición de negociación para bajar tus precios de promoción, premium u otros servicios cuando haya acuerdos especiales.
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow" type="button" onClick={hidePromotionIntro}>
+                            No volver a mostrar
+                          </button>
+                          <button className="h-10 rounded-2xl border border-white/10 bg-white/[0.07] px-4 text-sm font-black text-white" type="button" onClick={() => setPromotionIntroOpen(false)}>
+                            Quitar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <label className="mt-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-sky-400/10 text-sky-200 ring-1 ring-sky-400/20">⌕</span>
+                      <input
+                        className="h-10 min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-500"
+                        value={promotionSearch}
+                        onChange={(event) => setPromotionSearch(event.target.value)}
+                        placeholder="Buscar publicación para promocionar..."
+                      />
+                    </label>
+                  </div>
+
+                  <div className="grid max-h-[58vh] overflow-y-auto lg:grid-cols-[1.25fr_.75fr]">
+                    <div className="border-white/10 p-4 sm:p-5 lg:border-r">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <p className="text-sm font-black text-white">Biblioteca de publicaciones</p>
+                        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-300">
+                          {selectedPromotionCount} seleccionadas
+                        </span>
+                      </div>
+                      {filteredPromotionOffers.length === 0 ? (
+                        <p className="rounded-2xl border border-white/10 bg-white/[0.055] p-4 text-sm font-bold text-slate-300">
+                          No hay publicaciones disponibles para promocionar.
+                        </p>
+                      ) : (
+                        <div className="grid gap-3">
+                          {filteredPromotionOffers.map((offer) => {
+                            const selected = selectedPromotionOfferIds.includes(offer.id);
+                            const promotion = activePromotionByOfferId[offer.id];
+                            return (
+                              <button
+                                key={offer.id}
+                                type="button"
+                                className={`grid gap-3 rounded-3xl border p-3 text-left transition min-[520px]:grid-cols-[82px_1fr_auto] ${
+                                  selected
+                                    ? "border-mint/50 bg-mint/10 shadow-glow"
+                                    : "border-white/10 bg-white/[0.045] hover:border-sky-300/30 hover:bg-white/[0.07]"
+                                }`}
+                                onClick={() => togglePromotionOffer(offer.id)}
+                              >
+                                <div className="relative h-20 overflow-hidden rounded-2xl bg-gradient-to-br from-mint via-[#183047] to-sky-400">
+                                  {offer.cover_photo_data_url && <img className="h-full w-full object-cover" src={offer.cover_photo_data_url} alt="" />}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-base font-black text-white">{offer.title || "Oferta sin título"}</p>
+                                  <p className="mt-1 truncate text-xs font-bold text-slate-400">{offer.categories?.join(", ") || "Sin categoría"}</p>
+                                  {promotion && <p className="mt-2 inline-flex rounded-full bg-sky-400/10 px-3 py-1 text-[11px] font-black text-sky-200 ring-1 ring-sky-400/20">Activa hasta {formatDateTime(promotion.ends_at)}</p>}
+                                </div>
+                                <span className={`self-center rounded-full px-3 py-1 text-xs font-black ${selected ? "bg-mint text-ink" : "bg-white/10 text-slate-300"}`}>
+                                  {selected ? "Elegida" : "Elegir"}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <aside className="p-4 sm:p-5">
+                      <p className="text-sm font-black text-white">Duración</p>
+                      <div className="mt-3 grid gap-2">
+                        {promotionOptions.map((option) => (
+                          <button
+                            key={option.hours}
+                            type="button"
+                            className={`rounded-2xl border p-3 text-left transition ${
+                              promotionHours === option.hours ? "border-mint/60 bg-mint/10 shadow-glow" : "border-white/10 bg-white/[0.045]"
+                            }`}
+                            onClick={() => setPromotionHours(option.hours)}
+                          >
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-black text-white">{option.hours}h · {option.days} día{option.days > 1 ? "s" : ""}</span>
+                              <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-slate-200">{formatCents(option.cents)}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 rounded-[26px] border border-mint/20 bg-mint/10 p-4">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Resumen</p>
+                        <div className="mt-3 space-y-2 text-sm font-bold text-slate-300">
+                          <div className="flex justify-between gap-3"><span>Publicaciones</span><span>{selectedPromotionCount}</span></div>
+                          <div className="flex justify-between gap-3"><span>Duración</span><span>{promotionHours}h</span></div>
+                          <div className="flex justify-between gap-3"><span>Precio</span><span>{isAdminFreePromotion ? "Gratis Donoss" : formatCents(promotionTotalCents)}</span></div>
+                          <div className="flex justify-between gap-3 border-t border-white/10 pt-3 text-white"><span>Total puntos</span><span>{isAdminFreePromotion ? 0 : promotionTotalPoints} ptos.</span></div>
+                          <div className="flex justify-between gap-3 text-slate-400"><span>Tu saldo</span><span>{profilePoints} ptos.</span></div>
+                        </div>
+                      </div>
+
+                      {!hasEnoughPromotionPoints && (
+                        <div className="mt-4 rounded-[24px] border border-sun/25 bg-sun/10 p-4">
+                          <p className="text-sm font-black text-sun">Te faltan puntos para promocionar.</p>
+                          <p className="mt-2 text-xs font-bold leading-5 text-slate-300">
+                            Recarga puntos para activar la promoción y reforzar tu posición de negociación dentro de Donoss.
+                          </p>
+                          <a className="mt-3 grid h-11 place-items-center rounded-2xl bg-sun text-sm font-black text-ink" href="transfer.html">
+                            Recargar puntos
+                          </a>
+                        </div>
+                      )}
+                    </aside>
+                  </div>
+
+                  <div className="grid gap-3 border-t border-white/10 p-5 min-[430px]:grid-cols-2">
+                    <button
+                      className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white"
+                      onClick={() => setPromotionOpen(false)}
+                      disabled={isPromoting}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:cursor-not-allowed disabled:opacity-45"
+                      onClick={submitPromotion}
+                      disabled={isPromoting || selectedPromotionCount === 0 || !hasEnoughPromotionPoints}
+                    >
+                      {isPromoting ? "Activando..." : isAdminFreePromotion ? "Promocionar gratis" : `Pagar ${promotionTotalPoints} ptos.`}
+                    </button>
+                  </div>
+                </section>
+              </div>
+            )}
             {transferOffer && (
               <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-xl">
                 <section className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-[32px] border border-white/10 bg-[#0D111D] shadow-2xl shadow-black/50">

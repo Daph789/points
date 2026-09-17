@@ -3387,6 +3387,151 @@ app.post("/api/me/offer-transfer", async (request, response) => {
   }
 });
 
+const offerPromotionPriceCentsPerDay = 1599;
+
+function normalizePromotionHours(value) {
+  const hours = Math.floor(Number(value || 0));
+  if (!Number.isFinite(hours)) return 24;
+  return Math.min(Math.max(Math.ceil(hours / 24) * 24, 24), 168);
+}
+
+function promotionPointsCost(priceCents) {
+  return Math.ceil(Number(priceCents || 0) / 10);
+}
+
+app.get("/api/me/offer-promotions", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("offer_promotions")
+      .select("id, offer_id, business_id, duration_hours, price_cents, points_cost, is_admin_free, status, starts_at, ends_at, created_at")
+      .eq("business_id", auth.user.id)
+      .eq("status", "active")
+      .gt("ends_at", now)
+      .order("ends_at", { ascending: false });
+
+    if (error) throw error;
+    response.json({ promotions: data || [] });
+  } catch (error) {
+    console.error("Offer promotions load error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "offer_promotions_sql_missing" : "promotions_load_failed" });
+  }
+});
+
+app.post("/api/me/offer-promotions", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const offerIds = Array.isArray(request.body?.offerIds)
+    ? [...new Set(request.body.offerIds.map((id) => String(id || "").trim()).filter(Boolean))]
+    : [];
+  const durationHours = normalizePromotionHours(request.body?.durationHours);
+
+  if (offerIds.length === 0) return response.status(400).json({ error: "no_offers_selected" });
+  if (offerIds.length > 20) return response.status(400).json({ error: "too_many_offers" });
+
+  try {
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, email, account_type, points")
+      .eq("id", auth.user.id)
+      .maybeSingle();
+    if (profileError) throw profileError;
+    if (!profile || profile.account_type !== "business") return response.status(403).json({ error: "business_account_required" });
+
+    const { data: offers, error: offersError } = await supabaseAdmin
+      .from("business_offers")
+      .select("id, business_id, title")
+      .in("id", offerIds);
+    if (offersError) throw offersError;
+    const ownOffers = (offers || []).filter((offer) => offer.business_id === auth.user.id);
+    if (ownOffers.length !== offerIds.length) return response.status(403).json({ error: "offers_must_belong_to_business" });
+
+    const dayCount = durationHours / 24;
+    const totalPriceCents = ownOffers.length * dayCount * offerPromotionPriceCentsPerDay;
+    const totalPoints = promotionPointsCost(totalPriceCents);
+    const isAdminFree = String(auth.user.email || profile.email || "").trim().toLowerCase() === offerTransferAdminEmail;
+    const currentPoints = Number(profile.points || 0);
+
+    if (!isAdminFree && currentPoints < totalPoints) {
+      return response.status(400).json({
+        error: "insufficient_points",
+        required_points: totalPoints,
+        current_points: currentPoints,
+      });
+    }
+
+    const now = new Date();
+    const startsAt = now.toISOString();
+    const endsAt = new Date(now.getTime() + durationHours * 60 * 60 * 1000).toISOString();
+    const perOfferPriceCents = dayCount * offerPromotionPriceCentsPerDay;
+    const perOfferPoints = promotionPointsCost(perOfferPriceCents);
+
+    const rows = ownOffers.map((offer) => ({
+      offer_id: offer.id,
+      business_id: auth.user.id,
+      duration_hours: durationHours,
+      price_cents: perOfferPriceCents,
+      points_cost: isAdminFree ? 0 : perOfferPoints,
+      paid_with_points: !isAdminFree,
+      is_admin_free: isAdminFree,
+      status: "active",
+      starts_at: startsAt,
+      ends_at: endsAt,
+    }));
+
+    const { error: tableCheckError } = await supabaseAdmin
+      .from("offer_promotions")
+      .select("id", { head: true })
+      .limit(1);
+    if (tableCheckError) throw tableCheckError;
+
+    let updatedPoints = currentPoints;
+    if (!isAdminFree) {
+      updatedPoints = currentPoints - totalPoints;
+      const { error: pointsError } = await supabaseAdmin
+        .from("profiles")
+        .update({ points: updatedPoints })
+        .eq("id", auth.user.id);
+      if (pointsError) throw pointsError;
+    }
+
+    const { data: promotions, error: insertError } = await supabaseAdmin
+      .from("offer_promotions")
+      .insert(rows)
+      .select("id, offer_id, business_id, duration_hours, price_cents, points_cost, is_admin_free, status, starts_at, ends_at, created_at");
+    if (insertError) {
+      if (!isAdminFree) {
+        await supabaseAdmin.from("profiles").update({ points: currentPoints }).eq("id", auth.user.id);
+      }
+      throw insertError;
+    }
+
+    response.json({
+      ok: true,
+      promotions: promotions || [],
+      total_price_cents: totalPriceCents,
+      total_points: isAdminFree ? 0 : totalPoints,
+      profile_points: updatedPoints,
+      admin_free: isAdminFree,
+    });
+  } catch (error) {
+    console.error("Offer promotion create error:", error);
+    response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "offer_promotions_sql_missing" : "promotion_create_failed" });
+  }
+});
+
 app.get("/api/me/offer-automation-requests", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
@@ -4481,6 +4626,48 @@ async function enrichOffersWithBusiness(offers) {
   });
 }
 
+async function enrichOffersWithPromotions(offers) {
+  const rows = offers || [];
+  const offerIds = [...new Set(rows.map((offer) => offer.id).filter(Boolean))];
+  if (offerIds.length === 0) return rows;
+
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+      .from("offer_promotions")
+      .select("offer_id, ends_at, starts_at")
+      .in("offer_id", offerIds)
+      .eq("status", "active")
+      .gt("ends_at", now)
+      .order("ends_at", { ascending: false });
+
+    if (error) {
+      if (!["42P01", "42703"].includes(error.code)) console.error("Offer promotions enrichment error:", error);
+      return rows;
+    }
+
+    const promotionsByOfferId = {};
+    (data || []).forEach((promotion) => {
+      if (!promotionsByOfferId[promotion.offer_id]) promotionsByOfferId[promotion.offer_id] = promotion;
+    });
+
+    return rows
+      .map((offer) => {
+        const promotion = promotionsByOfferId[offer.id];
+        return promotion
+          ? { ...offer, is_promoted: true, promoted_until: promotion.ends_at, promoted_started_at: promotion.starts_at }
+          : { ...offer, is_promoted: false };
+      })
+      .sort((first, second) => {
+        if (Boolean(first.is_promoted) !== Boolean(second.is_promoted)) return first.is_promoted ? -1 : 1;
+        return new Date(second.created_at || 0) - new Date(first.created_at || 0);
+      });
+  } catch (error) {
+    console.error("Offer promotions enrichment fatal error:", error);
+    return rows;
+  }
+}
+
 function publicPlanProfile(profile) {
   if (!profile) return null;
   return {
@@ -5001,7 +5188,9 @@ app.get("/api/offers/featured", async (request, response) => {
     }
 
     const viewerMarket = await getViewerMarket(request);
-    const visibleOffers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
+    const visibleOffers = await enrichOffersWithPromotions(
+      await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket))
+    );
     const usedIds = new Set();
     const featured = [];
 
@@ -5059,7 +5248,9 @@ app.get("/api/offers/categories/summary", async (request, response) => {
     }
 
     const viewerMarket = await getViewerMarket(request);
-    const visibleOffers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
+    const visibleOffers = await enrichOffersWithPromotions(
+      await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket))
+    );
     const summary = wantedCategories.map((category) => {
       const offers = visibleOffers.filter((offer) => (offer.categories || []).includes(category));
       const preview = offers[0] || null;
@@ -5124,7 +5315,9 @@ app.get("/api/offers/by-category/:category", async (request, response) => {
 
     if (error) throw error;
     const viewerMarket = await getViewerMarket(request);
-    const offers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
+    const offers = await enrichOffersWithPromotions(
+      await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket))
+    );
     response.json({ offers, market: viewerMarket });
   } catch (error) {
     console.error("Offers by category load error:", error);

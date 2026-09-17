@@ -464,6 +464,9 @@
                   {i18n.category(firstCategory)}
                 </span>
                 <div className="relative flex items-center gap-2">
+                  {offer.is_promoted && (
+                    <span className="rounded-full bg-sky-400 px-3 py-1 text-xs font-black text-ink">{i18n.getLocale?.() === "fr" ? "Promu" : "Promocionado"}</span>
+                  )}
                   {outOfStock && (
                     <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">{i18n.t("common.soldOut")}</span>
                   )}
