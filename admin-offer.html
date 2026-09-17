@@ -275,6 +275,25 @@
         const parsedReservationDaysAhead = Math.max(Number.parseInt(reservationDaysAhead, 10) || 0, 0);
         const parsedReservationExtraPoints = Math.max(Number.parseInt(reservationExtraPointsPerPerson, 10) || 0, 0);
 
+        function getDefaultOfferMarket(countryCode) {
+          const code = String(countryCode || "").trim().toUpperCase();
+          if (code === "BE") return { country_code: "BE", city_market: "tournai", city_label: "Tournai" };
+          if (code === "FR") return { country_code: "FR", city_market: "lille", city_label: "Lille" };
+          return { country_code: "ES", city_market: "donostia", city_label: "Donostia / San Sebastián" };
+        }
+
+        function getEffectiveOfferMarket(profile) {
+          const countryCode = String(profile?.country_code || "").trim().toUpperCase() || "ES";
+          const cityMarket = String(profile?.city_market || "").trim().toLowerCase();
+          const cityStatus = String(profile?.city_status || "").trim().toLowerCase();
+          if (!cityMarket || cityMarket === "pending" || cityStatus === "pending_city") return getDefaultOfferMarket(countryCode);
+          return {
+            country_code: countryCode,
+            city_market: cityMarket,
+            city_label: profile?.city_label || getDefaultOfferMarket(countryCode).city_label,
+          };
+        }
+
         function normalizeReservationSlots(value) {
           return [...new Set(String(value || "")
             .split(/[\n,;]+/)
@@ -426,6 +445,7 @@
               country_code: metadata.country_code || "ES",
               city_market: metadata.city_market || "donostia",
               city_label: metadata.city_label || "Donostia / San Sebastián",
+              city_status: metadata.city_status || "active",
             };
 
             if (!userId) {
@@ -445,7 +465,7 @@
 
             const { data } = await supabaseClient
               .from("profiles")
-              .select("display_name, transaction_id, is_verified, country_code, city_market, city_label")
+              .select("display_name, transaction_id, is_verified, country_code, city_market, city_label, city_status")
               .eq("id", userId)
               .maybeSingle();
 
@@ -457,6 +477,7 @@
                 country_code: data.country_code || profile.country_code,
                 city_market: data.city_market || profile.city_market,
                 city_label: data.city_label || profile.city_label,
+                city_status: data.city_status || profile.city_status,
               };
             }
 
@@ -759,6 +780,7 @@
               }
             }
 
+            const offerMarket = getEffectiveOfferMarket(businessProfile);
             const payload = {
               business_id: userId,
               cover_photo_name: coverFiles[0]?.name || null,
@@ -789,9 +811,9 @@
               receiver_display_name: receiverName || null,
               business_display_name: businessProfile?.display_name || null,
               business_is_verified: Boolean(businessProfile?.is_verified),
-              country_code: businessProfile?.country_code || "ES",
-              city_market: businessProfile?.city_market || "donostia",
-              city_label: businessProfile?.city_label || "Donostia / San Sebastián",
+              country_code: offerMarket.country_code,
+              city_market: offerMarket.city_market,
+              city_label: offerMarket.city_label,
               delivery_home_enabled: deliveryOptionsEnabled && homeDeliveryEnabled,
               delivery_home_price: deliveryOptionsEnabled && homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: deliveryOptionsEnabled && homeDeliveryEnabled ? deliveryPoints : null,

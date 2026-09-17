@@ -918,6 +918,33 @@ const defaultCityMarkets = [
   { country_code: "BE", city_market: "tournai", city_label: "Tournai", is_active: true },
 ];
 
+function defaultMarketForCountry(countryCode) {
+  const code = String(countryCode || "").trim().toUpperCase();
+  return defaultCityMarkets.find((market) => market.country_code === code) || defaultCityMarkets[0];
+}
+
+function effectiveProfileMarket(profile) {
+  const countryCode = String(profile?.country_code || "").trim().toUpperCase() || "ES";
+  const cityMarket = String(profile?.city_market || "").trim().toLowerCase();
+  const cityStatus = String(profile?.city_status || "").trim().toLowerCase();
+  const shouldUseDefault = !cityMarket || cityMarket === "pending" || cityStatus === "pending_city";
+  if (shouldUseDefault) {
+    const fallback = defaultMarketForCountry(countryCode);
+    return {
+      country_code: fallback.country_code,
+      city_market: fallback.city_market,
+      city_label: fallback.city_label,
+      is_pending_city: cityStatus === "pending_city" || cityMarket === "pending",
+    };
+  }
+  return {
+    country_code: countryCode,
+    city_market: cityMarket,
+    city_label: profile?.city_label || defaultMarketForCountry(countryCode).city_label,
+    is_pending_city: false,
+  };
+}
+
 function cityMarketSlug(value) {
   const slug = String(value || "")
     .normalize("NFD")
@@ -4373,14 +4400,7 @@ async function getViewerMarket(request) {
     const user = userData?.user;
     if (userError || !user?.id) return null;
     const profile = await ensureProfileForUser(user);
-    const countryCode = String(profile?.country_code || "").trim().toUpperCase();
-    const cityMarket = String(profile?.city_market || "").trim().toLowerCase();
-    if (!countryCode || !cityMarket || cityMarket === "pending") return null;
-    return {
-      country_code: countryCode,
-      city_market: cityMarket,
-      city_label: profile?.city_label || "",
-    };
+    return effectiveProfileMarket(profile);
   } catch (error) {
     console.error("Viewer market load error:", error);
     return null;
@@ -5522,13 +5542,7 @@ app.get("/api/social-plans", async (request, response) => {
     }
 
     const viewerId = viewer?.id || "";
-    const viewerMarket = viewer
-      ? {
-          country_code: String(viewer.country_code || "").trim().toUpperCase(),
-          city_market: String(viewer.city_market || "").trim().toLowerCase(),
-          city_label: viewer.city_label || "",
-        }
-      : null;
+    const viewerMarket = viewer ? effectiveProfileMarket(viewer) : null;
     const localPlans = filterItemsByMarket(plans || [], viewerMarket);
     const enriched = await enrichSocialPlans(localPlans, viewerId);
     response.json({ plans: filterPublicSocialPlans(enriched, viewerId), guest: !viewerId, market: viewerMarket });
@@ -5701,13 +5715,14 @@ app.post("/api/social-plans", async (request, response) => {
       }
     }
 
+    const creatorMarket = effectiveProfileMarket(creator);
     const planPayload = {
         creator_id: creator.id,
         purchase_id: planType === "ticket" ? purchaseId : null,
         plan_type: planType,
-        country_code: creator.country_code || "ES",
-        city_market: creator.city_market || "donostia",
-        city_label: creator.city_label || "Donostia / San Sebastián",
+        country_code: creatorMarket.country_code,
+        city_market: creatorMarket.city_market,
+        city_label: creatorMarket.city_label,
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,
@@ -5827,12 +5842,13 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       }
     }
 
+    const ownerMarket = effectiveProfileMarket(owner);
     const planPayload = {
         purchase_id: planType === "ticket" ? purchaseId : null,
         plan_type: planType,
-        country_code: owner.country_code || "ES",
-        city_market: owner.city_market || "donostia",
-        city_label: owner.city_label || "Donostia / San Sebastián",
+        country_code: ownerMarket.country_code,
+        city_market: ownerMarket.city_market,
+        city_label: ownerMarket.city_label,
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,

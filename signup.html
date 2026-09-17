@@ -481,8 +481,10 @@
         const customCityValue = window.donossMarkets?.customCityValue || "__custom_city__";
         const isCustomCity = cityMarket === customCityValue;
         const selectedMarket = isCustomCity ? null : availableMarkets.find((market) => market.id === cityMarket) || window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
-        const finalCityLabel = isCustomCity ? customCity.trim() : selectedMarket?.label || "";
-        const finalCityMarket = isCustomCity ? "pending" : selectedMarket?.id || "";
+        const fallbackMarket = window.donossMarkets?.getMarket?.(selectedCountry.code, selectedCountry.defaultCity) || availableMarkets[0] || { id: "donostia", label: "Donostia / San Sebastián" };
+        const requestedCityLabel = customCity.trim();
+        const finalCityLabel = isCustomCity ? fallbackMarket.label : selectedMarket?.label || "";
+        const finalCityMarket = isCustomCity ? fallbackMarket.id : selectedMarket?.id || "";
         const cityStatus = isCustomCity ? "pending_city" : "active";
         const isCustomNeighborhood = neighborhood === customNeighborhoodValue;
         const finalNeighborhood = isCustomNeighborhood ? customNeighborhood.trim() : neighborhood;
@@ -502,6 +504,7 @@
           emailsMatch &&
           phone.trim() &&
           finalCityLabel &&
+          (!isCustomCity || requestedCityLabel) &&
           finalNeighborhood &&
           password.length >= 8 &&
           password === passwordConfirm &&
@@ -608,7 +611,7 @@
             city_market: finalCityMarket,
             city_label: finalCityLabel,
             city_status: cityStatus,
-            requested_city: isCustomCity ? finalCityLabel : null,
+            requested_city: isCustomCity ? requestedCityLabel : null,
             requested_city_country: isCustomCity ? selectedCountry.code : null,
             neighborhood: finalNeighborhood,
             transaction_id: transactionId,
