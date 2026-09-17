@@ -1,9 +1,9 @@
 (function () {
-  const allowedCountries = new Set(["ES", "DZ", "BE"]);
+  const allowedCountries = new Set(["ES", "FR", "BE"]);
   const cacheKey = "donossCountryCheck";
   const cacheMaxAge = 6 * 60 * 60 * 1000;
   const blockedPage = "country-unavailable.html";
-  const allowedTimezones = new Set(["Europe/Madrid", "Atlantic/Canary", "Africa/Ceuta", "Africa/Algiers", "Europe/Brussels"]);
+  const allowedTimezones = new Set(["Europe/Madrid", "Atlantic/Canary", "Africa/Ceuta", "Europe/Paris", "Europe/Brussels"]);
 
   function isBlockedPage() {
     return window.location.pathname.endsWith(blockedPage);
@@ -73,7 +73,7 @@
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (allowedTimezones.has(timezone)) {
       const timezoneCountries = {
-        "Africa/Algiers": "DZ",
+        "Europe/Paris": "FR",
         "Europe/Brussels": "BE",
       };
       const country = timezoneCountries[timezone] || "ES";

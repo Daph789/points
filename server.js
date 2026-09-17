@@ -702,7 +702,9 @@ function metadataText(metadata, key) {
 async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
-  const baseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
+  const legacyBaseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
+  const marketProfileColumns = "country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country";
+  const baseProfileColumns = `${legacyBaseProfileColumns}, ${marketProfileColumns}`;
   const profileIdentityColumns = `${baseProfileColumns}, bio`;
   const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
   const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at`;
@@ -716,7 +718,7 @@ async function ensureProfileForUser(user) {
   if (existingError?.code === "42703") {
     const fallback = await supabaseAdmin
       .from("profiles")
-      .select(baseProfileColumns)
+      .select(legacyBaseProfileColumns)
       .eq("id", user.id)
       .maybeSingle();
     existing = fallback.data;
@@ -785,6 +787,7 @@ async function ensureProfileForUser(user) {
         if (error?.code !== "42703") console.error("Business bank details backfill fatal error:", error);
       }
     }
+    await registerCityOpeningRequest(existing, metadata);
     await registerReferralForProfile(existing, metadata);
     return existing;
   }
@@ -804,6 +807,13 @@ async function ensureProfileForUser(user) {
     bio: metadataText(metadata, "bio") || null,
     email: user.email || metadataText(metadata, "email"),
     phone: metadataText(metadata, "phone") || null,
+    country_code: metadataText(metadata, "country_code") || "ES",
+    country_label: metadataText(metadata, "country_label") || "España",
+    city_market: metadataText(metadata, "city_market") || "donostia",
+    city_label: metadataText(metadata, "city_label") || "Donostia / San Sebastián",
+    city_status: metadataText(metadata, "city_status") || "active",
+    requested_city: metadataText(metadata, "requested_city") || null,
+    requested_city_country: metadataText(metadata, "requested_city_country") || null,
     neighborhood: metadataText(metadata, "neighborhood") || "Donostia",
     address: metadataText(metadata, "address") || null,
     business_categories: businessCategories,
@@ -835,17 +845,28 @@ async function ensureProfileForUser(user) {
       .maybeSingle();
 
     if (error?.code === "42703") {
-      const { bio: _bio, ...profileWithoutBio } = baseProfile;
+      const {
+        bio: _bio,
+        country_code: _countryCode,
+        country_label: _countryLabel,
+        city_market: _cityMarket,
+        city_label: _cityLabel,
+        city_status: _cityStatus,
+        requested_city: _requestedCity,
+        requested_city_country: _requestedCityCountry,
+        ...profileWithoutNewerColumns
+      } = baseProfile;
       const fallback = await supabaseAdmin
         .from("profiles")
-        .insert({ ...profileWithoutBio, transaction_id: transactionId })
-        .select(baseProfileColumns)
+        .insert({ ...profileWithoutNewerColumns, transaction_id: transactionId })
+        .select(legacyBaseProfileColumns)
         .maybeSingle();
       created = fallback.data;
       error = fallback.error;
     }
 
     if (!error && created) {
+      await registerCityOpeningRequest(created, metadata);
       await registerReferralForProfile(created, metadata);
       return created;
     }
@@ -855,6 +876,34 @@ async function ensureProfileForUser(user) {
   }
 
   throw lastError || new Error("Could not create profile");
+}
+
+async function registerCityOpeningRequest(profile, metadata = {}) {
+  if (!supabaseAdmin || !profile?.id) return null;
+  const status = metadataText(metadata, "city_status") || profile.city_status;
+  const cityName = metadataText(metadata, "requested_city") || profile.requested_city;
+  const countryCode = metadataText(metadata, "requested_city_country") || metadataText(metadata, "country_code") || profile.country_code;
+  if (status !== "pending_city" || !cityName || !countryCode) return null;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("city_opening_requests")
+      .insert({
+        profile_id: profile.id,
+        account_type: profile.account_type || metadataText(metadata, "account_type") || "user",
+        country_code: countryCode,
+        city_name: cityName,
+        status: "pending",
+      })
+      .select("id")
+      .maybeSingle();
+
+    if (error && error.code !== "23505") throw error;
+    return data || null;
+  } catch (error) {
+    if (error.code !== "42P01" && error.code !== "42703") console.error("City opening request error:", error);
+    return null;
+  }
 }
 
 async function registerReferralForProfile(profile, metadata = {}) {
@@ -5371,12 +5420,13 @@ app.post("/api/social-plans", async (request, response) => {
       }
     }
 
-    const { data: plan, error } = await supabaseAdmin
-      .from("social_plans")
-      .insert({
+    const planPayload = {
         creator_id: creator.id,
         purchase_id: planType === "ticket" ? purchaseId : null,
         plan_type: planType,
+        country_code: creator.country_code || "ES",
+        city_market: creator.city_market || "donostia",
+        city_label: creator.city_label || "Donostia / San Sebastián",
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,
@@ -5387,9 +5437,24 @@ app.post("/api/social-plans", async (request, response) => {
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
-      })
+      };
+
+    let { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .insert(planPayload)
       .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
+
+    if (error?.code === "42703") {
+      const { country_code, city_market, city_label, ...legacyPlanPayload } = planPayload;
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .insert(legacyPlanPayload)
+        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .maybeSingle();
+      plan = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Create social plan error:", error);
@@ -5481,11 +5546,12 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       }
     }
 
-    const { data: plan, error } = await supabaseAdmin
-      .from("social_plans")
-      .update({
+    const planPayload = {
         purchase_id: planType === "ticket" ? purchaseId : null,
         plan_type: planType,
+        country_code: owner.country_code || "ES",
+        city_market: owner.city_market || "donostia",
+        city_label: owner.city_label || "Donostia / San Sebastián",
         free_category: planType === "free" ? freeCategory : null,
         location: planType === "free" ? location : null,
         event_date: planType === "free" ? eventDate : null,
@@ -5497,11 +5563,28 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
         updated_at: new Date().toISOString(),
-      })
+      };
+
+    let { data: plan, error } = await supabaseAdmin
+      .from("social_plans")
+      .update(planPayload)
       .eq("id", existing.id)
       .eq("creator_id", owner.id)
       .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
       .maybeSingle();
+
+    if (error?.code === "42703") {
+      const { country_code, city_market, city_label, ...legacyPlanPayload } = planPayload;
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .update(legacyPlanPayload)
+        .eq("id", existing.id)
+        .eq("creator_id", owner.id)
+        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .maybeSingle();
+      plan = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Update social plan error:", error);

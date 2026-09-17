@@ -22,37 +22,41 @@ supabase-open-business-offers-no-rls.sql
    - cree/met a jour les colonnes des offres.
    - laisse `business_offers` sans RLS en mode lancement.
 
-3. `supabase-payments.sql`
+3. `supabase-markets.sql`
+   - ajoute les champs pays/ville Donoss: Espagne/Donostia, France/Lille, Belgique/Tournai.
+   - a executer sans activer RLS.
+
+4. `supabase-payments.sql`
    - achats avec points, historique et QR.
 
-4. `supabase-external-purchase-history.sql`
+5. `supabase-external-purchase-history.sql`
    - historique des clics/achats externes sans QR Donoss.
 
-5. `supabase-liked-offers.sql`
+6. `supabase-liked-offers.sql`
    - favoris/me gusta.
 
-6. `supabase-social-plans.sql`, `supabase-free-social-plans.sql`, `supabase-plan-chat.sql`, `supabase-side-groups.sql`
+7. `supabase-social-plans.sql`, `supabase-free-social-plans.sql`, `supabase-plan-chat.sql`, `supabase-side-groups.sql`
    - quedadas, plans libres, membres et chats.
 
-7. `supabase-offer-automation-requests.sql`
+8. `supabase-offer-automation-requests.sql`
    - demandes d'automatisation/copie de publication.
 
-8. `supabase-open-business-offers-no-rls.sql`
+9. `supabase-open-business-offers-no-rls.sql`
    - fichier de secours a lancer en dernier si les offres sont bloquees.
 
-9. `supabase-fix-business-account-type.sql`
+10. `supabase-fix-business-account-type.sql`
    - a utiliser seulement si un compte entreprise apparait comme `Usuario`.
    - remplace `EMAIL_ENTREPRISE_A_CORRIGER` par l'email de l'entreprise avant d'executer.
 
-10. `supabase-performance-indexes.sql`
+11. `supabase-performance-indexes.sql`
    - indexes de performance pour les offres, achats, categories et notifications.
    - a executer une fois si Supabase monte trop haut en CPU.
 
-11. `supabase-security-monitoring.sql`
+12. `supabase-security-monitoring.sql`
    - surveillance admin du trafic suspect, IP/comptes bloques et evenements de securite.
    - a executer une fois pour activer la section Seguridad dans `donos-admin-activity.html`.
 
-12. `supabase-secondary-admins.sql`
+13. `supabase-secondary-admins.sql`
    - admins secondaires, acces limite staff et journal des actions admin.
    - a executer une fois pour activer `donos-admin-staff.html` et `donos-admin-secondary.html`.
 

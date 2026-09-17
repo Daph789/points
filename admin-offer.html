@@ -421,6 +421,9 @@
               display_name: localName || metadata.display_name || "",
               transaction_id: localTransactionId || metadata.transaction_id || "",
               is_verified: false,
+              country_code: metadata.country_code || "ES",
+              city_market: metadata.city_market || "donostia",
+              city_label: metadata.city_label || "Donostia / San Sebastián",
             };
 
             if (!userId) {
@@ -440,7 +443,7 @@
 
             const { data } = await supabaseClient
               .from("profiles")
-              .select("display_name, transaction_id, is_verified")
+              .select("display_name, transaction_id, is_verified, country_code, city_market, city_label")
               .eq("id", userId)
               .maybeSingle();
 
@@ -449,6 +452,9 @@
                 display_name: data.display_name || profile.display_name,
                 transaction_id: data.transaction_id || profile.transaction_id,
                 is_verified: Boolean(data.is_verified),
+                country_code: data.country_code || profile.country_code,
+                city_market: data.city_market || profile.city_market,
+                city_label: data.city_label || profile.city_label,
               };
             }
 
@@ -781,6 +787,9 @@
               receiver_display_name: receiverName || null,
               business_display_name: businessProfile?.display_name || null,
               business_is_verified: Boolean(businessProfile?.is_verified),
+              country_code: businessProfile?.country_code || "ES",
+              city_market: businessProfile?.city_market || "donostia",
+              city_label: businessProfile?.city_label || "Donostia / San Sebastián",
               delivery_home_enabled: deliveryOptionsEnabled && homeDeliveryEnabled,
               delivery_home_price: deliveryOptionsEnabled && homeDeliveryEnabled && Number.isFinite(deliveryPrice) ? deliveryPrice : null,
               delivery_home_points: deliveryOptionsEnabled && homeDeliveryEnabled ? deliveryPoints : null,
@@ -803,11 +812,20 @@
               payload.external_checkout_url = externalCheckoutEnabled ? externalCheckoutUrl.trim() : null;
             }
 
-            const request = editId
+            let request = editId
               ? supabaseClient.from("business_offers").update(payload).eq("id", editId).eq("business_id", userId).select("id").maybeSingle()
               : supabaseClient.from("business_offers").insert(payload).select("id").maybeSingle();
 
-            const { data, error } = await request;
+            let { data, error } = await request;
+            if (error?.code === "42703") {
+              const { country_code, city_market, city_label, ...legacyPayload } = payload;
+              request = editId
+                ? supabaseClient.from("business_offers").update(legacyPayload).eq("id", editId).eq("business_id", userId).select("id").maybeSingle()
+                : supabaseClient.from("business_offers").insert(legacyPayload).select("id").maybeSingle();
+              const fallback = await request;
+              data = fallback.data;
+              error = fallback.error;
+            }
             if (error) throw error;
             if (editId && !data) {
               setStatus({

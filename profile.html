@@ -10,6 +10,7 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="market-config.js"></script>
     <script defer src="activity-tracker.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
@@ -236,7 +237,7 @@
               return;
             }
 
-            const columns = "id, display_name, bio, profile_photo_data_url, email, phone, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
+            const columns = "id, display_name, bio, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
             let data = null;
             let error = null;
 
@@ -281,6 +282,13 @@
                 bio: metadata.bio || "",
                 email: authUser.email || "",
                 phone: metadata.phone || "",
+                country_code: metadata.country_code || "ES",
+                country_label: metadata.country_label || "España",
+                city_market: metadata.city_market || "donostia",
+                city_label: metadata.city_label || "Donostia / San Sebastián",
+                city_status: metadata.city_status || "active",
+                requested_city: metadata.requested_city || "",
+                requested_city_country: metadata.requested_city_country || "",
                 neighborhood: metadata.neighborhood || "",
                 account_type: metadata.account_type || "user",
                 business_categories: metadata.business_categories || [],
@@ -929,6 +937,13 @@
             <section className="mt-5 grid gap-3 sm:grid-cols-2">
               <InfoCard label="Tipo de cuenta" value={isBusiness ? "Comercio / Empresa" : "Usuario"} />
               <InfoCard label="Teléfono" value={profile.phone} />
+              <InfoCard label="País" value={profile.country_label || profile.country_code || "España"} />
+              <InfoCard
+                label="Ciudad Donoss"
+                value={profile.city_status === "pending_city"
+                  ? `${profile.requested_city || profile.city_label || "Ciudad solicitada"} · pendiente`
+                  : profile.city_label || "Donostia / San Sebastián"}
+              />
               <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

@@ -9,6 +9,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="country-guard.js"></script>
+    <script src="market-config.js"></script>
     <script defer src="activity-tracker.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
@@ -293,6 +294,9 @@
         const [passwordConfirm, setPasswordConfirm] = React.useState("");
         const [acceptedTerms, setAcceptedTerms] = React.useState(false);
         const [isTermsOpen, setIsTermsOpen] = React.useState(false);
+        const [countryCode, setCountryCode] = React.useState(window.donossMarkets?.defaultCountryCode || "ES");
+        const [cityMarket, setCityMarket] = React.useState(window.donossMarkets?.getCountry?.("ES")?.defaultCity || "donostia");
+        const [customCity, setCustomCity] = React.useState("");
         const [neighborhood, setNeighborhood] = React.useState("");
         const [customNeighborhood, setCustomNeighborhood] = React.useState("");
         const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState([]);
@@ -309,6 +313,14 @@
 
         const isBusiness = accountType === "business";
         const isUser = accountType === "user";
+        const selectedCountry = window.donossMarkets?.getCountry?.(countryCode) || { code: "ES", name: "España", flag: "🇪🇸", dialCode: "+34", phonePlaceholder: "600 000 000", defaultCity: "donostia" };
+        const availableMarkets = window.donossMarkets?.getMarkets?.(selectedCountry.code) || [{ id: "donostia", label: "Donostia / San Sebastián" }];
+        const customCityValue = window.donossMarkets?.customCityValue || "__custom_city__";
+        const isCustomCity = cityMarket === customCityValue;
+        const selectedMarket = isCustomCity ? null : window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
+        const finalCityLabel = isCustomCity ? customCity.trim() : selectedMarket?.label || "";
+        const finalCityMarket = isCustomCity ? "pending" : selectedMarket?.id || "";
+        const cityStatus = isCustomCity ? "pending_city" : "active";
         const isCustomNeighborhood = neighborhood === customNeighborhoodValue;
         const finalNeighborhood = isCustomNeighborhood ? customNeighborhood.trim() : neighborhood;
         const normalizedEmail = email.trim().toLowerCase();
@@ -326,11 +338,27 @@
           bioText.length >= 20 &&
           emailsMatch &&
           phone.trim() &&
+          finalCityLabel &&
           finalNeighborhood &&
           password.length >= 8 &&
           password === passwordConfirm &&
           acceptedTerms &&
           (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim() && bankDetailsComplete));
+
+        React.useEffect(() => {
+          let cancelled = false;
+          async function syncCountryFromAccessCheck() {
+            const result = await window.donossCountryGuard?.detectCountry?.();
+            const detected = String(result?.country || "").toUpperCase();
+            if (!cancelled && ["ES", "FR", "BE"].includes(detected)) {
+              handleCountryChange(detected);
+            }
+          }
+          syncCountryFromAccessCheck();
+          return () => {
+            cancelled = true;
+          };
+        }, []);
 
         function normalizeIban(value) {
           return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
@@ -364,13 +392,28 @@
           }, 120);
         }
 
+        function handleCountryChange(value) {
+          const nextCountry = window.donossMarkets?.getCountry?.(value) || selectedCountry;
+          const nextMarkets = window.donossMarkets?.getMarkets?.(nextCountry.code) || [];
+          setCountryCode(nextCountry.code);
+          setCityMarket(nextMarkets[0]?.id || customCityValue);
+          setCustomCity("");
+        }
+
         function profilePayload(transactionId) {
           return {
             account_type: accountType,
             display_name: displayName.trim(),
             bio: bioText,
             email: normalizedEmail,
-            phone: `+34 ${phone.trim()}`,
+            phone: `${selectedCountry.dialCode} ${phone.trim()}`,
+            country_code: selectedCountry.code,
+            country_label: selectedCountry.name,
+            city_market: finalCityMarket,
+            city_label: finalCityLabel,
+            city_status: cityStatus,
+            requested_city: isCustomCity ? finalCityLabel : null,
+            requested_city_country: isCustomCity ? selectedCountry.code : null,
             neighborhood: finalNeighborhood,
             transaction_id: transactionId,
             business_categories: isBusiness ? businessCategoriesSelected : null,
@@ -743,17 +786,70 @@
                         )}
                       </Field>
 
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <Field label="País">
+                          <select
+                            className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
+                            value={selectedCountry.code}
+                            onChange={(event) => handleCountryChange(event.target.value)}
+                          >
+                            {(window.donossMarkets?.countries || []).map((country) => (
+                              <option key={country.code} className="bg-panel" value={country.code}>
+                                {country.flag} {country.name}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+
+                        <Field label="Ciudad Donoss">
+                          <select
+                            className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
+                            value={cityMarket}
+                            onChange={(event) => setCityMarket(event.target.value)}
+                          >
+                            {availableMarkets.map((market) => (
+                              <option key={market.id} className="bg-panel" value={market.id}>
+                                {market.label}
+                              </option>
+                            ))}
+                            <option className="bg-panel" value={customCityValue}>
+                              Mi ciudad no aparece
+                            </option>
+                          </select>
+                        </Field>
+                      </div>
+
+                      {isCustomCity && (
+                        <section className="rounded-[24px] border border-sun/25 bg-sun/10 p-4">
+                          <Field label="Escribe tu ciudad">
+                            <input
+                              className={inputClass}
+                              type="text"
+                              placeholder="Ej. Mouscron, Roubaix..."
+                              value={customCity}
+                              onChange={(event) => setCustomCity(event.target.value)}
+                              autoComplete="address-level2"
+                            />
+                          </Field>
+                          <p className="mt-3 text-xs font-bold leading-5 text-slate-300">
+                            {isBusiness
+                              ? "Tu cuenta se puede crear, pero Donoss revisará la apertura de esta ciudad antes de activar publicaciones allí."
+                              : "Podrás explorar las ciudades activas. Donoss podrá abrir tu ciudad si hay demanda suficiente."}
+                          </p>
+                        </section>
+                      )}
+
                       <Field label={isBusiness ? "Teléfono de contacto" : "Teléfono móvil"}>
                         <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
                           <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
-                            <span>🇪🇸</span>
-                            <span>+34</span>
+                            <span>{selectedCountry.flag}</span>
+                            <span>{selectedCountry.dialCode}</span>
                           </button>
                           <input
                             className={inputClass}
                             type="tel"
                             inputMode="tel"
-                            placeholder={isBusiness ? "943 000 000" : "600 000 000"}
+                            placeholder={isBusiness ? selectedCountry.phonePlaceholder : selectedCountry.phonePlaceholder}
                             autoComplete="tel"
                             value={phone}
                             onChange={(event) => setPhone(event.target.value)}

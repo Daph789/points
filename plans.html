@@ -1398,17 +1398,13 @@
             {mode === "discover" && (
               <>
                 {hasActivePlanSearch && (
-                  <section className="mt-4 rounded-[30px] border border-mint/20 bg-mint/10 p-4 shadow-glow">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Búsqueda compartida</p>
-                    <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <h2 className="break-words text-2xl font-black leading-tight text-white">Planes sobre “{planQuery.trim()}”</h2>
-                        <p className="mt-1 text-sm font-bold text-slate-300">{visiblePlans.length} resultado{visiblePlans.length === 1 ? "" : "s"} encontrado{visiblePlans.length === 1 ? "" : "s"}.</p>
-                      </div>
-                      <button className="h-11 rounded-2xl border border-white/10 bg-white/[0.08] px-4 text-sm font-black text-white transition hover:bg-white/[0.12]" type="button" onClick={() => setSharedPlanQuery("")}>
+                  <section className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-white/[0.055] px-4 py-3">
+                    <p className="text-sm font-black text-slate-300">
+                      {visiblePlans.length} resultado{visiblePlans.length === 1 ? "" : "s"} encontrado{visiblePlans.length === 1 ? "" : "s"}
+                    </p>
+                    <button className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]" type="button" onClick={() => setSharedPlanQuery("")}>
                         Ver todos
                       </button>
-                    </div>
                   </section>
                 )}
 
