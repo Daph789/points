@@ -3251,7 +3251,13 @@ app.put("/api/me/profile", async (request, response) => {
         payload.city_status = "pending_city";
         payload.requested_city = requestedCity;
         payload.requested_city_country = countryCode;
-        await createCityOpeningRequest(profile, { requested_city: requestedCity, requested_city_country: countryCode, country_code: countryCode });
+        await registerCityOpeningRequest(profile, {
+          city_status: "pending_city",
+          requested_city: requestedCity,
+          requested_city_country: countryCode,
+          country_code: countryCode,
+          account_type: profile.account_type,
+        });
       }
     }
     const { data, error } = await supabaseAdmin

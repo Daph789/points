@@ -252,6 +252,7 @@
       "Volver": "Retour",
       "Actualizar": "Actualiser",
       "Cerrar": "Fermer",
+      "Navegación principal": "Navigation principale",
       "Crear": "Créer",
       "Guardar": "Enregistrer",
       "Guardar cambios": "Enregistrer les changements",
@@ -269,6 +270,9 @@
       "Entrar": "Se connecter",
       "Crear cuenta": "Créer un compte",
       "Crear cuenta gratis": "Créer un compte gratuit",
+      "Cancelar": "Annuler",
+      "Modificar": "Modifier",
+      "Actualizar app": "Mettre à jour l’app",
       "Mis publicaciones": "Mes publications",
       "Panel empresa": "Espace entreprise",
       "Crear una publicación": "Créer une publication",
@@ -301,9 +305,35 @@
       "Publicación visible de nuevo.": "Publication de nouveau visible.",
       "Publicación eliminada definitivamente.": "Publication supprimée définitivement.",
       "Perfil": "Profil",
+      "Cargando perfil...": "Chargement du profil...",
+      "Cuenta Donoss": "Compte Donoss",
+      "Cuenta certificada": "Compte certifié",
+      "Empresa": "Entreprise",
+      "España": "Espagne",
       "Correo no indicado": "E-mail non indiqué",
       "ID no disponible": "ID non disponible",
       "Copiar": "Copier",
+      "Copiado": "Copié",
+      "Nombre / Apodo": "Nom / pseudo",
+      "Tu nombre o apodo": "Ton nom ou pseudo",
+      "Tu cuenta": "Ton compte",
+      "Puntos": "Points",
+      "Bio de la empresa": "Bio de l’entreprise",
+      "Bio personal": "Bio personnelle",
+      "Todavía no has añadido una bio.": "Tu n’as pas encore ajouté de bio.",
+      "Ej. Somos una librería de Gros que organiza planes culturales, descuentos para jóvenes y eventos cerca del barrio.": "Ex. Nous sommes une librairie qui organise des plans culturels, des réductions pour les jeunes et des événements près du quartier.",
+      "Ej. Soy una persona a la que le gusta mucho la música, el cine y conocer gente para hacer planes por Donostia.": "Ex. J’aime beaucoup la musique, le cinéma et rencontrer des gens pour faire des plans.",
+      "Mínimo 20 caracteres.": "Minimum 20 caractères.",
+      "Guardar bio": "Enregistrer la bio",
+      "Foto de empresa": "Photo de l’entreprise",
+      "Se verá en tu página pública de empresa y ayudará a que tus ofertas parezcan más fiables.": "Elle apparaîtra sur ta page publique d’entreprise et rendra tes offres plus fiables.",
+      "Añadir foto": "Ajouter une photo",
+      "Quitar": "Retirer",
+      "Foto de empresa guardada correctamente.": "Photo de l’entreprise enregistrée correctement.",
+      "Foto de empresa eliminada.": "Photo de l’entreprise supprimée.",
+      "No se ha podido guardar la foto de empresa.": "Impossible d’enregistrer la photo de l’entreprise.",
+      "Te invitó": "Invité par",
+      "Invitación registrada": "Invitation enregistrée",
       "Tipo de cuenta": "Type de compte",
       "Comercio / Empresa": "Commerce / Entreprise",
       "Usuario": "Utilisateur",
@@ -319,6 +349,12 @@
       "Tu ciudad quedará en revisión. Hasta que se abra, verás la ciudad principal del país seleccionado.": "Ta ville sera en vérification. Jusqu’à son ouverture, tu verras la ville principale du pays sélectionné.",
       "No se ha podido actualizar tu país o ciudad.": "Impossible de mettre à jour ton pays ou ta ville.",
       "Escribe una ciudad válida para pedir su apertura.": "Écris une ville valide pour demander son ouverture.",
+      "El nombre debe tener entre 2 y 60 caracteres.": "Le nom doit contenir entre 2 et 60 caractères.",
+      "Nombre actualizado correctamente.": "Nom mis à jour correctement.",
+      "No se ha podido actualizar tu nombre.": "Impossible de mettre à jour ton nom.",
+      "La bio debe tener entre 20 y 500 caracteres.": "La bio doit contenir entre 20 et 500 caractères.",
+      "Bio actualizada correctamente.": "Bio mise à jour correctement.",
+      "No se ha podido actualizar tu bio.": "Impossible de mettre à jour ta bio.",
       "Ciudad Donoss": "Ville Donoss",
       "Ciudad solicitada": "Ville demandée",
       "pendiente": "en attente",
@@ -327,21 +363,34 @@
       "Elige tu barrio": "Choisis ton quartier",
       "Escribe tu barrio": "Écris ton quartier",
       "Guardar barrio": "Enregistrer le quartier",
+      "El barrio debe tener entre 2 y 60 caracteres.": "Le quartier doit contenir entre 2 et 60 caractères.",
+      "Barrio actualizado correctamente.": "Quartier mis à jour correctement.",
+      "No se ha podido actualizar tu barrio.": "Impossible de mettre à jour ton quartier.",
       "Dirección": "Adresse",
       "Categorías": "Catégories",
       "Información esencial": "Informations essentielles",
+      "Si necesitas modificar un dato urgente o esencial que no aparece editable aquí, contacta con Donoss para revisarlo de forma segura.": "Si tu dois modifier une information urgente ou essentielle qui n’est pas modifiable ici, contacte Donoss pour la vérifier en sécurité.",
+      "Ejemplos: correo electrónico, teléfono principal, datos fiscales, dirección fiscal o cuenta bancaria/IBAN.": "Exemples : e-mail, téléphone principal, données fiscales, adresse fiscale ou compte bancaire/IBAN.",
+      "Ejemplos: correo electrónico, teléfono principal, datos fiscales o datos sensibles de tu cuenta.": "Exemples : e-mail, téléphone principal, données fiscales ou données sensibles de ton compte.",
+      "Contacta con Donoss": "Contacter Donoss",
       "Última versión": "Dernière version",
+      "Si algo no aparece después de una actualización, recarga Donoss sin cerrar sesión.": "Si quelque chose n’apparaît pas après une mise à jour, recharge Donoss sans te déconnecter.",
       "Plan Premium": "Plan Premium",
       "Certificación Donoss": "Certification Donoss",
       "Gana confianza y muestra tus ofertas oficiales con más autoridad dentro de Donoss.": "Gagne en confiance et affiche tes offres officielles avec plus d’autorité dans Donoss.",
       "Demuestra que eres una persona real y consigue una atención más rápida cuando necesites ayuda.": "Montre que tu es une vraie personne et bénéficie d’une aide plus rapide quand tu en as besoin.",
       "cada 31 días": "tous les 31 jours",
+      "Premium activado correctamente. Tu certificación ya está activa.": "Premium activé correctement. Ta certification est active.",
+      "No tienes puntos suficientes para activar Premium.": "Tu n’as pas assez de points pour activer Premium.",
+      "Completa tu NIE/DNI y una foto visible antes de activar Premium.": "Complète ton NIE/DNI et une photo visible avant d’activer Premium.",
+      "No se ha podido activar Premium.": "Impossible d’activer Premium.",
       "Estado": "Statut",
       "Pago al día": "Paiement à jour",
       "Pago fallido": "Paiement échoué",
       "Sin activar": "Non activé",
       "Próximo cobro": "Prochain prélèvement",
       "Al activar Premium": "À l’activation de Premium",
+      "No programado": "Non programmé",
       "Certificación": "Certification",
       "Activa": "Active",
       "No activa": "Non active",
@@ -352,21 +401,41 @@
       "Activar Premium": "Activer Premium",
       "Fotos para planes": "Photos pour les plans",
       "Planes con más gente": "Plans avec d’autres personnes",
+      "Estas fotos solo se muestran a personas autorizadas en Quedar: quien creó el plan y participantes del mismo grupo. Para apuntarte se necesitan mínimo 2 fotos.": "Ces photos ne sont montrées qu’aux personnes autorisées dans Plans : la personne qui a créé le plan et les participants du même groupe. Il faut au moins 2 photos pour participer.",
+      "Una foto es demasiado grande. Usa imágenes de menos de 8 MB.": "Une photo est trop grande. Utilise des images de moins de 8 Mo.",
+      "La foto es demasiado grande. Usa una imagen de menos de 8 MB.": "La photo est trop grande. Utilise une image de moins de 8 Mo.",
+      "No se ha podido preparar la foto.": "Impossible de préparer la photo.",
+      "No se han podido preparar las fotos.": "Impossible de préparer les photos.",
+      "Fotos para planes guardadas correctamente.": "Photos pour les plans enregistrées correctement.",
+      "No se han podido guardar las fotos.": "Impossible d’enregistrer les photos.",
       "¿Cómo te calificas para Quedar?": "Comment te définir pour les plans ?",
+      "Esto se usará automáticamente cuando pulses “Voy contigo”. Puedes cambiarlo cuando quieras.": "Ce choix sera utilisé automatiquement quand tu appuies sur “Je viens avec toi”. Tu peux le modifier quand tu veux.",
+      "Preferencia para Quedar guardada correctamente.": "Préférence pour les plans enregistrée correctement.",
+      "No se ha podido guardar tu preferencia.": "Impossible d’enregistrer ta préférence.",
       "Chica": "Fille",
       "Chico": "Garçon",
       "Añadir": "Ajouter",
       "Guardar fotos": "Enregistrer les photos",
       "Sesión": "Session",
+      "Sal de esta cuenta para entrar con otra.": "Déconnecte-toi de ce compte pour en utiliser un autre.",
       "Cerrar sesión": "Se déconnecter",
       "Política de privacidad": "Politique de confidentialité",
       "Eliminar cuenta y datos": "Supprimer compte et données",
       "Plan para empresas": "Plan pour entreprises",
       "Plan para usuarios": "Plan pour utilisateurs",
       "Verificación de identidad": "Vérification d’identité",
+      "Añade tu NIE o DNI para activar Premium.": "Ajoute ton NIE ou DNI pour activer Premium.",
+      "Añade una foto visible de ti para activar Premium.": "Ajoute une photo visible de toi pour activer Premium.",
+      "Identidad Premium guardada correctamente.": "Identité Premium enregistrée correctement.",
+      "No se ha podido guardar la identidad Premium.": "Impossible d’enregistrer l’identité Premium.",
       "Lista": "Prête",
       "NIE o DNI": "NIE ou DNI",
       "Foto visible": "Photo visible",
+      "Para modificarlo, contacta con Donoss.": "Pour le modifier, contacte Donoss.",
+      "Certificación para ganar confianza.": "Certification pour gagner en confiance.",
+      "Tus ofertas oficiales se muestran con más autoridad.": "Tes offres officielles s’affichent avec plus d’autorité.",
+      "Certificación para demostrar que eres una persona real.": "Certification pour montrer que tu es une vraie personne.",
+      "Servicio de ayuda más rápido cuando lo necesites.": "Aide plus rapide quand tu en as besoin.",
       "Renovar ahora": "Renouveler maintenant",
       "Activar": "Activer",
       "Guardar y activar": "Enregistrer et activer",
@@ -424,7 +493,17 @@
     if (locale !== "fr") return source;
     const trimmed = source.trim();
     const translated = phraseCopy.fr[trimmed];
-    if (!translated) return source;
+    if (!translated) {
+      const partialPhrases = {
+        "España": "Espagne",
+        "pendiente": "en attente",
+      };
+      let next = source;
+      Object.entries(partialPhrases).forEach(([from, to]) => {
+        next = next.split(from).join(to);
+      });
+      return next;
+    }
     return source.replace(trimmed, translated);
   }
 
@@ -433,7 +512,7 @@
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
         const parent = node.parentElement;
-        if (!parent || ["SCRIPT", "STYLE", "TEXTAREA", "OPTION"].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
+        if (!parent || ["SCRIPT", "STYLE", "TEXTAREA"].includes(parent.tagName)) return NodeFilter.FILTER_REJECT;
         return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       },
     });
@@ -475,6 +554,10 @@
     applyAll();
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
+        if (mutation.type === "characterData" && mutation.target?.parentElement) {
+          const translated = text(mutation.target.nodeValue);
+          if (translated !== mutation.target.nodeValue) mutation.target.nodeValue = translated;
+        }
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE) applyAll(node);
           if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
@@ -484,6 +567,6 @@
         });
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
   });
 })();
