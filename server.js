@@ -3190,11 +3190,12 @@ app.put("/api/me/profile", async (request, response) => {
   const hasBio = Object.prototype.hasOwnProperty.call(request.body || {}, "bio");
   const hasProfilePhoto = Object.prototype.hasOwnProperty.call(request.body || {}, "profile_photo_data_url");
   const hasNeighborhood = Object.prototype.hasOwnProperty.call(request.body || {}, "neighborhood");
+  const hasMarket = Object.prototype.hasOwnProperty.call(request.body || {}, "country_code") || Object.prototype.hasOwnProperty.call(request.body || {}, "city_market");
   const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
   const bio = String(request.body?.bio || "").trim().replace(/\s+/g, " ");
   const profilePhoto = String(request.body?.profile_photo_data_url || "");
   const neighborhood = String(request.body?.neighborhood || "").trim().replace(/\s+/g, " ");
-  if (!hasDisplayName && !hasBio && !hasProfilePhoto && !hasNeighborhood) {
+  if (!hasDisplayName && !hasBio && !hasProfilePhoto && !hasNeighborhood && !hasMarket) {
     return response.status(400).json({ error: "nothing_to_update" });
   }
   if (hasDisplayName && (displayName.length < 2 || displayName.length > 60)) {
@@ -3220,11 +3221,44 @@ app.put("/api/me/profile", async (request, response) => {
     if (hasBio) payload.bio = bio;
     if (hasProfilePhoto) payload.profile_photo_data_url = profilePhoto || null;
     if (hasNeighborhood) payload.neighborhood = neighborhood;
+    if (hasMarket) {
+      const countryCode = String(request.body?.country_code || "").trim().toUpperCase();
+      const selectedCityMarket = String(request.body?.city_market || "").trim().toLowerCase();
+      const requestedCity = String(request.body?.requested_city || "").trim().replace(/\s+/g, " ");
+      const activeMarkets = await loadActiveCityMarkets();
+      const country = marketCountryLabels[countryCode] ? { code: countryCode, label: marketCountryLabels[countryCode] } : null;
+      if (!country) return response.status(400).json({ error: "invalid_country" });
+      const selectedMarket = activeMarkets.find((market) =>
+        String(market.country_code || "").toUpperCase() === countryCode &&
+        String(market.city_market || "").toLowerCase() === selectedCityMarket
+      );
+
+      if (selectedMarket) {
+        payload.country_code = countryCode;
+        payload.country_label = country.label;
+        payload.city_market = String(selectedMarket.city_market || "").toLowerCase();
+        payload.city_label = selectedMarket.city_label;
+        payload.city_status = "active";
+        payload.requested_city = null;
+        payload.requested_city_country = null;
+      } else {
+        if (requestedCity.length < 2 || requestedCity.length > 80) return response.status(400).json({ error: "invalid_requested_city" });
+        const fallback = defaultMarketForCountry(countryCode);
+        payload.country_code = countryCode;
+        payload.country_label = country.label;
+        payload.city_market = fallback.city_market;
+        payload.city_label = fallback.city_label;
+        payload.city_status = "pending_city";
+        payload.requested_city = requestedCity;
+        payload.requested_city_country = countryCode;
+        await createCityOpeningRequest(profile, { requested_city: requestedCity, requested_city_country: countryCode, country_code: countryCode });
+      }
+    }
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .update(payload)
       .eq("id", profile.id)
-      .select("id, account_type, display_name, bio, profile_photo_data_url, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .select("id, account_type, display_name, bio, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (error?.code === "42703") return response.status(500).json({ error: hasProfilePhoto ? "profile_photo_sql_missing" : "profile_bio_sql_missing" });
