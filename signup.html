@@ -82,23 +82,29 @@
     <div id="root"></div>
 
     <script type="text/babel">
-      const neighborhoods = [
-        "Gros",
-        "Amara",
-        "Centro",
-        "Altza",
-        "Herrera",
-        "Egia",
-        "Antiguo",
-        "Intxaurrondo",
-        "Aiete",
-        "Loiola",
-        "Martutene",
-        "Ibaeta",
-        "Miramon-Zorroaga",
-        "Ulia",
-        "Añadir otro barrio",
-      ];
+      const neighborhoodsByCountry = {
+        ES: [
+          "Gros",
+          "Amara",
+          "Centro",
+          "Altza",
+          "Herrera",
+          "Egia",
+          "Antiguo",
+          "Intxaurrondo",
+          "Aiete",
+          "Loiola",
+          "Martutene",
+          "Ibaeta",
+          "Miramon-Zorroaga",
+          "Ulia",
+          "Añadir otro barrio",
+        ],
+        FR: ["Vieux-Lille", "Wazemmes", "Vauban-Esquermes", "Ajouter un quartier"],
+        BE: ["Centre-ville", "Saint-Piat", "Kain", "Ajouter un quartier"],
+      };
+
+      const customNeighborhoodLabels = ["Añadir otro barrio", "Ajouter un quartier"];
 
       const perks = [
         { label: "Cine barato", value: "2x1" },
@@ -161,6 +167,7 @@
           zoneUser: "Barrio",
           chooseZone: "Elige tu zona",
           customZone: "Escribe tu barrio",
+          customZonePlaceholder: "Ej. Bidebieta, Añorga...",
           password: "Contraseña",
           repeatPassword: "Repetir contraseña",
           passwordMismatch: "Las contraseñas no coinciden.",
@@ -239,6 +246,7 @@
           zoneUser: "Quartier",
           chooseZone: "Choisis ta zone",
           customZone: "Écris ton quartier",
+          customZonePlaceholder: "Ex. Fives, Moulins, Blandain...",
           password: "Mot de passe",
           repeatPassword: "Répéter le mot de passe",
           passwordMismatch: "Les mots de passe ne correspondent pas.",
@@ -482,6 +490,7 @@
         const isCustomCity = cityMarket === customCityValue;
         const selectedMarket = isCustomCity ? null : availableMarkets.find((market) => market.id === cityMarket) || window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
         const fallbackMarket = window.donossMarkets?.getMarket?.(selectedCountry.code, selectedCountry.defaultCity) || availableMarkets[0] || { id: "donostia", label: "Donostia / San Sebastián" };
+        const availableNeighborhoods = neighborhoodsByCountry[selectedCountry.code] || neighborhoodsByCountry.ES;
         const requestedCityLabel = customCity.trim();
         const finalCityLabel = isCustomCity ? fallbackMarket.label : selectedMarket?.label || "";
         const finalCityMarket = isCustomCity ? fallbackMarket.id : selectedMarket?.id || "";
@@ -597,6 +606,8 @@
           window.donossI18n?.setCountry?.(nextCountry.code);
           setCityMarket(nextMarkets[0]?.id || customCityValue);
           setCustomCity("");
+          setNeighborhood("");
+          setCustomNeighborhood("");
         }
 
         function profilePayload(transactionId) {
@@ -1111,11 +1122,11 @@
                           onChange={(event) => setNeighborhood(event.target.value)}
                         >
                           <option value="" className="bg-panel">{t.chooseZone}</option>
-                          {neighborhoods.map((item) => (
+                          {availableNeighborhoods.map((item) => (
                             <option
                               key={item}
                               className="bg-panel"
-                              value={item === "Añadir otro barrio" ? customNeighborhoodValue : item}
+                              value={customNeighborhoodLabels.includes(item) ? customNeighborhoodValue : item}
                             >
                               {item}
                             </option>
@@ -1128,7 +1139,7 @@
                           <input
                             className={inputClass}
                             type="text"
-                            placeholder="Ej. Bidebieta, Añorga..."
+                            placeholder={t.customZonePlaceholder}
                             value={customNeighborhood}
                             onChange={(event) => setCustomNeighborhood(event.target.value)}
                             autoComplete="address-level3"
