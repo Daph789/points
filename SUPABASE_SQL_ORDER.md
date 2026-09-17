@@ -23,7 +23,8 @@ supabase-open-business-offers-no-rls.sql
    - laisse `business_offers` sans RLS en mode lancement.
 
 3. `supabase-markets.sql`
-   - ajoute les champs pays/ville Donoss: Espagne/Donostia, France/Lille, Belgique/Tournai.
+   - ajoute les champs pays/ville Donoss, le registre des villes ouvertes et les demandes d'ouverture.
+   - villes de depart: Espagne/Donostia, France/Lille, Belgique/Tournai.
    - a executer sans activer RLS.
 
 4. `supabase-payments.sql`

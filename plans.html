@@ -6,6 +6,7 @@
     <title>Donoss | Quedar</title>
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -72,14 +73,15 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key };
       const isEmbeddedPlans = new URLSearchParams(window.location.search).get("embedded") === "1";
 
       const navItems = [
-        { label: "Inicio", icon: "home", href: "home.html" },
-        { label: "Historial", icon: "history", href: "historial.html" },
-        { label: "Quedar", icon: "users", active: true, href: "plans.html" },
-        { label: "Transf.", icon: "transfer", href: "transfer.html" },
-        { label: "Perfil", icon: "user", href: "profile.html" },
+        { label: i18n.t("nav.inicio"), icon: "home", href: "home.html" },
+        { label: i18n.t("nav.historial"), icon: "history", href: "historial.html" },
+        { label: i18n.t("nav.quedar"), icon: "users", active: true, href: "plans.html" },
+        { label: i18n.t("nav.transfer"), icon: "transfer", href: "transfer.html" },
+        { label: i18n.t("nav.perfil"), icon: "user", href: "profile.html" },
       ];
 
 

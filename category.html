@@ -6,6 +6,7 @@
     <title>Donoss | Categoría</title>
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -46,6 +47,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key, category: (value) => value, getLocale: () => "es" };
 
       const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
       if (isEmbeddedCategory) document.body.classList.add("embedded-category");
@@ -67,6 +69,12 @@
         if (!isEmbeddedCategory || window.parent === window) return;
         event.preventDefault();
         window.parent.postMessage({ type: "donos:navigate", route: "inicio" }, window.location.origin);
+      }
+
+      async function authHeaders() {
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const token = sessionData.session?.access_token;
+        return token ? { Authorization: `Bearer ${token}` } : {};
       }
 
       function formatEuro(value) {
@@ -153,14 +161,14 @@
           <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ver más</p>
-                <h2 className="mt-1 text-xl font-black text-white">Secciones con ofertas</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{i18n.t("home.seeMore")}</p>
+                <h2 className="mt-1 text-xl font-black text-white">{i18n.getLocale?.() === "fr" ? "Sections avec offres" : "Secciones con ofertas"}</h2>
               </div>
               <button
                 className="shrink-0 rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
                 onClick={() => openCategoryInsideApp(visibleItems[0].category)}
               >
-                Abrir
+                {i18n.getLocale?.() === "fr" ? "Ouvrir" : "Abrir"}
               </button>
             </div>
             <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:px-0 lg:grid-cols-3">
@@ -180,11 +188,11 @@
                     <div className="relative flex h-full flex-col justify-between gap-4">
                       <div className="flex items-center justify-between gap-3">
                         <span className="grid h-10 w-10 place-items-center rounded-2xl bg-white/12 text-2xl ring-1 ring-white/10">{categoryData.icon}</span>
-                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} ofertas</span>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} {i18n.getLocale?.() === "fr" ? "offres" : "ofertas"}</span>
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">{item.category}</p>
-                        <p className="mt-1 truncate text-xs font-bold text-slate-300">{item.preview?.title || "Ver ofertas"}</p>
+                        <p className="text-lg font-black text-white">{i18n.category(item.category)}</p>
+                        <p className="mt-1 truncate text-xs font-bold text-slate-300">{item.preview?.title || (i18n.getLocale?.() === "fr" ? "Voir les offres" : "Ver ofertas")}</p>
                       </div>
                     </div>
                   </button>
@@ -252,18 +260,18 @@
                 </button>
                 <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{i18n.category(offer.categories?.[0] || "Oferta")}</p>
                     <h2 className="mt-1 break-words text-xl font-black leading-tight text-white sm:text-2xl">{offer.title || "Oferta sin título"}</h2>
                   </div>
 	                  <div className="flex flex-col items-end gap-2">
 	                    {outOfStock && (
-	                      <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Agotado</span>
+	                      <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">{i18n.t("common.soldOut")}</span>
 	                    )}
 	                    {discountPercent !== null && (
 	                      <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discountPercent}%</span>
 	                    )}
                     {isExternalCheckout ? (
-                      <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">No disponible en puntos</span>
+                      <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</span>
                     ) : (
                       <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.required_points || 0} ptos.</span>
                     )}
@@ -294,7 +302,7 @@
 	                <div className={`mt-4 h-11 rounded-2xl py-3 text-center text-sm font-black ring-1 ${
                     outOfStock ? "bg-coral/10 text-coral ring-coral/20" : "bg-white/[0.08] text-white ring-white/10"
                   }`}>
-                    {outOfStock ? "Ver agotado" : "Ver detalles"}
+                    {outOfStock ? i18n.t("common.viewSoldOut") : i18n.t("common.seeDetails")}
                   </div>
               </div>
             </div>
@@ -323,23 +331,13 @@
             try {
               let visibleOffers = [];
 
-              try {
-                const { data, error } = await supabaseClient
-                  .from("business_offers")
-                  .select(offerListSelect)
-                  .contains("categories", [category])
-                  .order("created_at", { ascending: false });
-                if (error) throw error;
-                visibleOffers = (data || []).filter(isVisibleForUsers);
-              } catch (_directError) {
-                const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`);
-                const data = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                  setStatus("No se han podido cargar las ofertas.");
-                  return;
-                }
-                visibleOffers = data.offers || [];
+              const response = await fetch(`/api/offers/by-category/${encodeURIComponent(category)}`, { headers: await authHeaders() });
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) {
+                setStatus("No se han podido cargar las ofertas.");
+                return;
               }
+              visibleOffers = data.offers || [];
 
               setOffers(visibleOffers);
               setStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${category}.`);
@@ -356,7 +354,7 @@
 
         async function loadCategorySummary() {
           try {
-            const response = await fetch("/api/offers/categories/summary");
+            const response = await fetch("/api/offers/categories/summary", { headers: await authHeaders() });
             const data = await response.json().catch(() => ({}));
             if (response.ok) {
               setCategorySummary(data.categories || []);
@@ -460,9 +458,12 @@
         }, [loadOffers]);
 
         const activeCategorySummary = categorySummary.filter((item) => Number(item.count || 0) > 0 && item.category !== category);
+        const categoryLabel = i18n.category(category);
         const emptyCategoryText = activeCategorySummary.length
-          ? `Todavía no hay ofertas en ${category}, pero puedes explorar estas secciones activas.`
-          : `Todavía no hay ofertas en ${category}.`;
+          ? (i18n.getLocale?.() === "fr"
+            ? `Il n’y a pas encore d’offres dans ${categoryLabel}, mais tu peux explorer ces sections actives.`
+            : `Todavía no hay ofertas en ${categoryLabel}, pero puedes explorar estas secciones activas.`)
+          : i18n.t("common.noOffersIn", { category: categoryLabel });
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-5xl px-3 pb-10 pt-4 sm:px-6 lg:px-8">
@@ -473,22 +474,22 @@
                 </div>
                 <div>
                   <p className="text-lg font-black leading-tight">Donoss</p>
-                  <p className="text-xs font-semibold text-slate-400">Categorías</p>
+                  <p className="text-xs font-semibold text-slate-400">{i18n.getLocale?.() === "fr" ? "Catégories" : "Categorías"}</p>
                 </div>
               </a>
-              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200" href={backUrl} onClick={goBackToInicio}>Volver</a>
+              <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200" href={backUrl} onClick={goBackToInicio}>{i18n.t("common.back")}</a>
             </header>
 
             <section className="mt-8">
-              <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">Explorar</p>
+              <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">{i18n.getLocale?.() === "fr" ? "Explorer" : "Explorar"}</p>
               <div className="mt-2 flex items-end justify-between gap-3">
-                <h1 className="break-words text-3xl font-black tracking-normal text-white sm:text-4xl">{category}</h1>
+                <h1 className="break-words text-3xl font-black tracking-normal text-white sm:text-4xl">{categoryLabel}</h1>
                 {activeCategorySummary.length > 0 && (
                   <button
                     className="shrink-0 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200 transition hover:bg-white/[0.1]"
                     onClick={() => openCategoryInsideApp(activeCategorySummary[0].category)}
                   >
-                    Ver más
+                    {i18n.t("home.seeMore")}
                   </button>
                 )}
               </div>
@@ -502,7 +503,7 @@
                     className="h-11 min-w-0 flex-1 bg-transparent text-base font-bold text-white outline-none placeholder:text-slate-500"
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder={`Buscar en ${category}...`}
+                    placeholder={i18n.getLocale?.() === "fr" ? `Rechercher dans ${categoryLabel}...` : `Buscar en ${categoryLabel}...`}
                   />
                 </label>
               </div>
@@ -517,7 +518,7 @@
               ) : filteredOffers.length === 0 ? (
                 <div>
                   <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
-                    No hay resultados para esta búsqueda.
+                    {i18n.getLocale?.() === "fr" ? "Aucun résultat pour cette recherche." : "No hay resultados para esta búsqueda."}
                   </div>
                   <CategoryDiscovery items={categorySummary} currentCategory={category} />
                 </div>

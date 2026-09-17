@@ -906,6 +906,51 @@ async function registerCityOpeningRequest(profile, metadata = {}) {
   }
 }
 
+const marketCountryLabels = {
+  ES: "España",
+  FR: "France",
+  BE: "Belgique",
+};
+
+const defaultCityMarkets = [
+  { country_code: "ES", city_market: "donostia", city_label: "Donostia / San Sebastián", is_active: true },
+  { country_code: "FR", city_market: "lille", city_label: "Lille", is_active: true },
+  { country_code: "BE", city_market: "tournai", city_label: "Tournai", is_active: true },
+];
+
+function cityMarketSlug(value) {
+  const slug = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "ville";
+}
+
+async function loadActiveCityMarkets() {
+  if (!supabaseAdmin) return defaultCityMarkets;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("city_markets")
+      .select("country_code, city_market, city_label, is_active")
+      .eq("is_active", true)
+      .order("country_code", { ascending: true })
+      .order("city_label", { ascending: true });
+    if (error) throw error;
+    const seen = new Set();
+    return [...defaultCityMarkets, ...(data || [])].filter((market) => {
+      const key = `${String(market.country_code || "").toUpperCase()}:${String(market.city_market || "").toLowerCase()}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return market.country_code && market.city_market && market.city_label;
+    });
+  } catch (error) {
+    if (error.code !== "42P01" && error.code !== "42703") console.error("City markets load error:", error);
+    return defaultCityMarkets;
+  }
+}
+
 async function registerReferralForProfile(profile, metadata = {}) {
   if (!supabaseAdmin || !profile?.id) return null;
   const referralCode = cleanValidDonosId(metadata.referral_code || metadata.referrer_code || metadata.referred_by_code);
@@ -1303,10 +1348,19 @@ app.post("/api/admin/recharges", async (request, response) => {
   let profilesById = {};
 
   if (userIds.length > 0) {
-    const { data: profiles, error: profilesError } = await supabaseAdmin
+    let { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified, country_code, country_label, city_market, city_label, city_status, requested_city")
       .in("id", userIds);
+
+    if (profilesError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("profiles")
+        .select("id, display_name, email, phone, neighborhood, address, account_type, transaction_id, points, is_verified")
+        .in("id", userIds);
+      profiles = fallback.data;
+      profilesError = fallback.error;
+    }
 
     if (profilesError) {
       console.error("Admin profiles error:", profilesError);
@@ -1351,6 +1405,11 @@ app.post("/api/admin/recharges/delete", async (request, response) => {
 
 app.get("/api/point-packs", async (_request, response) => {
   response.json({ packs: await getPointPackSettings() });
+});
+
+app.get("/api/markets", async (_request, response) => {
+  const markets = await loadActiveCityMarkets();
+  response.json({ markets });
 });
 
 app.post("/api/admin/point-packs/toggle", async (request, response) => {
@@ -1499,10 +1558,11 @@ app.post("/api/admin/accounts", async (request, response) => {
     { data: payoutFees, error: payoutFeesError },
     { data: premiumSubscriptions, error: premiumSubscriptionsError },
     { data: premiumCharges, error: premiumChargesError },
+    { data: cityOpeningRequests, error: cityOpeningRequestsError },
   ] = await Promise.all([
     supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, created_at")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, created_at")
       .order("created_at", { ascending: false }),
     supabaseAdmin
       .from("stripe_point_recharges")
@@ -1516,9 +1576,25 @@ app.post("/api/admin/accounts", async (request, response) => {
     supabaseAdmin
       .from("premium_subscription_charges")
       .select("id, profile_id, subscription_id, points, status, reason, created_at"),
+    supabaseAdmin
+      .from("city_opening_requests")
+      .select("id, profile_id, country_code, city_name, status, admin_note, created_at, updated_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
-  if (accountsError) {
+  let safeAccounts = accounts || [];
+  if (accountsError?.code === "42703") {
+    const fallback = await supabaseAdmin
+      .from("profiles")
+      .select("id, display_name, email, phone, neighborhood, address, account_type, business_categories, tax_id, transaction_id, points, is_verified, premium_status, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at, created_at")
+      .order("created_at", { ascending: false });
+    if (fallback.error) {
+      console.error("Admin accounts fallback error:", fallback.error);
+      return response.status(500).json({ error: "No se han podido cargar las cuentas" });
+    }
+    safeAccounts = fallback.data || [];
+  } else if (accountsError) {
     console.error("Admin accounts error:", accountsError);
     return response.status(500).json({ error: "No se han podido cargar las cuentas" });
   }
@@ -1535,9 +1611,12 @@ app.post("/api/admin/accounts", async (request, response) => {
   if (premiumChargesError && premiumChargesError.code !== "42P01" && premiumChargesError.code !== "42703") {
     console.error("Admin premium charges error:", premiumChargesError);
   }
+  if (cityOpeningRequestsError && cityOpeningRequestsError.code !== "42P01" && cityOpeningRequestsError.code !== "42703") {
+    console.error("Admin city opening requests error:", cityOpeningRequestsError);
+  }
 
   const syncedAccounts = [];
-  for (const account of accounts || []) {
+  for (const account of safeAccounts) {
     try {
       const premium = await syncPremiumForProfile(account);
       syncedAccounts.push(premium.profile || account);
@@ -1596,6 +1675,11 @@ app.post("/api/admin/accounts", async (request, response) => {
   });
 
   const totalPoints = enrichedAccounts.reduce((sum, account) => sum + Number(account.points || 0), 0);
+  const enrichedAccountsById = Object.fromEntries(enrichedAccounts.map((account) => [account.id, account]));
+  const enrichedCityOpeningRequests = (cityOpeningRequestsError ? [] : cityOpeningRequests || []).map((requestItem) => ({
+    ...requestItem,
+    profile: enrichedAccountsById[requestItem.profile_id] || null,
+  }));
   const enrichedRecharges = (recharges || []).map(enrichRechargeAccounting);
   const totalPaid = enrichedRecharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
   const totalFees = enrichedRecharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
@@ -1616,6 +1700,7 @@ app.post("/api/admin/accounts", async (request, response) => {
 
   response.json({
     accounts: enrichedAccounts,
+    city_opening_requests: enrichedCityOpeningRequests,
     summary: {
       total_accounts: enrichedAccounts.length,
       total_users: enrichedAccounts.filter((account) => account.account_type !== "business").length,
@@ -1640,6 +1725,125 @@ app.post("/api/admin/accounts", async (request, response) => {
       missing_to_green_cents: missingToGreen,
     },
   });
+});
+
+app.post("/api/admin/city-opening-requests/:id/action", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const requestId = String(request.params.id || "").trim();
+  const action = String(request.body?.action || "").trim().toLowerCase();
+  if (!requestId || !["open", "review", "reject"].includes(action)) {
+    return response.status(400).json({ error: "Acción no válida" });
+  }
+
+  try {
+    const { data: cityRequest, error: requestError } = await supabaseAdmin
+      .from("city_opening_requests")
+      .select("id, profile_id, country_code, city_name, status")
+      .eq("id", requestId)
+      .maybeSingle();
+
+    if (requestError) throw requestError;
+    if (!cityRequest) return response.status(404).json({ error: "Solicitud no encontrada" });
+
+    const now = new Date().toISOString();
+    let nextStatus = action === "open" ? "opened" : action === "reject" ? "rejected" : "reviewed";
+    let cityMarket = cityMarketSlug(cityRequest.city_name);
+    const countryCode = String(cityRequest.country_code || "").trim().toUpperCase();
+    const cityLabel = String(cityRequest.city_name || "").trim();
+
+    if (action === "open") {
+      const { error: cityError } = await supabaseAdmin
+        .from("city_markets")
+        .upsert({
+          country_code: countryCode,
+          city_market: cityMarket,
+          city_label: cityLabel,
+          is_active: true,
+          opened_from_request_id: cityRequest.id,
+          updated_at: now,
+        }, { onConflict: "country_code,city_market" });
+      if (cityError) throw cityError;
+
+      if (cityRequest.profile_id) {
+        const { error: profileError } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            country_code: countryCode,
+            country_label: marketCountryLabels[countryCode] || countryCode,
+            city_market: cityMarket,
+            city_label: cityLabel,
+            city_status: "active",
+            requested_city: null,
+            requested_city_country: null,
+          })
+          .eq("id", cityRequest.profile_id);
+        if (profileError && profileError.code !== "42703") throw profileError;
+
+        const { error: offerMarketError } = await supabaseAdmin
+          .from("business_offers")
+          .update({
+            country_code: countryCode,
+            city_market: cityMarket,
+            city_label: cityLabel,
+          })
+          .eq("business_id", cityRequest.profile_id);
+        if (offerMarketError && offerMarketError.code !== "42P01" && offerMarketError.code !== "42703") throw offerMarketError;
+
+        const { error: planMarketError } = await supabaseAdmin
+          .from("social_plans")
+          .update({
+            country_code: countryCode,
+            city_market: cityMarket,
+            city_label: cityLabel,
+          })
+          .eq("creator_id", cityRequest.profile_id);
+        if (planMarketError && planMarketError.code !== "42P01" && planMarketError.code !== "42703") throw planMarketError;
+      }
+
+      const { error: similarProfilesError } = await supabaseAdmin
+        .from("profiles")
+        .update({
+          country_code: countryCode,
+          country_label: marketCountryLabels[countryCode] || countryCode,
+          city_market: cityMarket,
+          city_label: cityLabel,
+          city_status: "active",
+          requested_city: null,
+          requested_city_country: null,
+        })
+        .eq("requested_city_country", countryCode)
+        .eq("requested_city", cityLabel);
+      if (similarProfilesError && similarProfilesError.code !== "42703") throw similarProfilesError;
+    }
+
+    const { data: updatedRequest, error: updateError } = await supabaseAdmin
+      .from("city_opening_requests")
+      .update({
+        status: nextStatus,
+        admin_note: action === "open" ? `Ciudad abierta como ${cityMarket}` : null,
+        updated_at: now,
+      })
+      .eq("id", requestId)
+      .select("id, profile_id, country_code, city_name, status, admin_note, created_at, updated_at")
+      .maybeSingle();
+    if (updateError) throw updateError;
+
+    response.json({ ok: true, request: updatedRequest, city_market: cityMarket, city_label: cityLabel });
+  } catch (error) {
+    console.error("Admin city opening action error:", error);
+    response.status(500).json({
+      error: error.code === "42P01" || error.code === "42703"
+        ? "Falta ejecutar supabase-markets.sql actualizado."
+        : "No se ha podido actualizar la solicitud",
+    });
+  }
 });
 
 app.post("/api/admin/secondary-admins/list", async (request, response) => {
@@ -4139,9 +4343,9 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const publicOfferPreviewSelect =
-  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const legacyPublicOfferSelect =
   "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const legacyPublicOfferPreviewSelect =
@@ -4159,6 +4363,38 @@ function isOfferVisibleForPublic(offer) {
   if (remaining === null || remaining > 0) return true;
   if (!offer.out_of_stock_since) return true;
   return Date.now() - new Date(offer.out_of_stock_since).getTime() < 24 * 60 * 60 * 1000;
+}
+
+async function getViewerMarket(request) {
+  const token = String(request.headers.authorization || "").replace(/^Bearer\s+/i, "");
+  if (!token || !supabaseAdmin) return null;
+  try {
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+    const user = userData?.user;
+    if (userError || !user?.id) return null;
+    const profile = await ensureProfileForUser(user);
+    const countryCode = String(profile?.country_code || "").trim().toUpperCase();
+    const cityMarket = String(profile?.city_market || "").trim().toLowerCase();
+    if (!countryCode || !cityMarket || cityMarket === "pending") return null;
+    return {
+      country_code: countryCode,
+      city_market: cityMarket,
+      city_label: profile?.city_label || "",
+    };
+  } catch (error) {
+    console.error("Viewer market load error:", error);
+    return null;
+  }
+}
+
+function filterItemsByMarket(items, market) {
+  if (!market?.country_code || !market?.city_market) return items || [];
+  return (items || []).filter((item) => {
+    const itemCountry = String(item?.country_code || "").trim().toUpperCase();
+    const itemCity = String(item?.city_market || "").trim().toLowerCase();
+    if (!itemCountry && !itemCity) return true;
+    return itemCountry === market.country_code && itemCity === market.city_market;
+  });
 }
 
 async function enrichOffersWithBusiness(offers) {
@@ -4675,7 +4911,7 @@ async function markSideGroupReadForProfile(planId, readerId, statuses = []) {
   return messages?.length || 0;
 }
 
-app.get("/api/offers/featured", async (_request, response) => {
+app.get("/api/offers/featured", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
   }
@@ -4704,7 +4940,8 @@ app.get("/api/offers/featured", async (_request, response) => {
       return response.status(500).json({ error: "featured_offers_failed" });
     }
 
-    const visibleOffers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
+    const viewerMarket = await getViewerMarket(request);
+    const visibleOffers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
     const usedIds = new Set();
     const featured = [];
 
@@ -4725,14 +4962,14 @@ app.get("/api/offers/featured", async (_request, response) => {
       }
     }
 
-    response.json({ offers: featured });
+    response.json({ offers: featured, market: viewerMarket });
   } catch (error) {
     console.error("Featured offers fatal error:", error);
     response.status(500).json({ error: "featured_offers_failed" });
   }
 });
 
-app.get("/api/offers/categories/summary", async (_request, response) => {
+app.get("/api/offers/categories/summary", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });
   }
@@ -4761,7 +4998,8 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
       return response.status(500).json({ error: "offer_category_summary_failed" });
     }
 
-    const visibleOffers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
+    const viewerMarket = await getViewerMarket(request);
+    const visibleOffers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
     const summary = wantedCategories.map((category) => {
       const offers = visibleOffers.filter((offer) => (offer.categories || []).includes(category));
       const preview = offers[0] || null;
@@ -4789,6 +5027,7 @@ app.get("/api/offers/categories/summary", async (_request, response) => {
       categories: summary,
       active_categories: summary.filter((item) => item.count > 0),
       total: visibleOffers.length,
+      market: viewerMarket,
     });
   } catch (error) {
     console.error("Offer category summary fatal error:", error);
@@ -4824,8 +5063,9 @@ app.get("/api/offers/by-category/:category", async (request, response) => {
     }
 
     if (error) throw error;
-    const offers = await enrichOffersWithBusiness((data || []).filter(isOfferVisibleForPublic));
-    response.json({ offers });
+    const viewerMarket = await getViewerMarket(request);
+    const offers = await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket));
+    response.json({ offers, market: viewerMarket });
   } catch (error) {
     console.error("Offers by category load error:", error);
     response.status(500).json({ error: "offers_by_category_failed" });
@@ -4912,10 +5152,19 @@ app.get("/api/me/liked-offers", async (request, response) => {
     let offersById = {};
 
     if (offerIds.length > 0) {
-      const { data: offers, error: offersError } = await supabaseAdmin
+      let { data: offers, error: offersError } = await supabaseAdmin
         .from("business_offers")
         .select(publicOfferSelect)
         .in("id", offerIds);
+
+      if (offersError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("business_offers")
+          .select(legacyPublicOfferSelect)
+          .in("id", offerIds);
+        offers = fallback.data;
+        offersError = fallback.error;
+      }
 
       if (offersError) console.error("Liked offers detail error:", offersError);
       const enriched = await enrichOffersWithBusiness(offers || []);
@@ -5021,12 +5270,23 @@ app.get("/api/businesses/:businessId/profile", async (request, response) => {
     if (businessError) throw businessError;
     if (!business) return response.status(404).json({ error: "business_not_found" });
 
-    const { data: offers, error: offersError } = await supabaseAdmin
+    let { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
       .select(publicOfferPreviewSelect)
       .eq("business_id", business.id)
       .order("created_at", { ascending: false })
       .limit(300);
+
+    if (offersError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("business_offers")
+        .select(legacyPublicOfferPreviewSelect)
+        .eq("business_id", business.id)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      offers = fallback.data;
+      offersError = fallback.error;
+    }
 
     if (offersError) throw offersError;
     const publicOffers = await enrichOffersWithBusiness((offers || []).filter(isOfferVisibleForPublic));
@@ -5236,12 +5496,25 @@ app.get("/api/social-plans", async (request, response) => {
 
   try {
     const viewer = auth.error ? null : await ensureProfileForUser(auth.user);
-    const { data: plans, error } = await supabaseAdmin
+    const socialPlanPublicSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, country_code, city_market, city_label, status, confirmed_at, created_at, updated_at";
+    const legacySocialPlanPublicSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at";
+    let { data: plans, error } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select(socialPlanPublicSelect)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(120);
+
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .select(legacySocialPlanPublicSelect)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(120);
+      plans = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Social plans list error:", error);
@@ -5249,8 +5522,16 @@ app.get("/api/social-plans", async (request, response) => {
     }
 
     const viewerId = viewer?.id || "";
-    const enriched = await enrichSocialPlans(plans || [], viewerId);
-    response.json({ plans: filterPublicSocialPlans(enriched, viewerId), guest: !viewerId });
+    const viewerMarket = viewer
+      ? {
+          country_code: String(viewer.country_code || "").trim().toUpperCase(),
+          city_market: String(viewer.city_market || "").trim().toLowerCase(),
+          city_label: viewer.city_label || "",
+        }
+      : null;
+    const localPlans = filterItemsByMarket(plans || [], viewerMarket);
+    const enriched = await enrichSocialPlans(localPlans, viewerId);
+    response.json({ plans: filterPublicSocialPlans(enriched, viewerId), guest: !viewerId, market: viewerMarket });
   } catch (error) {
     console.error("Social plans list fatal error:", error);
     response.status(500).json({ error: "social_plans_failed" });

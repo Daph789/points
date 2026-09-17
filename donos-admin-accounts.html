@@ -57,6 +57,28 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
+      const MARKET_FILTERS = [
+        { id: "all", label: "Todos", helper: "Todos los mercados" },
+        { id: "ES:donostia", label: "🇪🇸 Donostia", helper: "España" },
+        { id: "FR:lille", label: "🇫🇷 Lille", helper: "France" },
+        { id: "BE:tournai", label: "🇧🇪 Tournai", helper: "Belgique" },
+      ];
+
+      function marketLabel(account = {}) {
+        const country = String(account.country_code || "").toUpperCase();
+        const city = account.city_status === "pending"
+          ? `${account.requested_city || account.city_label || "Ciudad solicitada"} · pendiente`
+          : account.city_label || account.requested_city || account.neighborhood || "";
+        if (!country && !city) return "Mercado antiguo";
+        return [country, city].filter(Boolean).join(" · ");
+      }
+
+      function matchesMarket(account = {}, filter) {
+        if (!filter || filter === "all") return true;
+        const [country, city] = filter.split(":");
+        return String(account.country_code || "").toUpperCase() === country && String(account.city_market || "").toLowerCase() === city;
+      }
+
       function matchesAccount(account, query) {
         const cleanQuery = query.trim().toLowerCase();
         if (!cleanQuery) return true;
@@ -70,6 +92,10 @@
           account.transaction_id,
           account.business_categories?.join(" "),
           account.tax_id,
+          account.country_code,
+          account.country_label,
+          account.city_label,
+          account.requested_city,
         ].filter(Boolean).join(" ").toLowerCase().includes(cleanQuery);
       }
 
@@ -123,11 +149,14 @@
         const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
         const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
         const [accounts, setAccounts] = React.useState([]);
+        const [cityRequests, setCityRequests] = React.useState([]);
         const [summary, setSummary] = React.useState({});
         const [search, setSearch] = React.useState("");
+        const [marketFilter, setMarketFilter] = React.useState("all");
         const [status, setStatus] = React.useState("");
         const [isLoading, setIsLoading] = React.useState(false);
         const [savingId, setSavingId] = React.useState("");
+        const [savingCityRequestId, setSavingCityRequestId] = React.useState("");
         const [showDonossMoneyDetails, setShowDonossMoneyDetails] = React.useState(false);
         const [pendingVerifyAccount, setPendingVerifyAccount] = React.useState(null);
         const [emailAccount, setEmailAccount] = React.useState(null);
@@ -136,8 +165,9 @@
         const [profileAccount, setProfileAccount] = React.useState(null);
         const [profileDraft, setProfileDraft] = React.useState({ display_name: "", premium_identity_dni: "", premium_identity_photo_data_url: "" });
         const [isSavingProfile, setIsSavingProfile] = React.useState(false);
-        const filteredAccounts = accounts.filter((account) => matchesAccount(account, search));
+        const filteredAccounts = accounts.filter((account) => matchesMarket(account, marketFilter) && matchesAccount(account, search));
         const premiumAccounts = accounts.filter((account) => account.premium?.status === "active");
+        const pendingCityRequests = cityRequests.filter((request) => String(request.status || "pending").toLowerCase() === "pending");
 
         React.useEffect(() => {
           if (isUnlocked) loadAccounts();
@@ -160,6 +190,7 @@
             sessionStorage.setItem("donosAdminPassword", password);
             setIsUnlocked(true);
             setAccounts(data.accounts || []);
+            setCityRequests(data.city_opening_requests || []);
             setSummary(data.summary || {});
           } catch (error) {
             setStatus(error.message || "No se han podido cargar las cuentas.");
@@ -320,6 +351,38 @@
           }
         }
 
+        async function updateCityRequest(requestItem, action) {
+          const actionLabel = action === "open" ? "abrir esta ciudad" : action === "reject" ? "rechazar esta solicitud" : "marcarla como revisada";
+          if (!window.confirm(`¿Confirmas que quieres ${actionLabel}?`)) return;
+
+          setStatus("");
+          setSavingCityRequestId(`${requestItem.id}:${action}`);
+
+          try {
+            const response = await fetch(`/api/admin/city-opening-requests/${requestItem.id}/action`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password, action }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "No se ha podido actualizar la solicitud.");
+
+            setCityRequests((current) =>
+              current.map((item) => (item.id === requestItem.id ? { ...item, ...data.request } : item))
+            );
+            if (action === "open") {
+              setStatus(`Ciudad abierta: ${data.city_label}. Las empresas de esa ciudad ya pueden publicar en su mercado.`);
+              loadAccounts();
+            } else {
+              setStatus(action === "reject" ? "Solicitud rechazada." : "Solicitud marcada como revisada.");
+            }
+          } catch (error) {
+            setStatus(error.message || "No se ha podido actualizar la solicitud.");
+          } finally {
+            setSavingCityRequestId("");
+          }
+        }
+
         if (!isUnlocked) {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -440,6 +503,71 @@
               </div>
             </section>
 
+            <section className="mt-5 rounded-[30px] border border-sun/25 bg-sun/10 p-5 sm:p-6">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-sun">Apertura de ciudades</p>
+                  <h2 className="mt-2 text-2xl font-black text-white">Solicitudes de empresas</h2>
+                  <p className="mt-1 text-sm font-bold text-slate-300">Empresas que pidieron una ciudad que Donoss todavía no tiene abierta.</p>
+                </div>
+                <span className="rounded-full bg-sun px-3 py-1 text-sm font-black text-ink">{pendingCityRequests.length} pendientes</span>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                {cityRequests.slice(0, 8).map((request) => {
+                  const account = request.profile || {};
+                  const isPending = String(request.status || "pending").toLowerCase() === "pending";
+                  return (
+                    <article key={request.id} className={`rounded-3xl border p-4 ${isPending ? "border-sun/25 bg-black/25" : "border-white/10 bg-black/15"}`}>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-black text-white">{request.city_name || "Ciudad solicitada"}</p>
+                          <p className="mt-1 text-sm font-bold text-slate-400">{String(request.country_code || "").toUpperCase() || "País"} · {account.display_name || account.email || "Cuenta Donoss"}</p>
+                        </div>
+                        <span className={`rounded-full px-3 py-1 text-xs font-black ${isPending ? "bg-sun text-ink" : "bg-white/10 text-slate-300"}`}>
+                          {isPending ? "Pendiente" : request.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Email: {account.email || "sin email"}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">ID: {formatDonosId(account.transaction_id)}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Tipo: {account.account_type === "business" ? "Empresa" : "Usuario"}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Fecha: {request.created_at ? new Date(request.created_at).toLocaleDateString("es-ES") : "sin fecha"}</p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow disabled:opacity-50"
+                          disabled={!isPending || savingCityRequestId.startsWith(request.id)}
+                          type="button"
+                          onClick={() => updateCityRequest(request, "open")}
+                        >
+                          {savingCityRequestId === `${request.id}:open` ? "Abriendo..." : "Abrir ciudad"}
+                        </button>
+                        <button
+                          className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white disabled:opacity-50"
+                          disabled={!isPending || savingCityRequestId.startsWith(request.id)}
+                          type="button"
+                          onClick={() => updateCityRequest(request, "review")}
+                        >
+                          Revisada
+                        </button>
+                        <button
+                          className="h-10 rounded-2xl border border-coral/25 bg-coral/10 px-4 text-sm font-black text-coral disabled:opacity-50"
+                          disabled={!isPending || savingCityRequestId.startsWith(request.id)}
+                          type="button"
+                          onClick={() => updateCityRequest(request, "reject")}
+                        >
+                          Rechazar
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+                {cityRequests.length === 0 && (
+                  <p className="rounded-3xl border border-white/10 bg-black/20 p-4 text-sm font-bold text-slate-300">Todavía no hay solicitudes de apertura de ciudad.</p>
+                )}
+              </div>
+            </section>
+
             <section className="mt-5 rounded-[30px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
               <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Guía rápida para admin</p>
               <h2 className="mt-2 text-2xl font-black text-white">Cómo leer la reserva y el beneficio</h2>
@@ -484,6 +612,23 @@
                   placeholder="Buscar por nombre, email, ID Donoss, barrio, categoría..."
                 />
               </label>
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {MARKET_FILTERS.map((option) => (
+                  <button
+                    key={option.id}
+                    className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition ${
+                      marketFilter === option.id
+                        ? "border-mint/50 bg-mint/15 text-mint"
+                        : "border-white/10 bg-white/[0.04] text-slate-300"
+                    }`}
+                    type="button"
+                    onClick={() => setMarketFilter(option.id)}
+                  >
+                    <span className="block text-sm font-black">{option.label}</span>
+                    <span className="mt-1 block text-[11px] font-bold text-slate-500">{option.helper}</span>
+                  </button>
+                ))}
+              </div>
             </section>
 
             {status && <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-4 text-sm font-bold text-coral">{status}</p>}
@@ -511,6 +656,7 @@
                       </p>
                       <p className="mt-1 truncate text-sm font-bold text-slate-400">{account.email || "Sin email"}</p>
                       <p className="mt-1 truncate text-xs font-bold text-slate-500">{account.phone || account.neighborhood || "Sin contacto"}</p>
+                      <p className="mt-1 truncate text-xs font-black text-mint">{marketLabel(account)}</p>
                       <p className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-black ${
                         account.premium_identity_dni && account.premium_identity_photo_data_url
                           ? "bg-mint/10 text-mint ring-1 ring-mint/20"

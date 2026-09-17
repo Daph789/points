@@ -6,6 +6,7 @@
     <title>Donoss | Empresa</title>
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -53,6 +54,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key, getLocale: () => "es" };
       const isEmbeddedBusiness = new URLSearchParams(window.location.search).get("embedded") === "1" || window.parent !== window;
 
       function formatNumber(value) {
@@ -320,10 +322,10 @@
           <main className="mx-auto min-h-screen w-full max-w-6xl px-3 pb-36 pt-4 sm:px-6 sm:pb-20 lg:px-8">
             <header className="flex items-center justify-between gap-3">
               <button className="rounded-full bg-white/[0.08] px-4 py-2 text-sm font-black text-white ring-1 ring-white/10" onClick={() => history.back()}>
-                Volver
+                {i18n.t("common.back")}
               </button>
               <button className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" onClick={loadBusiness}>
-                Actualizar
+                {i18n.t("common.refresh")}
               </button>
             </header>
 
@@ -343,7 +345,7 @@
                       )}
                     </div>
                     <div className="min-w-0 pb-1">
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-mint sm:text-xs">Empresa Donoss</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-mint sm:text-xs">{i18n.t("business.company")}</p>
                       <h1 className="mt-1 flex min-w-0 max-w-full flex-wrap items-center gap-2 text-2xl font-black leading-tight text-white sm:text-5xl">
                         <span className="min-w-0 max-w-full break-words">{business?.display_name || "Empresa"}</span>
                         {business?.is_verified && <VerifiedBadge />}
@@ -360,20 +362,20 @@
                     disabled={isSelf || isSavingFollow}
                     onClick={toggleFollow}
                   >
-                    {isSelf ? "Tu empresa" : isFollowing ? "Siguiendo" : "Seguir"}
+                    {isSelf ? i18n.t("business.yourCompany") : isFollowing ? i18n.t("business.following") : i18n.t("business.follow")}
                   </button>
                 </div>
 
                 <div className="mt-5 grid grid-cols-3 gap-2 sm:mt-6 sm:gap-3">
-                  <StatCard label="Posts" value={stats.publications_count} />
-                  <StatCard label="Likes" value={stats.total_likes} />
-                  <StatCard label="Abonados" value={stats.followers_count} />
+                  <StatCard label={i18n.t("business.posts")} value={stats.publications_count} />
+                  <StatCard label={i18n.t("business.likes")} value={stats.total_likes} />
+                  <StatCard label={i18n.t("business.followers")} value={stats.followers_count} />
                 </div>
 
                 <div className="mt-5 rounded-[26px] border border-white/10 bg-black/20 p-4 sm:rounded-3xl">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">Bio</p>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{i18n.t("business.bio")}</p>
                   <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-6 text-slate-200">
-                    {business?.bio || "Esta empresa todavía no ha añadido una bio."}
+                    {business?.bio || i18n.t("business.emptyBio")}
                   </p>
                 </div>
 
@@ -392,8 +394,8 @@
             <section className="mt-8">
               <div className="flex items-end justify-between gap-4">
                 <div>
-                  <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">Ofertas oficiales</p>
-                  <h2 className="mt-1 text-3xl font-black text-white">Publicaciones</h2>
+                  <p className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">{i18n.t("business.officialOffers")}</p>
+                  <h2 className="mt-1 text-3xl font-black text-white">{i18n.t("business.publications")}</h2>
                 </div>
                 <span className="rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-slate-300 ring-1 ring-white/10">
                   {formatNumber(offers.length)}
@@ -414,7 +416,7 @@
                 </div>
               ) : (
                 <div className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-400">
-                  Esta empresa todavía no tiene publicaciones visibles.
+                  {i18n.t("business.emptyPosts")}
                 </div>
               )}
             </section>

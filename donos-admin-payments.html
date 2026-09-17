@@ -67,6 +67,26 @@
         return clean ? clean.match(/.{1,4}/g)?.join("-") : "Sin ID";
       }
 
+      const MARKET_FILTERS = [
+        { id: "all", label: "Todos", helper: "Todos los mercados" },
+        { id: "ES:donostia", label: "🇪🇸 Donostia", helper: "España" },
+        { id: "FR:lille", label: "🇫🇷 Lille", helper: "France" },
+        { id: "BE:tournai", label: "🇧🇪 Tournai", helper: "Belgique" },
+      ];
+
+      function marketLabel(profile = {}) {
+        const country = String(profile.country_code || "").toUpperCase();
+        const city = profile.city_label || profile.requested_city || profile.neighborhood || "";
+        if (!country && !city) return "Mercado antiguo";
+        return [country, city].filter(Boolean).join(" · ");
+      }
+
+      function matchesMarket(profile = {}, filter) {
+        if (!filter || filter === "all") return true;
+        const [country, city] = filter.split(":");
+        return String(profile.country_code || "").toUpperCase() === country && String(profile.city_market || "").toLowerCase() === city;
+      }
+
       function DetailItem({ label, value }) {
         return (
           <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-4">
@@ -85,6 +105,7 @@
         const [isLoading, setIsLoading] = React.useState(false);
         const [deletingId, setDeletingId] = React.useState("");
         const [search, setSearch] = React.useState("");
+        const [marketFilter, setMarketFilter] = React.useState("all");
         const [packs, setPacks] = React.useState([]);
         const [savingPack, setSavingPack] = React.useState("");
 
@@ -203,6 +224,7 @@
         const donosDebt = recharges.reduce((sum, item) => sum + Number(item.donos_debt_cents || 0), 0);
         const filteredRecharges = recharges.filter((item) => {
           const profile = item.profiles || {};
+          if (!matchesMarket(profile, marketFilter)) return false;
           const query = search.trim().toLowerCase();
           if (!query) return true;
           return [
@@ -211,6 +233,10 @@
             profile.phone,
             profile.transaction_id,
             profile.neighborhood,
+            profile.country_code,
+            profile.country_label,
+            profile.city_label,
+            profile.requested_city,
             item.customer_email,
             item.stripe_session_id,
           ].filter(Boolean).join(" ").toLowerCase().includes(query);
@@ -301,6 +327,23 @@
                   placeholder="Buscar pago, email, ID Donoss, cliente..."
                 />
               </label>
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {MARKET_FILTERS.map((option) => (
+                  <button
+                    key={option.id}
+                    className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition ${
+                      marketFilter === option.id
+                        ? "border-mint/50 bg-mint/15 text-mint"
+                        : "border-white/10 bg-white/[0.04] text-slate-300"
+                    }`}
+                    type="button"
+                    onClick={() => setMarketFilter(option.id)}
+                  >
+                    <span className="block text-sm font-black">{option.label}</span>
+                    <span className="mt-1 block text-[11px] font-bold text-slate-500">{option.helper}</span>
+                  </button>
+                ))}
+              </div>
             </section>
 
             <section className="mt-6 overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.055] sm:rounded-[30px]">
@@ -322,6 +365,7 @@
                       <div className="min-w-0">
                         <p className="truncate font-black text-white">{profile.display_name || item.customer_email || "Cliente"}</p>
                         <p className="mt-1 break-all font-mono text-xs font-bold text-slate-500">{formatDonosId(profile.transaction_id)}</p>
+                        <p className="mt-1 truncate text-xs font-black text-mint">{marketLabel(profile)}</p>
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-slate-300">{profile.email || item.customer_email || "Sin email"}</p>
@@ -375,6 +419,7 @@
                     <DetailItem label="Email cuenta" value={selected.profiles?.email || selected.customer_email} />
                     <DetailItem label="Teléfono" value={selected.profiles?.phone} />
                     <DetailItem label="Barrio" value={selected.profiles?.neighborhood} />
+                    <DetailItem label="Mercado" value={marketLabel(selected.profiles || {})} />
                     <DetailItem label="Dirección" value={selected.profiles?.address} />
                     <DetailItem label="ID Donoss" value={formatDonosId(selected.profiles?.transaction_id)} />
                     <DetailItem label="Tipo de cuenta" value={selected.profiles?.account_type} />

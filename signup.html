@@ -10,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="country-guard.js"></script>
     <script src="market-config.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script defer src="activity-tracker.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
@@ -454,6 +455,7 @@
         const [isTermsOpen, setIsTermsOpen] = React.useState(false);
         const [countryCode, setCountryCode] = React.useState(window.donossMarkets?.defaultCountryCode || "ES");
         const [cityMarket, setCityMarket] = React.useState(window.donossMarkets?.getCountry?.("ES")?.defaultCity || "donostia");
+        const [marketsByCountry, setMarketsByCountry] = React.useState(window.donossMarkets?.marketsByCountry || {});
         const [customCity, setCustomCity] = React.useState("");
         const [neighborhood, setNeighborhood] = React.useState("");
         const [customNeighborhood, setCustomNeighborhood] = React.useState("");
@@ -475,10 +477,10 @@
         const selectedCountry = window.donossMarkets?.getCountry?.(countryCode) || { code: "ES", name: "España", flag: "🇪🇸", dialCode: "+34", phonePlaceholder: "600 000 000", defaultCity: "donostia" };
         const locale = ["FR", "BE"].includes(selectedCountry.code) ? "fr" : "es";
         const t = signupCopy[locale] || signupCopy.es;
-        const availableMarkets = window.donossMarkets?.getMarkets?.(selectedCountry.code) || [{ id: "donostia", label: "Donostia / San Sebastián" }];
+        const availableMarkets = marketsByCountry[selectedCountry.code] || window.donossMarkets?.getMarkets?.(selectedCountry.code) || [{ id: "donostia", label: "Donostia / San Sebastián" }];
         const customCityValue = window.donossMarkets?.customCityValue || "__custom_city__";
         const isCustomCity = cityMarket === customCityValue;
-        const selectedMarket = isCustomCity ? null : window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
+        const selectedMarket = isCustomCity ? null : availableMarkets.find((market) => market.id === cityMarket) || window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
         const finalCityLabel = isCustomCity ? customCity.trim() : selectedMarket?.label || "";
         const finalCityMarket = isCustomCity ? "pending" : selectedMarket?.id || "";
         const cityStatus = isCustomCity ? "pending_city" : "active";
@@ -526,6 +528,33 @@
           document.title = t.title;
         }, [locale]);
 
+        React.useEffect(() => {
+          let cancelled = false;
+          async function loadOpenMarkets() {
+            try {
+              const response = await fetch("/api/markets");
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok || !Array.isArray(data.markets)) return;
+              const grouped = { ...(window.donossMarkets?.marketsByCountry || {}) };
+              for (const market of data.markets) {
+                const country = String(market.country_code || "").toUpperCase();
+                const id = String(market.city_market || "").toLowerCase();
+                const label = String(market.city_label || "").trim();
+                if (!country || !id || !label) continue;
+                const current = grouped[country] || [];
+                if (!current.some((item) => item.id === id)) grouped[country] = [...current, { id, label }];
+              }
+              if (!cancelled) setMarketsByCountry(grouped);
+            } catch (_error) {
+              // En local file:// la app garde las ciudades base del fichier.
+            }
+          }
+          loadOpenMarkets();
+          return () => {
+            cancelled = true;
+          };
+        }, []);
+
         function normalizeIban(value) {
           return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         }
@@ -560,8 +589,9 @@
 
         function handleCountryChange(value) {
           const nextCountry = window.donossMarkets?.getCountry?.(value) || selectedCountry;
-          const nextMarkets = window.donossMarkets?.getMarkets?.(nextCountry.code) || [];
+          const nextMarkets = marketsByCountry[nextCountry.code] || window.donossMarkets?.getMarkets?.(nextCountry.code) || [];
           setCountryCode(nextCountry.code);
+          window.donossI18n?.setCountry?.(nextCountry.code);
           setCityMarket(nextMarkets[0]?.id || customCityValue);
           setCustomCity("");
         }

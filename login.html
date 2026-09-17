@@ -9,6 +9,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="country-guard.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script defer src="activity-tracker.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script>
@@ -180,7 +181,10 @@
           let cancelled = false;
           async function syncLocale() {
             const result = await window.donossCountryGuard?.detectCountry?.();
-            if (!cancelled) setLocale(localeFromCountry(result?.country));
+            if (!cancelled) {
+              window.donossI18n?.setCountry?.(result?.country);
+              setLocale(localeFromCountry(result?.country));
+            }
           }
           syncLocale();
           return () => {

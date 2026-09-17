@@ -32,6 +32,18 @@ create table if not exists public.city_opening_requests (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.city_markets (
+  id uuid primary key default gen_random_uuid(),
+  country_code text not null,
+  city_market text not null,
+  city_label text not null,
+  is_active boolean not null default true,
+  opened_from_request_id uuid references public.city_opening_requests(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (country_code, city_market)
+);
+
 create index if not exists profiles_market_idx
   on public.profiles (country_code, city_market, city_status);
 
@@ -44,8 +56,22 @@ create index if not exists social_plans_market_idx
 create index if not exists city_opening_requests_status_idx
   on public.city_opening_requests (status, country_code, city_name);
 
+create index if not exists city_markets_active_idx
+  on public.city_markets (country_code, is_active, city_market);
+
 create unique index if not exists city_opening_requests_profile_city_uidx
   on public.city_opening_requests (profile_id, country_code, city_name);
+
+insert into public.city_markets (country_code, city_market, city_label, is_active)
+values
+  ('ES', 'donostia', 'Donostia / San Sebastián', true),
+  ('FR', 'lille', 'Lille', true),
+  ('BE', 'tournai', 'Tournai', true)
+on conflict (country_code, city_market) do update
+set
+  city_label = excluded.city_label,
+  is_active = true,
+  updated_at = now();
 
 update public.profiles
 set

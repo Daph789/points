@@ -6,6 +6,7 @@
     <title>Donoss | Inicio</title>
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -116,6 +117,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key, category: (value) => value, setCountry: () => {} };
       const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       const categories = [
@@ -215,11 +217,11 @@
       ];
 
       const navItems = [
-        { label: "Inicio", icon: "home", active: true, href: "home.html" },
-        { label: "Historial", icon: "history", href: "historial.html" },
-        { label: "Quedar", icon: "users", href: "plans.html" },
-        { label: "Transf.", icon: "transfer", href: "transfer.html" },
-        { label: "Perfil", icon: "user", href: "profile.html" },
+        { label: i18n.t("nav.inicio"), icon: "home", active: true, href: "home.html" },
+        { label: i18n.t("nav.historial"), icon: "history", href: "historial.html" },
+        { label: i18n.t("nav.quedar"), icon: "users", href: "plans.html" },
+        { label: i18n.t("nav.transfer"), icon: "transfer", href: "transfer.html" },
+        { label: i18n.t("nav.perfil"), icon: "user", href: "profile.html" },
       ];
 
 
@@ -271,7 +273,7 @@
             >
               <span aria-hidden="true">{category.icon}</span>
             </div>
-            <p className={`mt-2 text-xs font-bold ${active ? "text-mint" : "text-slate-300"}`}>{category.label}</p>
+            <p className={`mt-2 text-xs font-bold ${active ? "text-mint" : "text-slate-300"}`}>{i18n.category(category.label)}</p>
             {isReady && hasContent && (
               <span className="mt-1 inline-flex rounded-full bg-mint/10 px-2 py-0.5 text-[10px] font-black text-mint ring-1 ring-mint/15">
                 {count}
@@ -289,14 +291,14 @@
           <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-2xl shadow-black/20 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Ver más</p>
-                <h2 className="mt-1 text-xl font-black text-white">Categorías con chollos</h2>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{i18n.t("home.seeMore")}</p>
+                <h2 className="mt-1 text-xl font-black text-white">{i18n.getLocale?.() === "fr" ? "Catégories avec bons plans" : "Categorías con chollos"}</h2>
               </div>
               <button
                 className="shrink-0 rounded-full bg-white/[0.08] px-4 py-2 text-xs font-black text-white ring-1 ring-white/10"
                 onClick={() => onOpenCategory(visibleItems[0].category)}
               >
-                Ver más
+                {i18n.t("home.seeMore")}
               </button>
             </div>
 
@@ -317,12 +319,12 @@
                     <div className="relative flex h-full flex-col justify-between gap-5">
                       <div className="flex items-center justify-between gap-3">
                         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/12 text-2xl ring-1 ring-white/10">{categoryData.icon}</span>
-                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} ofertas</span>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{item.count} {i18n.getLocale?.() === "fr" ? "offres" : "ofertas"}</span>
                       </div>
                       <div>
-                        <p className="text-lg font-black text-white">{item.category}</p>
+                        <p className="text-lg font-black text-white">{i18n.category(item.category)}</p>
                         <p className="mt-1 truncate text-xs font-bold text-slate-300">
-                          {item.preview?.title || "Ver propuestas disponibles"}
+                          {item.preview?.title || (i18n.getLocale?.() === "fr" ? "Voir les propositions disponibles" : "Ver propuestas disponibles")}
                         </p>
                       </div>
                     </div>
@@ -459,17 +461,17 @@
               <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/12 to-black/20"></div>
               <div className="flex items-center justify-between gap-3">
                 <span className="relative rounded-full bg-black/35 px-3 py-1 text-xs font-black text-white backdrop-blur">
-                  {firstCategory}
+                  {i18n.category(firstCategory)}
                 </span>
                 <div className="relative flex items-center gap-2">
                   {outOfStock && (
-                    <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Agotado</span>
+                    <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">{i18n.t("common.soldOut")}</span>
                   )}
                   {discountPercent !== null && (
                     <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discountPercent}%</span>
                   )}
                   {isExternalCheckout ? (
-                    <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">No disponible en puntos</span>
+                    <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</span>
                   ) : (
                     <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">
                       {offer.required_points || 0} ptos.
@@ -525,7 +527,7 @@
                   onOpen(offer);
                 }}
               >
-                {outOfStock ? "Ver agotado" : "Ver detalles"}
+                {outOfStock ? i18n.t("common.viewSoldOut") : i18n.t("common.seeDetails")}
               </button>
             </div>
           </article>
@@ -540,17 +542,17 @@
         const outOfStock = isOutOfStock(offer);
         const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         const detailItems = [
-          ["Dirección", offer.address],
-          ["Categoría", offer.categories?.join(", ")],
-          ["Precio base", formatEuro(offer.base_price)],
-          [isExternalCheckout ? "Pago" : "Puntos necesarios", isExternalCheckout ? `Externo · ${formatEuro(offer.reduced_price || offer.base_price)}` : `${offer.required_points || 0} ptos.`],
-          ["Horarios", offer.hours],
-          ["Evento / actividad", offer.start_date],
-          ["Compra disponible hasta", offer.end_date],
-          ["Edad", offer.age],
-          ["Autor/a", offer.author],
-          ["Entrega a domicilio", offer.delivery_home_enabled ? `${offer.delivery_home_points || 0} ptos. extra` : "No disponible"],
-          ["Recogida en tienda", offer.delivery_pickup_enabled ? "Disponible" : "No disponible"],
+          [i18n.getLocale?.() === "fr" ? "Adresse" : "Dirección", offer.address],
+          [i18n.t("common.category"), offer.categories?.map((category) => i18n.category(category)).join(", ")],
+          [i18n.getLocale?.() === "fr" ? "Prix de base" : "Precio base", formatEuro(offer.base_price)],
+          [isExternalCheckout ? i18n.t("checkout.externalPayment") : (i18n.getLocale?.() === "fr" ? "Points nécessaires" : "Puntos necesarios"), isExternalCheckout ? `Externo · ${formatEuro(offer.reduced_price || offer.base_price)}` : `${offer.required_points || 0} ptos.`],
+          [i18n.t("common.hours"), offer.hours],
+          [i18n.t("common.eventActivity"), offer.start_date],
+          [i18n.t("common.purchaseUntil"), offer.end_date],
+          [i18n.t("common.age"), offer.age],
+          [i18n.getLocale?.() === "fr" ? "Auteur/autrice" : "Autor/a", offer.author],
+          [i18n.getLocale?.() === "fr" ? "Livraison à domicile" : "Entrega a domicilio", offer.delivery_home_enabled ? `${offer.delivery_home_points || 0} ptos. extra` : (i18n.getLocale?.() === "fr" ? "Non disponible" : "No disponible")],
+          [i18n.getLocale?.() === "fr" ? "Retrait en boutique" : "Recogida en tienda", offer.delivery_pickup_enabled ? (i18n.getLocale?.() === "fr" ? "Disponible" : "Disponible") : (i18n.getLocale?.() === "fr" ? "Non disponible" : "No disponible")],
         ];
 
         return (
@@ -564,8 +566,8 @@
                   ×
                 </button>
                 <div className="absolute bottom-5 left-5 right-5">
-	                  <p className="text-sm font-black uppercase tracking-[0.16em] text-ink/70">Detalle</p>
-	                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h2>
+	                  <p className="text-sm font-black uppercase tracking-[0.16em] text-ink/70">{i18n.category(offer.categories?.[0] || "Oferta")}</p>
+	                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">{offer.title || (i18n.getLocale?.() === "fr" ? "Offre sans titre" : "Oferta sin título")}</h2>
 	                  {businessName && (
 	                    <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-black/30 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur">
 	                      <span>{businessName}</span>
@@ -579,17 +581,17 @@
               <div className="space-y-5 p-5 sm:p-7">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
-                    <p className="text-xs font-semibold text-slate-400">Precio base</p>
+                    <p className="text-xs font-semibold text-slate-400">{i18n.getLocale?.() === "fr" ? "Prix de base" : "Precio base"}</p>
                     <p className="mt-1 text-2xl font-black text-white line-through decoration-slate-500">{formatEuro(offer.base_price)}</p>
                   </div>
                   <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                    <p className="text-xs font-semibold text-mint">{isExternalCheckout ? "Precio externo" : "Puntos"}</p>
+                    <p className="text-xs font-semibold text-mint">{isExternalCheckout ? (i18n.getLocale?.() === "fr" ? "Prix externe" : "Precio externo") : "Puntos"}</p>
                     <p className="mt-1 text-2xl font-black text-white">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : (offer.required_points || 0)}</p>
                   </div>
                   {isExternalCheckout && (
                     <div className="col-span-2 rounded-3xl border border-sun/25 bg-sun/10 p-4">
-                      <p className="text-xs font-semibold text-sun">No disponible en puntos</p>
-                      <p className="mt-1 text-sm font-bold text-slate-200">Se paga en euros en la web del comercio.</p>
+                      <p className="text-xs font-semibold text-sun">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</p>
+                      <p className="mt-1 text-sm font-bold text-slate-200">{i18n.getLocale?.() === "fr" ? "Se paie en euros sur le site du commerçant." : "Se paga en euros en la web del comercio."}</p>
                     </div>
                   )}
 	                  {discountPercent !== null && (
@@ -627,7 +629,7 @@
 	                <button className={`h-14 w-full rounded-2xl text-base font-black ${
                     outOfStock ? "bg-white/10 text-slate-500" : "bg-mint text-ink shadow-glow"
                   }`} disabled={outOfStock}>
-	                  {outOfStock ? "Oferta agotada" : (offer.cart_button_text || "Comprar")}
+	                  {outOfStock ? i18n.t("common.soldOut") : (offer.cart_button_text || i18n.t("common.buy"))}
 	                </button>
               </div>
             </section>
@@ -680,67 +682,33 @@
           if (response.ok) setNavBadges(data.counts?.sections || {});
         }
 
+        async function authHeaders() {
+          const { data: sessionData } = await supabaseClient.auth.getSession();
+          const token = sessionData.session?.access_token;
+          return token ? { Authorization: `Bearer ${token}` } : {};
+        }
+
         async function loadFeaturedOffers() {
           try {
-            const { data, error } = await supabaseClient
-              .from("business_offers")
-              .select(offerListSelect)
-              .order("created_at", { ascending: false })
-              .limit(250);
-            if (error) throw error;
-            const visibleOffers = (data || []).filter(isVisibleForUsers);
-            const usedIds = new Set();
-            const featured = [];
-            for (const category of categories) {
-              const offer = visibleOffers.find((item) => !usedIds.has(item.id) && (item.categories || []).includes(category.label));
-              if (!offer) continue;
-              usedIds.add(offer.id);
-              featured.push({ ...offer, featured_category: category.label });
-              if (featured.length >= 6) break;
+            const response = await fetch("/api/offers/featured", { headers: await authHeaders() });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+              setFeaturedOffers(data.offers || []);
+              return;
             }
-            if (featured.length < 6) {
-              for (const offer of visibleOffers) {
-                if (usedIds.has(offer.id)) continue;
-                usedIds.add(offer.id);
-                featured.push({ ...offer, featured_category: offer.categories?.[0] || "Oferta" });
-                if (featured.length >= 6) break;
-              }
-            }
-            setFeaturedOffers(featured);
-            return;
-          } catch (_directError) {
-            try {
-              const response = await fetch("/api/offers/featured");
-              const data = await response.json().catch(() => ({}));
-              if (response.ok) {
-                setFeaturedOffers(data.offers || []);
-                return;
-              }
-            } catch (_serverError) {}
-          }
+          } catch (_serverError) {}
           setFeaturedOffers([]);
         }
 
         async function loadCategorySummary() {
           try {
-            const { data, error } = await supabaseClient
-              .from("business_offers")
-              .select(offerListSelect)
-              .order("created_at", { ascending: false })
-              .limit(250);
-            if (error) throw error;
-            setCategorySummary(buildCategorySummaryFromOffers(data || []));
-            return;
-          } catch (_directError) {
-            try {
-              const response = await fetch("/api/offers/categories/summary");
-              const data = await response.json().catch(() => ({}));
-              if (response.ok) {
-                setCategorySummary(data.categories || []);
-                return;
-              }
-            } catch (_serverError) {}
-          }
+            const response = await fetch("/api/offers/categories/summary", { headers: await authHeaders() });
+            const data = await response.json().catch(() => ({}));
+            if (response.ok) {
+              setCategorySummary(data.categories || []);
+              return;
+            }
+          } catch (_serverError) {}
           setCategorySummary([]);
         }
 
@@ -796,6 +764,7 @@
 
               if (profile?.account_type) type = profile.account_type;
               if (profile?.display_name) name = profile.display_name;
+              if (profile?.country_code) i18n.setCountry(profile.country_code);
               if (profile?.transaction_id) donosId = profile.transaction_id;
               points = Number(profile?.points || 0);
               setAccountVerified(Boolean(profile?.is_verified));
@@ -871,7 +840,7 @@
           const clean = String(transactionId || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
           if (!clean) return;
           await navigator.clipboard.writeText(clean);
-          setCopyStatus("Copiado");
+          setCopyStatus(i18n.t("home.copied"));
           setTimeout(() => setCopyStatus(""), 1400);
         };
 
@@ -889,26 +858,16 @@
           try {
             let visibleOffers = [];
 
-            try {
-              const { data, error } = await supabaseClient
-                .from("business_offers")
-                .select(offerListSelect)
-                .contains("categories", [categoryLabel])
-                .order("created_at", { ascending: false });
-              if (error) throw error;
-              visibleOffers = (data || []).filter(isVisibleForUsers);
-            } catch (_directError) {
-              const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`);
-              const data = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                setCategoryOffers([]);
-                setOffersStatus("No se han podido cargar las ofertas ahora.");
-                return;
-              }
-              visibleOffers = data.offers || [];
+            const response = await fetch(`/api/offers/by-category/${encodeURIComponent(categoryLabel)}`, { headers: await authHeaders() });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              setCategoryOffers([]);
+              setOffersStatus("No se han podido cargar las ofertas ahora.");
+              return;
             }
+            visibleOffers = data.offers || [];
             setCategoryOffers(visibleOffers);
-            setOffersStatus(visibleOffers.length ? "" : `Todavía no hay ofertas en ${categoryLabel}.`);
+            setOffersStatus(visibleOffers.length ? "" : i18n.t("common.noOffersIn", { category: i18n.category(categoryLabel) }));
           } finally {
             categoryLoadRef.current = "";
             if (!options.silent) setIsLoadingOffers(false);
@@ -970,7 +929,7 @@
                         <p className="text-lg font-black leading-tight">Donoss</p>
                         {isBusiness && (
                           <span className="rounded-full bg-sun px-2.5 py-1 text-[11px] font-black text-ink">
-                            Soy Empresa
+                            {i18n.t("home.company")}
                           </span>
                         )}
                         <span className="max-w-[145px] truncate rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-[11px] font-black text-slate-200 sm:max-w-[170px]">
@@ -978,7 +937,7 @@
                         </span>
                         {accountVerified && <VerifiedBadge small />}
                       </div>
-                      <p className="text-xs font-semibold text-slate-400">Inicio</p>
+                      <p className="text-xs font-semibold text-slate-400">{i18n.t("home.section")}</p>
                     </div>
                   </div>
                   <button
@@ -993,14 +952,14 @@
                 </header>
 
                 <section className="mt-5 rounded-[28px] border border-white/10 bg-white/[0.055] p-4 shadow-glow sm:mt-6 sm:rounded-[34px] sm:p-8">
-                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint sm:text-sm sm:tracking-[0.18em]">Saldo Donoss</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-mint sm:text-sm sm:tracking-[0.18em]">{i18n.t("home.balance")}</p>
                   <div className="mt-4">
                     <p className="text-[52px] font-black leading-none tracking-normal text-white sm:text-[78px]">{formatNumber(accountPoints)}</p>
-                    <p className="mt-1 text-base font-bold text-slate-300">puntos</p>
+                    <p className="mt-1 text-base font-bold text-slate-300">{i18n.t("common.points")}</p>
                   </div>
                   <div className="mt-5 flex flex-col items-start gap-3 rounded-3xl border border-mint/20 bg-mint/10 p-4 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between sm:mt-6">
                     <div className="w-full min-w-0">
-                      <p className="text-xs font-semibold text-mint">ID Donoss</p>
+                      <p className="text-xs font-semibold text-mint">{i18n.t("home.donosId")}</p>
                       <p className="mt-1 break-all font-mono text-base font-black tracking-normal text-white sm:text-lg">
                         {displayedDonosId || (isLoggedIn ? "ID no disponible" : "Inicia sesión")}
                       </p>
@@ -1010,7 +969,7 @@
                         className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-xs font-black text-white ring-1 ring-white/10 transition hover:bg-white/15"
                         onClick={copyTransactionId}
                       >
-                        {copyStatus || "Copiar"}
+                        {copyStatus || i18n.t("home.copy")}
                       </button>
                     ) : (
                       <a
@@ -1028,9 +987,9 @@
                 <section>
                   <div className="flex items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Cerca de ti</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">{i18n.t("home.nearby")}</p>
                       <h1 className="mt-2 max-w-full break-words text-[26px] font-black leading-tight tracking-normal text-white sm:text-3xl">
-                        Aprovechar actividades culturales
+                        {i18n.t("home.hero")}
                       </h1>
                     </div>
 	                    {isBusiness ? (
@@ -1039,19 +998,19 @@
 	                          href="my-offers.html"
 	                          className="hidden rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200 transition hover:bg-white/[0.1] sm:inline-flex"
 	                        >
-	                          Mis publicaciones
+	                          {i18n.t("home.myPosts")}
 	                        </a>
 	                        <a
 	                          href="validate-ticket.html"
 	                          className="rounded-full border border-mint/25 bg-mint/10 px-4 py-2 text-sm font-black text-mint transition hover:bg-mint/15"
 	                        >
-	                          Validar QR
+	                          {i18n.t("home.validateQr")}
 	                        </a>
 	                        <a
 	                          href="create-offer.html"
 	                          className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]"
                         >
-                          Crear
+                          {i18n.t("home.create")}
                         </a>
                       </div>
                     ) : (
@@ -1062,7 +1021,7 @@
                           openFullPage(`category.html?category=${encodeURIComponent(firstActive)}`);
                         }}
                       >
-                        Ver más
+                        {i18n.t("home.seeMore")}
                       </button>
                     )}
                   </div>
@@ -1087,8 +1046,8 @@
                   <section className="rounded-[30px] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
                     <div className="mb-4 flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Categoría</p>
-                        <h2 className="mt-1 text-2xl font-black text-white">{selectedCategory}</h2>
+                        <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">{i18n.t("home.categoryTitle")}</p>
+                        <h2 className="mt-1 text-2xl font-black text-white">{i18n.category(selectedCategory)}</h2>
                       </div>
                       <button
                         className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200"
@@ -1098,13 +1057,13 @@
                           setOffersStatus("");
                         }}
                       >
-                        Cerrar
+                        {i18n.t("common.close")}
                       </button>
                     </div>
 
                     {isLoadingOffers ? (
                       <div className="rounded-2xl border border-white/10 bg-white/[0.045] p-5 text-sm font-bold text-slate-300">
-                        Cargando ofertas...
+                        {i18n.t("common.loadingOffers")}
                       </div>
                     ) : offersStatus ? (
                       <div className="space-y-4">
@@ -1129,11 +1088,11 @@
                 <section className="pt-10 lg:pt-0">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Feed</p>
-                      <h2 className="mt-1 text-2xl font-black text-white">Chollos destacados</h2>
+                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">{i18n.t("home.feed")}</p>
+                      <h2 className="mt-1 text-2xl font-black text-white">{i18n.t("home.featured")}</h2>
                     </div>
                     <span className="rounded-full bg-mint/10 px-3 py-1 text-xs font-black text-mint ring-1 ring-mint/20">
-                      Nuevo
+                      {i18n.t("home.new")}
                     </span>
                   </div>
 
@@ -1161,7 +1120,7 @@
                       ))
                     ) : (
                       <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold leading-6 text-slate-300 sm:col-span-2">
-                        Todavía no hay chollos destacados reales. Cuando una empresa publique ofertas, aparecerá una selección variada aquí.
+                        {i18n.t("home.emptyFeatured")}
                       </div>
                     )}
                   </div>

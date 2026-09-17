@@ -6,6 +6,7 @@
     <title>Donoss | Detalle</title>
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -46,6 +47,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key, category: (value) => value, getLocale: () => "es" };
       const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
       const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
       const legacyOfferPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
@@ -360,7 +362,7 @@
         const remainingStock = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
         const canBuy = Boolean(deliveryChoice && !outOfStock && (isExternalCheckout || totalPoints > 0));
-        const actionButtonText = (offer.cart_button_text || "Comprar").trim() || "Comprar";
+        const actionButtonText = (offer.cart_button_text || i18n.t("common.buy")).trim() || i18n.t("common.buy");
         const additionalLinks = normalizeAdditionalLinks(offer.additional_links);
         const additionalDetails = normalizeAdditionalDetails(offer.additional_details);
         const checkoutDockClass = `fixed left-0 right-0 z-40 border-t border-white/10 bg-[#060914]/88 px-4 py-4 backdrop-blur-2xl ${
@@ -424,7 +426,7 @@
               <div className="absolute inset-0 bg-gradient-to-t from-[#060914] via-black/25 to-black/20"></div>
               <header className="relative z-10 flex items-center justify-between px-4 pt-5 sm:px-6 lg:px-8">
                 <button className="rounded-full bg-black/30 px-4 py-2 text-sm font-black text-white backdrop-blur" onClick={goBackFromDetail}>
-                  Volver
+                  {i18n.t("common.back")}
                 </button>
                 <div className="flex items-center gap-2">
                   <button
@@ -442,25 +444,25 @@
                       className="rounded-full bg-white/10 px-3 py-1.5 text-xs font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-white/15"
                       href={`admin-offer.html?id=${offer.id}`}
                     >
-                      Editar
+                      {i18n.getLocale?.() === "fr" ? "Modifier" : "Editar"}
                     </a>
                   )}
 	                  {discountPercent !== null && (
 	                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">-{discountPercent}%</span>
 	                  )}
                   {outOfStock && (
-                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">Agotado</span>
+                    <span className="rounded-full bg-coral px-3 py-1.5 text-xs font-black text-white">{i18n.t("common.soldOut")}</span>
                   )}
                   {isExternalCheckout ? (
-                    <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">No disponible en puntos</span>
+                    <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</span>
                   ) : (
 	                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} ptos.</span>
                   )}
                 </div>
               </header>
               <div className="absolute bottom-8 left-4 right-4 z-10 sm:left-6 sm:right-6 lg:left-8 lg:right-8">
-                <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{offer.categories?.[0] || "Oferta"}</p>
-                <h1 className="mt-2 max-w-3xl break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || "Oferta sin título"}</h1>
+                <p className="text-sm font-black uppercase tracking-[0.18em] text-mint">{i18n.category(offer.categories?.[0] || "Oferta")}</p>
+                <h1 className="mt-2 max-w-3xl break-words text-3xl font-black leading-tight text-white sm:text-5xl">{offer.title || (i18n.getLocale?.() === "fr" ? "Offre sans titre" : "Oferta sin título")}</h1>
                 {businessName && (
                   <a
                     className="mt-4 inline-flex items-center gap-2 rounded-full bg-black/35 px-4 py-2 text-sm font-black text-white ring-1 ring-white/10 backdrop-blur transition hover:bg-mint hover:text-ink"
@@ -480,7 +482,7 @@
                         <path d="M8 11h8M8 15h5" />
                       </svg>
                     </span>
-                    <span>Por {offer.author}</span>
+                    <span>{i18n.getLocale?.() === "fr" ? "Par" : "Por"} {offer.author}</span>
                   </div>
                 )}
               </div>
@@ -489,22 +491,22 @@
             <section className="px-4 pt-6 sm:px-6 lg:px-8">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
-                  <p className="text-xs font-semibold text-slate-400">Precio base</p>
+                  <p className="text-xs font-semibold text-slate-400">{i18n.getLocale?.() === "fr" ? "Prix de base" : "Precio base"}</p>
                   <p className="mt-1 text-3xl font-black line-through decoration-slate-500">{formatEuro(offer.base_price)}</p>
                 </div>
                 <div className="rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                  <p className="text-xs font-semibold text-mint">{isExternalCheckout ? "Precio externo" : "Puntos"}</p>
+                  <p className="text-xs font-semibold text-mint">{isExternalCheckout ? (i18n.getLocale?.() === "fr" ? "Prix externe" : "Precio externo") : "Puntos"}</p>
                   <p className="mt-1 text-3xl font-black">{isExternalCheckout ? formatEuro(offer.reduced_price || offer.base_price) : (offer.required_points || 0)}</p>
                 </div>
                 {isExternalCheckout && (
                   <div className="rounded-3xl border border-sun/25 bg-sun/10 p-4 sm:col-span-2">
-                    <p className="text-xs font-semibold text-sun">No disponible en puntos</p>
-                    <p className="mt-1 text-sm font-bold leading-6 text-slate-200">Esta oferta se paga en euros en la web del comercio.</p>
+                    <p className="text-xs font-semibold text-sun">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</p>
+                    <p className="mt-1 text-sm font-bold leading-6 text-slate-200">{i18n.getLocale?.() === "fr" ? "Cette offre se paie en euros sur le site du commerçant." : "Esta oferta se paga en euros en la web del comercio."}</p>
                   </div>
                 )}
 	                {discountPercent !== null && (
 	                  <div className="rounded-3xl border border-coral/25 bg-coral/10 p-4 sm:col-span-2">
-	                    <p className="text-xs font-semibold text-coral">Descuento</p>
+	                    <p className="text-xs font-semibold text-coral">{i18n.getLocale?.() === "fr" ? "Réduction" : "Descuento"}</p>
 	                    <p className="mt-1 text-3xl font-black">-{discountPercent}%</p>
 	                  </div>
 	                )}
@@ -512,8 +514,8 @@
                   <div className={`rounded-3xl border p-4 sm:col-span-2 ${
                     outOfStock ? "border-coral/25 bg-coral/10" : "border-white/10 bg-white/[0.055]"
                   }`}>
-                    <p className={`text-xs font-semibold ${outOfStock ? "text-coral" : "text-slate-400"}`}>Disponibilidad</p>
-                    <p className="mt-1 text-3xl font-black">{outOfStock ? "Agotado" : `${remainingStock} disponibles`}</p>
+                    <p className={`text-xs font-semibold ${outOfStock ? "text-coral" : "text-slate-400"}`}>{i18n.getLocale?.() === "fr" ? "Disponibilité" : "Disponibilidad"}</p>
+                    <p className="mt-1 text-3xl font-black">{outOfStock ? i18n.t("common.soldOut") : `${remainingStock} ${i18n.getLocale?.() === "fr" ? "disponibles" : "disponibles"}`}</p>
                   </div>
                 )}
 	              </div>
@@ -528,7 +530,7 @@
                     >
                       <img className="h-full w-full object-cover transition duration-300 group-hover:scale-105" src={src} alt="" />
                       <div className="absolute inset-0 bg-black/0 transition group-hover:bg-black/20"></div>
-                      <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-3 py-1 text-xs font-black text-white backdrop-blur">Ver</span>
+                      <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-3 py-1 text-xs font-black text-white backdrop-blur">{i18n.getLocale?.() === "fr" ? "Voir" : "Ver"}</span>
                     </button>
                   ))}
                 </div>
@@ -536,14 +538,14 @@
 
               {offer.description && (
                 <section className="mt-7">
-                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Descripción</p>
+                  <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">{i18n.t("common.description")}</p>
                   <p className="mt-3 text-base leading-7 text-slate-300">{offer.description}</p>
                 </section>
               )}
 
               {detailsLoading && !offer.description && gallery.length === 0 && additionalLinks.length === 0 && additionalDetails.length === 0 && (
                 <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.045] p-5">
-                  <p className="text-sm font-black text-slate-300">Cargando más detalles...</p>
+                  <p className="text-sm font-black text-slate-300">{i18n.getLocale?.() === "fr" ? "Chargement de plus de détails..." : "Cargando más detalles..."}</p>
                 </section>
               )}
 
@@ -551,8 +553,8 @@
                 <section className="mt-7 rounded-[28px] border border-white/10 bg-white/[0.045] p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">Información adicional</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">Detalles útiles antes de comprar.</p>
+                      <p className="text-sm font-bold uppercase tracking-[0.16em] text-mint">{i18n.t("common.additionalInfo")}</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-400">{i18n.t("common.usefulDetails")}</p>
                     </div>
                     <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint/10 text-lg ring-1 ring-mint/20">↗</span>
                   </div>
@@ -594,11 +596,11 @@
               <section className="mt-8 space-y-5">
                 {offer.categories?.length > 0 && (
                   <div>
-                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Categoría</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">{i18n.t("common.category")}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {offer.categories.map((category) => (
                         <span key={category} className="rounded-full border border-mint/20 bg-mint/10 px-4 py-2 text-sm font-black text-mint">
-                          {category}
+                          {i18n.category(category)}
                         </span>
                       ))}
                     </div>
@@ -609,7 +611,7 @@
                   {offer.hours && (
                     <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                       <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-mint/10 text-xl ring-1 ring-mint/20">⏱</div>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Horarios</p>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{i18n.t("common.hours")}</p>
                       <p className="mt-2 text-base font-black leading-snug text-white">{offer.hours}</p>
                     </div>
                   )}
@@ -618,13 +620,13 @@
                       <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-coral/10 text-xl ring-1 ring-coral/20">⌁</div>
                       {eventDate && (
                         <>
-                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Evento / actividad</p>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{i18n.t("common.eventActivity")}</p>
                           <p className="mt-2 text-base font-black leading-snug text-white">{eventDate}</p>
                         </>
                       )}
                       {purchaseLimitDate && (
                         <div className={eventDate ? "mt-4 border-t border-white/10 pt-4" : ""}>
-                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Compra disponible hasta</p>
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{i18n.t("common.purchaseUntil")}</p>
                           <p className="mt-2 text-base font-black leading-snug text-white">{purchaseLimitDate}</p>
                         </div>
                       )}
@@ -633,7 +635,7 @@
                   {offer.age && (
                     <div className="rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                       <div className="mb-4 grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">16+</div>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Edad</p>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{i18n.t("common.age")}</p>
                       <p className="mt-2 text-base font-black leading-snug text-white">{offer.age}</p>
                     </div>
                   )}
@@ -676,7 +678,7 @@
                         </p>
                         {Array.isArray(offer.reservation_time_slots) && offer.reservation_time_slots.length > 0 && (
                           <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">
-                            Horarios: {offer.reservation_time_slots.slice(0, 5).join(", ")}{offer.reservation_time_slots.length > 5 ? "..." : ""}
+                            {i18n.t("common.hours")}: {offer.reservation_time_slots.slice(0, 5).join(", ")}{offer.reservation_time_slots.length > 5 ? "..." : ""}
                           </p>
                         )}
                         <p className="mt-2 text-sm font-semibold leading-5 text-slate-300">
@@ -730,8 +732,8 @@
                           <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/10 text-xl ring-1 ring-white/10">⇥</div>
                           <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.delivery_home_points || 0} ptos. extra</span>
                         </div>
-                        <p className="mt-4 text-base font-black text-white">Entrega a domicilio</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-400">Se suma al total de puntos al comprar.</p>
+                        <p className="mt-4 text-base font-black text-white">{i18n.getLocale?.() === "fr" ? "Livraison à domicile" : "Entrega a domicilio"}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-400">{i18n.getLocale?.() === "fr" ? "S’ajoute au total de points à l’achat." : "Se suma al total de puntos al comprar."}</p>
                       </button>
                     </div>
                   </div>
@@ -740,9 +742,9 @@
                     <div className="flex items-start gap-4">
                       <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint/15 text-xl ring-1 ring-mint/20">▣</div>
                       <div>
-                        <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Sin entrega</p>
-                        <p className="mt-1 text-base font-black text-white">Billete digital</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-300">No hace falta elegir recogida ni domicilio. Compra y guarda tu QR en Donoss.</p>
+                        <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{i18n.getLocale?.() === "fr" ? "Sans livraison" : "Sin entrega"}</p>
+                        <p className="mt-1 text-base font-black text-white">{i18n.getLocale?.() === "fr" ? "Billet digital" : "Billete digital"}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-300">{i18n.getLocale?.() === "fr" ? "Pas besoin de choisir retrait ou domicile. Achète et garde ton QR dans Donoss." : "No hace falta elegir recogida ni domicilio. Compra y guarda tu QR en Donoss."}</p>
                       </div>
                     </div>
                   </div>
@@ -763,7 +765,7 @@
 	                  disabled={!canBuy}
 	                  onClick={goToCheckout}
 	                >
-	                  {outOfStock ? "Agotado" : actionButtonText}
+	                  {outOfStock ? i18n.t("common.soldOut") : actionButtonText}
 	                </button>
               </div>
             </div>
@@ -772,7 +774,7 @@
               <div className="fixed inset-0 z-50 flex flex-col bg-[#03050B]/95 px-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] pt-5 backdrop-blur-2xl">
                 <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Galería</p>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">{i18n.getLocale?.() === "fr" ? "Galerie" : "Galería"}</p>
                     <p className="mt-1 text-sm font-bold text-slate-300">{activeImageIndex + 1} / {allImages.length}</p>
                   </div>
                   <button className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-2xl font-black text-white ring-1 ring-white/10" onClick={closeImage}>
