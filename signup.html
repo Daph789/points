@@ -106,6 +106,164 @@
       ];
 
       const customNeighborhoodValue = "custom";
+      const signupCopy = {
+        es: {
+          title: "Donoss | Registro",
+          sideBadge: "Donostia en modo puntos",
+          sideHeading: "Chollos, planes y comercio local en una sola app.",
+          sideIntro: "Donoss conecta jóvenes, tiendas y cultura local con puntos, descuentos y experiencias cerca de tu barrio.",
+          mobileSubtitle: "Chollos locales",
+          brandTagline: "Tu barrio, tus puntos",
+          createEyebrow: "Crear cuenta",
+          chooseProfile: "Elige tu perfil",
+          businessRegistration: "Registro Empresa",
+          userRegistration: "Registro Usuario",
+          introChoose: "Selecciona cómo vas a usar Donoss para adaptar el registro.",
+          introForm: "Completa solo lo necesario para entrar en Donoss.",
+          userCardTitle: "Soy un usuario",
+          userCardText: "Chollos, planes culturales y compraventa entre jóvenes.",
+          businessCardTitle: "Soy un comercio / Empresa",
+          businessCardText: "Publica ofertas, eventos y ventajas para la comunidad Donoss.",
+          formTitleBusiness: "Formulario empresa",
+          formTitleUser: "Formulario usuario",
+          formHint: "Rellena estos datos para crear tu cuenta Donoss.",
+          active: "Activo",
+          divider: "o con correo",
+          displayBusiness: "Nombre del comercio / Empresa",
+          displayUser: "Nombre o apodo",
+          bioBusiness: "Bio de la empresa",
+          bioUser: "Bio personal",
+          bioMin: "Mínimo 20 caracteres para que otros entiendan quién eres.",
+          categories: "Categorías",
+          emailBusiness: "Correo electrónico profesional",
+          emailUser: "Correo electrónico",
+          repeatEmailBusiness: "Repetir correo profesional",
+          repeatEmailUser: "Repetir correo electrónico",
+          repeatEmailPlaceholder: "Vuelve a escribir tu correo",
+          emailMismatch: "Los correos no coinciden.",
+          country: "País",
+          city: "Ciudad Donoss",
+          missingCity: "Mi ciudad no aparece",
+          customCity: "Escribe tu ciudad",
+          cityBusinessNote: "Tu cuenta se puede crear, pero Donoss revisará la apertura de esta ciudad antes de activar publicaciones allí.",
+          cityUserNote: "Podrás explorar las ciudades activas. Donoss podrá abrir tu ciudad si hay demanda suficiente.",
+          phoneBusiness: "Teléfono de contacto",
+          phoneUser: "Teléfono móvil",
+          address: "Dirección",
+          bankTitle: "Datos bancarios para pagos",
+          bankHint: "Necesarios para enviarte dinero desde Donoss cuando corresponda.",
+          added: "Añadido",
+          pending: "Pendiente",
+          addIban: "Añadir un IBAN",
+          editIban: "Modificar IBAN",
+          zoneBusiness: "Barrio / Zona",
+          zoneUser: "Barrio",
+          chooseZone: "Elige tu zona",
+          customZone: "Escribe tu barrio",
+          password: "Contraseña",
+          repeatPassword: "Repetir contraseña",
+          passwordMismatch: "Las contraseñas no coinciden.",
+          termsPrefix: "Acepto las",
+          termsLink: "condiciones de Donoss",
+          privacyLink: "política de privacidad",
+          termsSuffix: "También acepto recibir avisos importantes de mi cuenta.",
+          submit: "Crear cuenta gratis",
+          submitting: "Creando cuenta...",
+          already: "¿Ya tienes cuenta?",
+          login: "Inicia sesión",
+          privacyFooter: "Política de privacidad",
+          deleteFooter: "Eliminar datos",
+          socialUnavailable: (provider) => `Ahora ${provider === "apple" ? "Apple" : "Google"} no está disponible. Crea tu cuenta con correo y contraseña.`,
+          socialTitle: "Acceso no disponible",
+          socialButton: "Entendido",
+          accountSelectedBusiness: "Perfil empresa seleccionado. Completa el formulario de abajo.",
+          accountSelectedUser: "Perfil usuario seleccionado. Completa el formulario de abajo.",
+          emailsDoNotMatch: "Los correos electrónicos no coinciden.",
+          passwordsDoNotMatch: "Las contraseñas no coinciden.",
+          bankRequired: "Añade los datos bancarios de la empresa para poder recibir transferencias.",
+          completeRequired: "Completa todos los campos necesarios para continuar.",
+          created: (id) => `Cuenta creada. Tu ID Donoss es ${id}.`,
+          checkEmail: (id) => `Revisa tu correo. Tu ID Donoss es ${id}.`,
+        },
+        fr: {
+          title: "Donoss | Inscription",
+          sideBadge: "Donoss en mode points",
+          sideHeading: "Bons plans, sorties et commerces locaux dans une seule app.",
+          sideIntro: "Donoss connecte les jeunes, les commerces et la culture locale avec des points, des réductions et des expériences près de chez toi.",
+          mobileSubtitle: "Bons plans locaux",
+          brandTagline: "Ton quartier, tes points",
+          createEyebrow: "Créer un compte",
+          chooseProfile: "Choisis ton profil",
+          businessRegistration: "Inscription entreprise",
+          userRegistration: "Inscription utilisateur",
+          introChoose: "Choisis comment tu vas utiliser Donoss pour adapter l’inscription.",
+          introForm: "Complète seulement les informations nécessaires pour entrer dans Donoss.",
+          userCardTitle: "Je suis un utilisateur",
+          userCardText: "Bons plans, sorties culturelles et échanges entre jeunes.",
+          businessCardTitle: "Je suis un commerce / une entreprise",
+          businessCardText: "Publie des offres, des événements et des avantages pour la communauté Donoss.",
+          formTitleBusiness: "Formulaire entreprise",
+          formTitleUser: "Formulaire utilisateur",
+          formHint: "Remplis ces informations pour créer ton compte Donoss.",
+          active: "Actif",
+          divider: "ou avec e-mail",
+          displayBusiness: "Nom du commerce / de l’entreprise",
+          displayUser: "Nom ou pseudo",
+          bioBusiness: "Bio de l’entreprise",
+          bioUser: "Bio personnelle",
+          bioMin: "Minimum 20 caractères pour que les autres comprennent qui tu es.",
+          categories: "Catégories",
+          emailBusiness: "Adresse e-mail professionnelle",
+          emailUser: "Adresse e-mail",
+          repeatEmailBusiness: "Répéter l’e-mail professionnel",
+          repeatEmailUser: "Répéter l’adresse e-mail",
+          repeatEmailPlaceholder: "Réécris ton e-mail",
+          emailMismatch: "Les e-mails ne correspondent pas.",
+          country: "Pays",
+          city: "Ville Donoss",
+          missingCity: "Ma ville n’apparaît pas",
+          customCity: "Écris ta ville",
+          cityBusinessNote: "Ton compte peut être créé, mais Donoss vérifiera l’ouverture de cette ville avant d’y activer des publications.",
+          cityUserNote: "Tu peux explorer les villes actives. Donoss pourra ouvrir ta ville s’il y a assez de demande.",
+          phoneBusiness: "Téléphone de contact",
+          phoneUser: "Téléphone mobile",
+          address: "Adresse",
+          bankTitle: "Coordonnées bancaires pour les paiements",
+          bankHint: "Nécessaires pour que Donoss puisse t’envoyer de l’argent quand il le faut.",
+          added: "Ajouté",
+          pending: "En attente",
+          addIban: "Ajouter un IBAN",
+          editIban: "Modifier l’IBAN",
+          zoneBusiness: "Quartier / Zone",
+          zoneUser: "Quartier",
+          chooseZone: "Choisis ta zone",
+          customZone: "Écris ton quartier",
+          password: "Mot de passe",
+          repeatPassword: "Répéter le mot de passe",
+          passwordMismatch: "Les mots de passe ne correspondent pas.",
+          termsPrefix: "J’accepte les",
+          termsLink: "conditions de Donoss",
+          privacyLink: "politique de confidentialité",
+          termsSuffix: "J’accepte aussi de recevoir les notifications importantes de mon compte.",
+          submit: "Créer un compte gratuit",
+          submitting: "Création du compte...",
+          already: "Tu as déjà un compte ?",
+          login: "Se connecter",
+          privacyFooter: "Politique de confidentialité",
+          deleteFooter: "Supprimer mes données",
+          socialUnavailable: (provider) => `${provider === "apple" ? "Apple" : "Google"} n’est pas encore disponible. Crée ton compte avec ton e-mail et ton mot de passe.`,
+          socialTitle: "Accès non disponible",
+          socialButton: "Compris",
+          accountSelectedBusiness: "Profil entreprise sélectionné. Complète le formulaire ci-dessous.",
+          accountSelectedUser: "Profil utilisateur sélectionné. Complète le formulaire ci-dessous.",
+          emailsDoNotMatch: "Les adresses e-mail ne correspondent pas.",
+          passwordsDoNotMatch: "Les mots de passe ne correspondent pas.",
+          bankRequired: "Ajoute les coordonnées bancaires de l’entreprise pour pouvoir recevoir des virements.",
+          completeRequired: "Complète tous les champs nécessaires pour continuer.",
+          created: (id) => `Compte créé. Ton ID Donoss est ${id}.`,
+          checkEmail: (id) => `Vérifie ton e-mail. Ton ID Donoss est ${id}.`,
+        },
+      };
       const businessCategories = [
         "Cine / Cultura",
         "Moda / Segunda mano",
@@ -309,11 +467,14 @@
         const [bankName, setBankName] = React.useState("");
         const [bankBic, setBankBic] = React.useState("");
         const [status, setStatus] = React.useState({ type: "", message: "" });
+        const [socialNotice, setSocialNotice] = React.useState(null);
         const [isSubmitting, setIsSubmitting] = React.useState(false);
 
         const isBusiness = accountType === "business";
         const isUser = accountType === "user";
         const selectedCountry = window.donossMarkets?.getCountry?.(countryCode) || { code: "ES", name: "España", flag: "🇪🇸", dialCode: "+34", phonePlaceholder: "600 000 000", defaultCity: "donostia" };
+        const locale = ["FR", "BE"].includes(selectedCountry.code) ? "fr" : "es";
+        const t = signupCopy[locale] || signupCopy.es;
         const availableMarkets = window.donossMarkets?.getMarkets?.(selectedCountry.code) || [{ id: "donostia", label: "Donostia / San Sebastián" }];
         const customCityValue = window.donossMarkets?.customCityValue || "__custom_city__";
         const isCustomCity = cityMarket === customCityValue;
@@ -360,6 +521,11 @@
           };
         }, []);
 
+        React.useEffect(() => {
+          document.documentElement.lang = locale;
+          document.title = t.title;
+        }, [locale]);
+
         function normalizeIban(value) {
           return String(value || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         }
@@ -384,7 +550,7 @@
           setAccountType(type);
           setStatus({
             type: "info",
-            message: type === "business" ? "Perfil empresa seleccionado. Completa el formulario de abajo." : "Perfil usuario seleccionado. Completa el formulario de abajo.",
+            message: type === "business" ? t.accountSelectedBusiness : t.accountSelectedUser,
           });
           localStorage.setItem("donosAccountType", type);
           window.setTimeout(() => {
@@ -458,23 +624,23 @@
           setStatus({ type: "", message: "" });
 
           if (normalizedEmail !== normalizedEmailConfirm) {
-            setStatus({ type: "error", message: "Los correos electrónicos no coinciden." });
+            setStatus({ type: "error", message: t.emailsDoNotMatch });
             return;
           }
 
           if (password !== passwordConfirm) {
-            setStatus({ type: "error", message: "Las contraseñas no coinciden." });
+            setStatus({ type: "error", message: t.passwordsDoNotMatch });
             return;
           }
 
           if (isBusiness && !bankDetailsComplete) {
-            setStatus({ type: "error", message: "Añade los datos bancarios de la empresa para poder recibir transferencias." });
+            setStatus({ type: "error", message: t.bankRequired });
             setIsBankOverlayOpen(true);
             return;
           }
 
           if (!canSubmit) {
-            setStatus({ type: "error", message: "Completa todos los campos necesarios para continuar." });
+            setStatus({ type: "error", message: t.completeRequired });
             return;
           }
 
@@ -509,12 +675,12 @@
               if (profile?.display_name) localStorage.setItem("donosDisplayName", profile.display_name);
               setStatus({
                 type: "success",
-                message: `Cuenta creada. Tu ID Donoss es ${formatTransactionId(profile?.transaction_id || transactionId)}.`,
+                message: t.created(formatTransactionId(profile?.transaction_id || transactionId)),
               });
             } else {
               setStatus({
                 type: "success",
-                message: `Revisa tu correo. Tu ID Donoss es ${formatTransactionId(transactionId)}.`,
+                message: t.checkEmail(formatTransactionId(transactionId)),
               });
             }
 
@@ -530,9 +696,9 @@
         }
 
         async function handleSocialLogin(provider) {
-          setStatus({
-            type: "info",
-            message: `Ahora ${provider === "apple" ? "Apple" : "Google"} no está disponible. Crea tu cuenta con correo y contraseña.`,
+          setSocialNotice({
+            provider,
+            message: t.socialUnavailable(provider),
           });
         }
 
@@ -548,8 +714,8 @@
               }`}
             >
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-mint text-2xl sm:h-14 sm:w-14 sm:text-3xl">👤</div>
-              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un usuario</p>
-              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Chollos, planes culturales y compraventa entre jóvenes.</p>
+              <p className="mt-4 break-words text-lg font-black leading-tight text-white">{t.userCardTitle}</p>
+              <p className="mt-2 break-words text-sm leading-5 text-slate-400">{t.userCardText}</p>
             </button>
 
             <button
@@ -562,8 +728,8 @@
               }`}
             >
               <div className="grid h-12 w-12 place-items-center rounded-2xl bg-sun text-2xl sm:h-14 sm:w-14 sm:text-3xl">🏢</div>
-              <p className="mt-4 break-words text-lg font-black leading-tight text-white">Soy un comercio / Empresa</p>
-              <p className="mt-2 break-words text-sm leading-5 text-slate-400">Publica ofertas, eventos y ventajas para la comunidad Donoss.</p>
+              <p className="mt-4 break-words text-lg font-black leading-tight text-white">{t.businessCardTitle}</p>
+              <p className="mt-2 break-words text-sm leading-5 text-slate-400">{t.businessCardText}</p>
             </button>
           </div>
         );
@@ -576,14 +742,14 @@
                 <div className="max-w-xl">
                   <div className="mb-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-slate-200">
                     <span className="h-2.5 w-2.5 rounded-full bg-mint shadow-[0_0_22px_rgba(66,242,179,0.9)]"></span>
-                    Donostia en modo puntos
+                    {t.sideBadge}
                   </div>
 
                   <h1 className="text-5xl font-extrabold leading-[1.02] tracking-normal text-white">
-                    Chollos, planes y comercio local en una sola app.
+                    {t.sideHeading}
                   </h1>
                   <p className="mt-5 max-w-lg text-lg leading-8 text-slate-300">
-                    Donoss conecta jóvenes, tiendas y cultura local con puntos, descuentos y experiencias cerca de tu barrio.
+                    {t.sideIntro}
                   </p>
 
                   <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
@@ -625,7 +791,7 @@
                     </div>
                     <div className="min-w-0">
                       <p className="text-lg font-black">Donoss</p>
-                      <p className="text-xs font-medium text-slate-400">Chollos locales</p>
+                      <p className="text-xs font-medium text-slate-400">{t.mobileSubtitle}</p>
                     </div>
                   </div>
                 </div>
@@ -637,19 +803,19 @@
                     </div>
                     <div>
                       <p className="text-xl font-black">Donoss</p>
-                      <p className="text-sm font-medium text-slate-400">Tu barrio, tus puntos</p>
+                      <p className="text-sm font-medium text-slate-400">{t.brandTagline}</p>
                     </div>
                   </div>
 
                   <div className="mt-1 lg:mt-8">
-                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Crear cuenta</p>
+                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">{t.createEyebrow}</p>
                     <h2 className="mt-2 break-words text-[32px] font-black leading-tight tracking-normal text-white sm:text-4xl">
-                      {accountType ? (isBusiness ? "Registro Empresa" : "Registro Usuario") : "Elige tu perfil"}
+                      {accountType ? (isBusiness ? t.businessRegistration : t.userRegistration) : t.chooseProfile}
                     </h2>
                     <p className="mt-3 text-sm leading-6 text-slate-400">
                       {accountType
-                        ? "Completa solo lo necesario para entrar en Donoss."
-                        : "Selecciona cómo vas a usar Donoss para adaptar el registro."}
+                        ? t.introForm
+                        : t.introChoose}
                     </p>
                   </div>
 
@@ -659,10 +825,10 @@
                     <form ref={formRef} className="mt-6 scroll-mt-4 space-y-4 rounded-[26px] border border-mint/15 bg-black/10 p-3 sm:p-4" onSubmit={handleSubmit}>
                       <div className="flex items-center justify-between gap-3 rounded-2xl bg-mint/10 px-4 py-3">
                         <div>
-                          <p className="text-sm font-black text-white">{isBusiness ? "Formulario empresa" : "Formulario usuario"}</p>
-                          <p className="mt-1 text-xs font-bold text-slate-400">Rellena estos datos para crear tu cuenta Donoss.</p>
+                          <p className="text-sm font-black text-white">{isBusiness ? t.formTitleBusiness : t.formTitleUser}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-400">{t.formHint}</p>
                         </div>
-                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">Activo</span>
+                        <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{t.active}</span>
                       </div>
                       {isUser && (
                         <>
@@ -687,13 +853,13 @@
 
                           <div className="my-6 flex items-center gap-3">
                             <div className="h-px flex-1 bg-white/10"></div>
-                            <span className="text-xs font-semibold text-slate-500">o con correo</span>
+                            <span className="text-xs font-semibold text-slate-500">{t.divider}</span>
                             <div className="h-px flex-1 bg-white/10"></div>
                           </div>
                         </>
                       )}
 
-                      <Field label={isBusiness ? "Nombre del comercio / Empresa" : "Nombre o apodo"}>
+                      <Field label={isBusiness ? t.displayBusiness : t.displayUser}>
                         <input
                           className={inputClass}
                           type="text"
@@ -704,7 +870,7 @@
                         />
                       </Field>
 
-                      <Field label={isBusiness ? "Bio de la empresa" : "Bio personal"}>
+                      <Field label={isBusiness ? t.bioBusiness : t.bioUser}>
                         <textarea
                           className={`${inputClass} min-h-32 resize-none py-3 leading-6`}
                           placeholder={
@@ -718,7 +884,7 @@
                         />
                         <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
                           <span className={bioText.length >= 20 ? "text-mint" : "text-coral"}>
-                            Mínimo 20 caracteres para que otros entiendan quién eres.
+                            {t.bioMin}
                           </span>
                           <span className="text-slate-500">{bio.length}/500</span>
                         </div>
@@ -727,7 +893,7 @@
                       {isBusiness && (
                         <>
                           <div>
-                            <p className="mb-2 text-sm font-medium text-slate-300">Categorías</p>
+                            <p className="mb-2 text-sm font-medium text-slate-300">{t.categories}</p>
                             <div className="grid gap-2 min-[390px]:grid-cols-2">
                               {businessCategories.map((item) => {
                                 const isSelected = businessCategoriesSelected.includes(item);
@@ -761,7 +927,7 @@
                         </>
                       )}
 
-                      <Field label={isBusiness ? "Correo electrónico profesional" : "Correo electrónico"}>
+                      <Field label={isBusiness ? t.emailBusiness : t.emailUser}>
                         <input
                           className={inputClass}
                           type="email"
@@ -772,22 +938,22 @@
                         />
                       </Field>
 
-                      <Field label={isBusiness ? "Repetir correo profesional" : "Repetir correo electrónico"}>
+                      <Field label={isBusiness ? t.repeatEmailBusiness : t.repeatEmailUser}>
                         <input
                           className={inputClass}
                           type="email"
-                          placeholder="Vuelve a escribir tu correo"
+                          placeholder={t.repeatEmailPlaceholder}
                           autoComplete="email"
                           value={emailConfirm}
                           onChange={(event) => setEmailConfirm(event.target.value)}
                         />
                         {emailConfirm.trim() && !emailsMatch && (
-                          <p className="mt-2 text-xs font-bold text-coral">Los correos no coinciden.</p>
+                          <p className="mt-2 text-xs font-bold text-coral">{t.emailMismatch}</p>
                         )}
                       </Field>
 
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="País">
+                        <Field label={t.country}>
                           <select
                             className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
                             value={selectedCountry.code}
@@ -801,7 +967,7 @@
                           </select>
                         </Field>
 
-                        <Field label="Ciudad Donoss">
+                        <Field label={t.city}>
                           <select
                             className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
                             value={cityMarket}
@@ -813,7 +979,7 @@
                               </option>
                             ))}
                             <option className="bg-panel" value={customCityValue}>
-                              Mi ciudad no aparece
+                              {t.missingCity}
                             </option>
                           </select>
                         </Field>
@@ -821,7 +987,7 @@
 
                       {isCustomCity && (
                         <section className="rounded-[24px] border border-sun/25 bg-sun/10 p-4">
-                          <Field label="Escribe tu ciudad">
+                          <Field label={t.customCity}>
                             <input
                               className={inputClass}
                               type="text"
@@ -833,13 +999,13 @@
                           </Field>
                           <p className="mt-3 text-xs font-bold leading-5 text-slate-300">
                             {isBusiness
-                              ? "Tu cuenta se puede crear, pero Donoss revisará la apertura de esta ciudad antes de activar publicaciones allí."
-                              : "Podrás explorar las ciudades activas. Donoss podrá abrir tu ciudad si hay demanda suficiente."}
+                              ? t.cityBusinessNote
+                              : t.cityUserNote}
                           </p>
                         </section>
                       )}
 
-                      <Field label={isBusiness ? "Teléfono de contacto" : "Teléfono móvil"}>
+                      <Field label={isBusiness ? t.phoneBusiness : t.phoneUser}>
                         <div className="grid grid-cols-[82px_1fr] gap-2 sm:grid-cols-[96px_1fr]">
                           <button type="button" className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-line bg-white/[0.055] px-3 text-sm font-bold text-white">
                             <span>{selectedCountry.flag}</span>
@@ -859,7 +1025,7 @@
 
                       {isBusiness && (
                         <>
-                          <Field label="Dirección">
+                          <Field label={t.address}>
                             <input
                               className={inputClass}
                               type="text"
@@ -877,15 +1043,15 @@
                           }`}>
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="text-sm font-black text-white">Datos bancarios para pagos</p>
+                                <p className="text-sm font-black text-white">{t.bankTitle}</p>
                                 <p className="mt-1 text-xs font-bold leading-5 text-slate-400">
-                                  Necesarios para enviarte dinero desde Donoss cuando corresponda.
+                                  {t.bankHint}
                                 </p>
                               </div>
                               <span className={`rounded-full px-3 py-1 text-xs font-black ${
                                 bankDetailsComplete ? "bg-mint text-ink" : "bg-white/[0.08] text-slate-300"
                               }`}>
-                                {bankDetailsComplete ? "Añadido" : "Pendiente"}
+                                {bankDetailsComplete ? t.added : t.pending}
                               </span>
                             </div>
                             {bankDetailsComplete && (
@@ -899,19 +1065,19 @@
                               className="mt-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]"
                               onClick={() => setIsBankOverlayOpen(true)}
                             >
-                              {bankDetailsComplete ? "Modificar IBAN" : "Añadir un IBAN"}
+                              {bankDetailsComplete ? t.editIban : t.addIban}
                             </button>
                           </section>
                         </>
                       )}
 
-                      <Field label={isBusiness ? "Barrio / Zona" : "Barrio"}>
+                      <Field label={isBusiness ? t.zoneBusiness : t.zoneUser}>
                         <select
                           className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
                           value={neighborhood}
                           onChange={(event) => setNeighborhood(event.target.value)}
                         >
-                          <option value="" className="bg-panel">Elige tu zona</option>
+                          <option value="" className="bg-panel">{t.chooseZone}</option>
                           {neighborhoods.map((item) => (
                             <option
                               key={item}
@@ -925,7 +1091,7 @@
                       </Field>
 
                       {isCustomNeighborhood && (
-                        <Field label="Escribe tu barrio">
+                        <Field label={t.customZone}>
                           <input
                             className={inputClass}
                             type="text"
@@ -938,7 +1104,7 @@
                       )}
 
                       <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Contraseña">
+                        <Field label={t.password}>
                           <input
                             className={inputClass}
                             type="password"
@@ -949,7 +1115,7 @@
                           />
                         </Field>
 
-                        <Field label="Repetir contraseña">
+                        <Field label={t.repeatPassword}>
                           <input
                             className={inputClass}
                             type="password"
@@ -959,7 +1125,7 @@
                             onChange={(event) => setPasswordConfirm(event.target.value)}
                           />
                           {passwordConfirm && password !== passwordConfirm && (
-                            <p className="mt-2 text-xs font-bold text-coral">Las contraseñas no coinciden.</p>
+                            <p className="mt-2 text-xs font-bold text-coral">{t.passwordMismatch}</p>
                           )}
                         </Field>
                       </div>
@@ -972,7 +1138,7 @@
                           onChange={(event) => setAcceptedTerms(event.target.checked)}
                         />
                         <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
-                          Acepto las{" "}
+                          {t.termsPrefix}{" "}
                           <button
                             type="button"
                             className="font-black text-white underline decoration-mint/70 underline-offset-4"
@@ -982,13 +1148,13 @@
                               setIsTermsOpen(true);
                             }}
                           >
-                            condiciones de Donoss
+                            {t.termsLink}
                           </button>{" "}
-                          y la{" "}
+                          {locale === "fr" ? "et la" : "y la"}{" "}
                           <a className="font-black text-white underline decoration-mint/70 underline-offset-4" href="privacy-policy.html" target="_blank" rel="noreferrer">
-                            política de privacidad
+                            {t.privacyLink}
                           </a>
-                          . También acepto recibir avisos importantes de mi cuenta.
+                          . {t.termsSuffix}
                         </span>
                       </label>
 
@@ -1014,18 +1180,18 @@
                         }`}
                         disabled={!canSubmit || isSubmitting}
                       >
-                        {isSubmitting ? "Creando cuenta..." : "Crear cuenta gratis"}
+                        {isSubmitting ? t.submitting : t.submit}
                       </button>
                     </form>
                   )}
 
                   <p className="mt-5 text-center text-sm text-slate-400">
-                    ¿Ya tienes cuenta? <a className="font-bold text-white underline decoration-mint/70 underline-offset-4" href="login.html">Inicia sesión</a>
+                    {t.already} <a className="font-bold text-white underline decoration-mint/70 underline-offset-4" href="login.html">{t.login}</a>
                   </p>
                   <p className="mt-3 text-center text-xs font-bold text-slate-500">
-                    <a className="underline decoration-mint/50 underline-offset-4 transition hover:text-white" href="privacy-policy.html" target="_blank" rel="noreferrer">Política de privacidad</a>
+                    <a className="underline decoration-mint/50 underline-offset-4 transition hover:text-white" href="privacy-policy.html" target="_blank" rel="noreferrer">{t.privacyFooter}</a>
                     <span className="mx-2">·</span>
-                    <a className="underline decoration-mint/50 underline-offset-4 transition hover:text-white" href="data-deletion.html" target="_blank" rel="noreferrer">Eliminar datos</a>
+                    <a className="underline decoration-mint/50 underline-offset-4 transition hover:text-white" href="data-deletion.html" target="_blank" rel="noreferrer">{t.deleteFooter}</a>
                   </p>
                 </div>
 
@@ -1077,6 +1243,27 @@
                     Aceptar condiciones
                   </button>
                 </div>
+              </div>
+            </div>
+          )}
+          {socialNotice && (
+            <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 py-6 backdrop-blur-xl">
+              <div className="w-full max-w-sm rounded-[30px] border border-mint/20 bg-[#0b0f1a] p-5 text-center shadow-2xl shadow-black/60">
+                <div className="mx-auto grid h-16 w-16 place-items-center rounded-3xl bg-white/[0.07] ring-1 ring-white/10">
+                  {socialNotice.provider === "apple" ? <AppleIcon /> : <GoogleIcon />}
+                </div>
+                <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-mint">{t.socialTitle}</p>
+                <h2 className="mt-2 text-2xl font-black leading-tight text-white">
+                  {socialNotice.provider === "apple" ? "Apple" : "Google"}
+                </h2>
+                <p className="mt-3 text-sm font-bold leading-6 text-slate-300">{socialNotice.message}</p>
+                <button
+                  type="button"
+                  className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow transition hover:bg-[#66ffd0]"
+                  onClick={() => setSocialNotice(null)}
+                >
+                  {t.socialButton}
+                </button>
               </div>
             </div>
           )}
