@@ -113,6 +113,16 @@
       ];
 
       const customNeighborhoodValue = "custom";
+      const signupDraftKey = "donossSignupDraftV1";
+
+      function readSignupDraft() {
+        try {
+          return JSON.parse(localStorage.getItem(signupDraftKey) || "{}") || {};
+        } catch (_error) {
+          return {};
+        }
+      }
+
       const signupCopy = {
         es: {
           title: "Donoss | Registro",
@@ -190,6 +200,22 @@
           passwordsDoNotMatch: "Las contraseñas no coinciden.",
           bankRequired: "Añade los datos bancarios de la empresa para poder recibir transferencias.",
           completeRequired: "Completa todos los campos necesarios para continuar.",
+          needAccountType: "Elige si quieres crear una cuenta de usuario o de empresa.",
+          needDisplayName: "Escribe tu nombre o el nombre del comercio.",
+          needBio: "Añade una bio de mínimo 20 caracteres.",
+          needEmail: "Escribe tu correo electrónico.",
+          needEmailConfirm: "Repite tu correo electrónico.",
+          needPhone: "Añade tu teléfono.",
+          needCustomCity: "Escribe la ciudad que quieres solicitar.",
+          needZone: "Selecciona una zona o barrio para continuar.",
+          needCustomZone: "Escribe tu barrio o zona.",
+          needPassword: "La contraseña debe tener mínimo 8 caracteres.",
+          needPasswordConfirm: "Repite la contraseña.",
+          needTerms: "Acepta las condiciones y la política de privacidad.",
+          needBusinessCategories: "Selecciona al menos una categoría para la empresa.",
+          needTaxId: "Añade el CIF / NIF de la empresa.",
+          needAddress: "Añade la dirección de la empresa.",
+          needBank: "Añade los datos bancarios de la empresa.",
           created: (id) => `Cuenta creada. Tu ID Donoss es ${id}.`,
           checkEmail: (id) => `Revisa tu correo. Tu ID Donoss es ${id}.`,
         },
@@ -269,6 +295,22 @@
           passwordsDoNotMatch: "Les mots de passe ne correspondent pas.",
           bankRequired: "Ajoute les coordonnées bancaires de l’entreprise pour pouvoir recevoir des virements.",
           completeRequired: "Complète tous les champs nécessaires pour continuer.",
+          needAccountType: "Choisis si tu veux créer un compte utilisateur ou entreprise.",
+          needDisplayName: "Écris ton nom ou le nom du commerce.",
+          needBio: "Ajoute une bio de minimum 20 caractères.",
+          needEmail: "Écris ton adresse e-mail.",
+          needEmailConfirm: "Répète ton adresse e-mail.",
+          needPhone: "Ajoute ton téléphone.",
+          needCustomCity: "Écris la ville que tu veux demander.",
+          needZone: "Sélectionne une zone ou un quartier pour continuer.",
+          needCustomZone: "Écris ton quartier ou ta zone.",
+          needPassword: "Le mot de passe doit contenir au moins 8 caractères.",
+          needPasswordConfirm: "Répète le mot de passe.",
+          needTerms: "Accepte les conditions et la politique de confidentialité.",
+          needBusinessCategories: "Sélectionne au moins une catégorie pour l’entreprise.",
+          needTaxId: "Ajoute le numéro d’identification de l’entreprise.",
+          needAddress: "Ajoute l’adresse de l’entreprise.",
+          needBank: "Ajoute les coordonnées bancaires de l’entreprise.",
           created: (id) => `Compte créé. Ton ID Donoss est ${id}.`,
           checkEmail: (id) => `Vérifie ton e-mail. Ton ID Donoss est ${id}.`,
         },
@@ -445,31 +487,32 @@
 
       function App() {
         const formRef = React.useRef(null);
+        const initialSignupDraft = React.useMemo(() => readSignupDraft(), []);
         const initialReferralCode = React.useMemo(() => {
           const params = new URLSearchParams(window.location.search);
           const code = cleanValidReferralCode(params.get("ref") || params.get("r") || localStorage.getItem("donossReferralCode"));
           if (code) localStorage.setItem("donossReferralCode", code);
           return code;
         }, []);
-        const [accountType, setAccountType] = React.useState("");
-        const [displayName, setDisplayName] = React.useState("");
-        const [bio, setBio] = React.useState("");
-        const [email, setEmail] = React.useState("");
-        const [emailConfirm, setEmailConfirm] = React.useState("");
-        const [phone, setPhone] = React.useState("");
+        const [accountType, setAccountType] = React.useState(initialSignupDraft.accountType || "");
+        const [displayName, setDisplayName] = React.useState(initialSignupDraft.displayName || "");
+        const [bio, setBio] = React.useState(initialSignupDraft.bio || "");
+        const [email, setEmail] = React.useState(initialSignupDraft.email || "");
+        const [emailConfirm, setEmailConfirm] = React.useState(initialSignupDraft.emailConfirm || "");
+        const [phone, setPhone] = React.useState(initialSignupDraft.phone || "");
         const [password, setPassword] = React.useState("");
         const [passwordConfirm, setPasswordConfirm] = React.useState("");
-        const [acceptedTerms, setAcceptedTerms] = React.useState(false);
+        const [acceptedTerms, setAcceptedTerms] = React.useState(Boolean(initialSignupDraft.acceptedTerms));
         const [isTermsOpen, setIsTermsOpen] = React.useState(false);
-        const [countryCode, setCountryCode] = React.useState(window.donossMarkets?.defaultCountryCode || "ES");
-        const [cityMarket, setCityMarket] = React.useState(window.donossMarkets?.getCountry?.("ES")?.defaultCity || "donostia");
+        const [countryCode, setCountryCode] = React.useState(initialSignupDraft.countryCode || window.donossMarkets?.defaultCountryCode || "ES");
+        const [cityMarket, setCityMarket] = React.useState(initialSignupDraft.cityMarket || window.donossMarkets?.getCountry?.(initialSignupDraft.countryCode || "ES")?.defaultCity || "donostia");
         const [marketsByCountry, setMarketsByCountry] = React.useState(window.donossMarkets?.marketsByCountry || {});
-        const [customCity, setCustomCity] = React.useState("");
-        const [neighborhood, setNeighborhood] = React.useState("");
-        const [customNeighborhood, setCustomNeighborhood] = React.useState("");
-        const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState([]);
-        const [taxId, setTaxId] = React.useState("");
-        const [businessAddress, setBusinessAddress] = React.useState("");
+        const [customCity, setCustomCity] = React.useState(initialSignupDraft.customCity || "");
+        const [neighborhood, setNeighborhood] = React.useState(initialSignupDraft.neighborhood || "");
+        const [customNeighborhood, setCustomNeighborhood] = React.useState(initialSignupDraft.customNeighborhood || "");
+        const [businessCategoriesSelected, setBusinessCategoriesSelected] = React.useState(Array.isArray(initialSignupDraft.businessCategoriesSelected) ? initialSignupDraft.businessCategoriesSelected : []);
+        const [taxId, setTaxId] = React.useState(initialSignupDraft.taxId || "");
+        const [businessAddress, setBusinessAddress] = React.useState(initialSignupDraft.businessAddress || "");
         const [isBankOverlayOpen, setIsBankOverlayOpen] = React.useState(false);
         const [bankAccountHolder, setBankAccountHolder] = React.useState("");
         const [bankIban, setBankIban] = React.useState("");
@@ -520,9 +563,33 @@
           acceptedTerms &&
           (!isBusiness || (businessCategoriesSelected.length > 0 && taxId.trim() && businessAddress.trim() && bankDetailsComplete));
 
+        const submitBlockReason = (() => {
+          if (!accountType) return t.needAccountType;
+          if (!displayName.trim()) return t.needDisplayName;
+          if (bioText.length < 20) return t.needBio;
+          if (!normalizedEmail) return t.needEmail;
+          if (!normalizedEmailConfirm) return t.needEmailConfirm;
+          if (!emailsMatch) return t.emailsDoNotMatch;
+          if (!phone.trim()) return t.needPhone;
+          if (!finalCityLabel) return t.completeRequired;
+          if (isCustomCity && !requestedCityLabel) return t.needCustomCity;
+          if (!neighborhood) return t.needZone;
+          if (isCustomNeighborhood && !finalNeighborhood) return t.needCustomZone;
+          if (password.length < 8) return t.needPassword;
+          if (!passwordConfirm) return t.needPasswordConfirm;
+          if (password !== passwordConfirm) return t.passwordsDoNotMatch;
+          if (!acceptedTerms) return t.needTerms;
+          if (isBusiness && businessCategoriesSelected.length === 0) return t.needBusinessCategories;
+          if (isBusiness && !taxId.trim()) return t.needTaxId;
+          if (isBusiness && !businessAddress.trim()) return t.needAddress;
+          if (isBusiness && !bankDetailsComplete) return t.needBank;
+          return "";
+        })();
+
         React.useEffect(() => {
           let cancelled = false;
           async function syncCountryFromAccessCheck() {
+            if (initialSignupDraft.countryCode) return;
             const result = await window.donossCountryGuard?.detectCountry?.();
             const detected = String(result?.country || "").toUpperCase();
             if (!cancelled && ["ES", "FR", "BE"].includes(detected)) {
@@ -534,6 +601,43 @@
             cancelled = true;
           };
         }, []);
+
+        React.useEffect(() => {
+          const draft = {
+            accountType,
+            displayName,
+            bio,
+            email,
+            emailConfirm,
+            phone,
+            acceptedTerms,
+            countryCode,
+            cityMarket,
+            customCity,
+            neighborhood,
+            customNeighborhood,
+            businessCategoriesSelected,
+            taxId,
+            businessAddress,
+          };
+          localStorage.setItem(signupDraftKey, JSON.stringify(draft));
+        }, [
+          accountType,
+          displayName,
+          bio,
+          email,
+          emailConfirm,
+          phone,
+          acceptedTerms,
+          countryCode,
+          cityMarket,
+          customCity,
+          neighborhood,
+          customNeighborhood,
+          businessCategoriesSelected,
+          taxId,
+          businessAddress,
+        ]);
 
         React.useEffect(() => {
           document.documentElement.lang = locale;
@@ -684,7 +788,7 @@
           }
 
           if (!canSubmit) {
-            setStatus({ type: "error", message: t.completeRequired });
+            setStatus({ type: "error", message: submitBlockReason || t.completeRequired });
             return;
           }
 
@@ -728,6 +832,7 @@
               });
             }
 
+            localStorage.removeItem(signupDraftKey);
             redirectToHome(accountType);
           } catch (error) {
             setStatus({
@@ -1174,13 +1279,22 @@
                         </Field>
                       </div>
 
-                      <label className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3">
+                      <label className="grid cursor-pointer grid-cols-[auto_1fr] items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.045] p-3 transition hover:border-mint/25 hover:bg-white/[0.065]">
                         <input
                           type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-line bg-panel accent-mint"
+                          className="peer sr-only"
                           checked={acceptedTerms}
                           onChange={(event) => setAcceptedTerms(event.target.checked)}
                         />
+                        <span className={`mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-lg border-2 transition ${
+                          acceptedTerms
+                            ? "border-mint bg-mint text-ink shadow-glow"
+                            : "border-slate-400 bg-white text-transparent"
+                        }`}>
+                          <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="M4.5 10.5l3.5 3.5 7.5-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
                         <span className="min-w-0 break-words text-xs leading-5 text-slate-400">
                           {t.termsPrefix}{" "}
                           <button
@@ -1201,6 +1315,12 @@
                           . {t.termsSuffix}
                         </span>
                       </label>
+
+                      {!canSubmit && submitBlockReason && (
+                        <div className="rounded-2xl border border-sun/25 bg-sun/10 p-3 text-sm font-black leading-5 text-sun">
+                          {submitBlockReason}
+                        </div>
+                      )}
 
                       {status.message && (
                         <div
