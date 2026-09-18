@@ -1,7 +1,7 @@
 (function () {
   const lockedCountries = new Set(["FR", "BE"]);
   const unlockKey = "donossRegionLaunchUnlocked";
-  const password = "26012006Ja@";
+  const passwordHash = "f262a01d304ee4608705305f2d0ca0b980be47518909a93449a7b8f8b4f7df42";
   const skippedPages = new Set([
     "login.html",
     "signup.html",
@@ -45,6 +45,19 @@
 
   function setUnlocked() {
     localStorage.setItem(unlockKey, "1");
+  }
+
+  async function sha256Hex(value) {
+    if (!window.crypto?.subtle || !window.TextEncoder) return "";
+    const bytes = new TextEncoder().encode(String(value || ""));
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function isValidPassword(value) {
+    return await sha256Hex(value) === passwordHash;
   }
 
   function shouldLock() {
@@ -211,9 +224,9 @@
 
     const input = overlay.querySelector("#donoss-region-lock-password");
     const error = overlay.querySelector("#donoss-region-lock-error");
-    overlay.querySelector("#donoss-region-lock-form")?.addEventListener("submit", (event) => {
+    overlay.querySelector("#donoss-region-lock-form")?.addEventListener("submit", async (event) => {
       event.preventDefault();
-      if (input.value === password) {
+      if (await isValidPassword(input.value)) {
         setUnlocked();
         removeOverlay();
         return;
