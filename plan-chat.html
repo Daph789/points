@@ -90,8 +90,13 @@
         return Date.now() - new Date(message.created_at).getTime() <= 15 * 60 * 1000;
       }
 
+      function canModerateMessage(message, profile) {
+        if (!message || message.pending || message.deleted_at) return false;
+        return Boolean(profile?.is_donoss_admin);
+      }
+
       function messageReadCount(message) {
-        return (message?.read_by || []).filter((read) => read.reader?.id && read.reader.id !== message.sender_id).length;
+        return (message?.read_by || []).filter((read) => read.reader?.id && read.reader.id !== message.sender_id && String(read.reader?.email || "").toLowerCase() !== "donoss.red@gmail.com").length;
       }
 
       function ReadTicks({ message }) {
@@ -428,16 +433,17 @@
               <div className="space-y-3">
                 {messages.map((message) => {
                   const mine = message.sender_id === profile?.id;
+                  const canModerate = canModerateMessage(message, profile);
                   return (
                     <div key={message.local_key || message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                       {!mine && <Avatar user={message.sender} />}
                       <article
-                        className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${mine && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
+                        className={`max-w-[76%] rounded-[24px] px-3.5 py-2.5 shadow-2xl shadow-black/10 transition sm:max-w-[68%] ${(mine || canModerate) && !message.pending && !message.deleted_at ? "cursor-pointer active:scale-[0.99]" : ""} ${
                         mine
                           ? "rounded-br-md bg-mint text-ink"
                           : "rounded-bl-md border border-white/10 bg-white/[0.075] text-white"
                       } ${message.deleted_at ? "opacity-70" : ""}`}
-                        onClick={() => mine && !message.pending && !message.deleted_at ? setSelectedMessage(message) : null}
+                        onClick={() => (mine || canModerate) && !message.pending && !message.deleted_at ? setSelectedMessage(message) : null}
                       >
                         {!mine && (
                           <div className="mb-1 flex items-center gap-2">
@@ -484,12 +490,14 @@
               <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 px-4 pb-5 backdrop-blur-sm" onClick={() => setSelectedMessage(null)}>
                 <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                   <p className="text-sm font-black text-white">Opciones del mensaje</p>
-                  <p className="mt-1 text-xs font-bold text-slate-500">Puedes modificarlo solo durante 15 minutos.</p>
+                  <p className="mt-1 text-xs font-bold text-slate-500">
+                    {profile?.is_donoss_admin ? "Modo Donoss: puedes moderar este mensaje sin aparecer como miembro." : "Puedes modificarlo solo durante 15 minutos."}
+                  </p>
                   <div className="mt-4 grid gap-2">
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => openReadList(selectedMessage)}>
                       Ver quién lo ha leído
                     </button>
-                    {canEditMessage(selectedMessage) && (
+                    {(profile?.is_donoss_admin || canEditMessage(selectedMessage)) && (
                       <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => {
                         setEditingMessage(selectedMessage);
                         setEditDraft(selectedMessage.body || "");

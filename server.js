@@ -40,6 +40,10 @@ const supabaseAdmin =
       })
     : null;
 
+function isDonossMainAdminProfile(profile) {
+  return String(profile?.email || "").trim().toLowerCase() === offerTransferAdminEmail;
+}
+
 app.set("trust proxy", true);
 
 const pointPacks = {
@@ -5528,7 +5532,8 @@ async function enrichSocialPlans(plans, viewerId = "") {
   });
 }
 
-async function getSocialPlanChatAccess(planId, profileId) {
+async function getSocialPlanChatAccess(planId, profile) {
+  const profileId = profile?.id || "";
   const { data: plan, error: planError } = await supabaseAdmin
     .from("social_plans")
     .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
@@ -5536,6 +5541,7 @@ async function getSocialPlanChatAccess(planId, profileId) {
     .maybeSingle();
   if (planError) throw planError;
   if (!plan || plan.status === "cancelled") return { allowed: false, reason: "plan_not_found" };
+  if (isDonossMainAdminProfile(profile)) return { allowed: true, role: "donoss_admin", plan };
   if (plan.creator_id === profileId) return { allowed: true, role: "owner", plan };
 
   const { data: member, error: memberError } = await supabaseAdmin
@@ -5639,6 +5645,7 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
         }]));
       }
       for (const read of reads || []) {
+        if (isDonossMainAdminProfile(readersById[read.reader_id])) continue;
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
@@ -5669,7 +5676,8 @@ function otherSideGroupStatus(value) {
   return value === "waiting" ? "removed" : "waiting";
 }
 
-async function getSideGroupAccess(planId, profileId, requestedStatus) {
+async function getSideGroupAccess(planId, profile, requestedStatus) {
+  const profileId = profile?.id || "";
   const status = normalizeSideGroupStatus(requestedStatus);
   if (!status) return { allowed: false, reason: "invalid_side_group" };
 
@@ -5680,6 +5688,7 @@ async function getSideGroupAccess(planId, profileId, requestedStatus) {
     .maybeSingle();
   if (planError) throw planError;
   if (!plan || plan.status !== "confirmed") return { allowed: false, reason: "side_group_not_ready" };
+  if (isDonossMainAdminProfile(profile)) return { allowed: true, role: "donoss_admin", plan, member: null, status };
 
   const { data: member, error: memberError } = await supabaseAdmin
     .from("social_plan_members")
@@ -5762,6 +5771,7 @@ async function enrichSideMessages(messages = [], options = {}) {
         }]));
       }
       for (const read of reads || []) {
+        if (isDonossMainAdminProfile(readersById[read.reader_id])) continue;
         if (!readsByMessageId[read.message_id]) readsByMessageId[read.message_id] = [];
         readsByMessageId[read.message_id].push({
           read_at: read.read_at,
@@ -6918,7 +6928,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const { data: messages, error } = await supabaseAdmin
@@ -6933,7 +6943,8 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_failed" });
     }
     response.json({
-      profile: privatePlanProfile(profile),
+      profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
+      role: access.role,
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
       messages: await enrichPlanChatMessages(messages || [], { includeReadProfiles: false }),
     });
@@ -6951,8 +6962,9 @@ app.post("/api/social-plans/:id/chat/read", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+    if (access.role === "donoss_admin") return response.json({ ok: true, read: 0, hidden_admin: true });
     const read = await markPlanChatReadForProfile(access.plan.id, profile.id);
     response.json({ ok: true, read });
   } catch (error) {
@@ -6969,7 +6981,7 @@ app.get("/api/social-plans/:id/chat/:messageId/reads", async (request, response)
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const { data: message, error: messageError } = await supabaseAdmin
@@ -6997,7 +7009,7 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
@@ -7030,7 +7042,7 @@ app.patch("/api/social-plans/:id/chat/:messageId", async (request, response) => 
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
@@ -7043,8 +7055,9 @@ app.patch("/api/social-plans/:id/chat/:messageId", async (request, response) => 
       .eq("plan_id", access.plan.id)
       .maybeSingle();
     if (currentError) throw currentError;
-    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
-    if (!canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
+    const canModerate = access.role === "donoss_admin";
+    if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
+    if (!canModerate && !canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
 
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
@@ -7069,7 +7082,7 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSocialPlanChatAccess(request.params.id, profile.id);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const { data: current, error: currentError } = await supabaseAdmin
@@ -7079,7 +7092,8 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
       .eq("plan_id", access.plan.id)
       .maybeSingle();
     if (currentError) throw currentError;
-    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+    const canModerate = access.role === "donoss_admin";
+    if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
 
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
@@ -7104,7 +7118,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
 
     const otherStatus = otherSideGroupStatus(access.status);
@@ -7157,7 +7171,8 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
     if (mergeError) return response.status(500).json({ error: ["42P01", "42703"].includes(mergeError.code) ? "side_groups_sql_missing" : "side_group_failed" });
 
     response.json({
-      profile: privatePlanProfile(profile),
+      profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
+      role: access.role,
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
       status: access.status,
       other_status: otherStatus,
@@ -7181,8 +7196,9 @@ app.post("/api/social-plans/:id/side-group/:status/read", async (request, respon
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
+    if (access.role === "donoss_admin") return response.json({ ok: true, read: 0, hidden_admin: true });
     const merge = await getAcceptedSideMerge(access.plan.id);
     const mergedStatuses = merge ? [merge.from_status, merge.to_status].filter(Boolean) : [access.status];
     const read = await markSideGroupReadForProfile(access.plan.id, profile.id, mergedStatuses);
@@ -7201,7 +7217,7 @@ app.get("/api/social-plans/:id/side-group/:status/messages/:messageId/reads", as
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
 
     const { data: message, error: messageError } = await supabaseAdmin
@@ -7229,7 +7245,7 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
     if (!body) return response.status(400).json({ error: "empty_message" });
@@ -7258,7 +7274,7 @@ app.patch("/api/social-plans/:id/side-group/:status/messages/:messageId", async 
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
@@ -7271,8 +7287,9 @@ app.patch("/api/social-plans/:id/side-group/:status/messages/:messageId", async 
       .eq("plan_id", access.plan.id)
       .maybeSingle();
     if (currentError) throw currentError;
-    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
-    if (!canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
+    const canModerate = access.role === "donoss_admin";
+    if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
+    if (!canModerate && !canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
 
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
@@ -7297,7 +7314,7 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
 
     const { data: current, error: currentError } = await supabaseAdmin
@@ -7307,7 +7324,8 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
       .eq("plan_id", access.plan.id)
       .maybeSingle();
     if (currentError) throw currentError;
-    if (!current || current.sender_id !== profile.id) return response.status(404).json({ error: "message_not_found" });
+    const canModerate = access.role === "donoss_admin";
+    if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
 
     const { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
@@ -7332,7 +7350,7 @@ app.post("/api/social-plans/:id/side-group/:status/merge-request", async (reques
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
     const otherStatus = otherSideGroupStatus(access.status);
 
@@ -7364,7 +7382,7 @@ app.post("/api/social-plans/:id/side-group/:status/merge-request/:requestId/acce
 
   try {
     const profile = await ensureProfileForUser(auth.user);
-    const access = await getSideGroupAccess(request.params.id, profile.id, request.params.status);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
 
     const { data: merge, error: mergeError } = await supabaseAdmin

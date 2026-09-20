@@ -363,7 +363,7 @@
         );
       }
 
-      function PlanCard({ plan, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0, chatEvent = null, sideEvent = null, updateEvent = null, updateUnreadCount = 0 }) {
+      function PlanCard({ plan, isDonossAdmin = false, onOpen, onJoin, onEdit, onChat, onSideGroup, onWarmChat, onWarmSideGroup, chatUnreadCount = 0, sideUnreadCount = 0, chatEvent = null, sideEvent = null, updateEvent = null, updateUnreadCount = 0 }) {
         const free = isFreePlan(plan);
         const image = free ? (plan.free_cover_data_url || "") : ticketImage(plan.purchase);
         const merchant = free ? (plan.free_category || "Plan libre") : offerMerchant(plan.purchase);
@@ -375,7 +375,7 @@
         const accepted = Number(counts.accepted || 0);
         const hasPreference = Number(plan.wanted_women || 0) > 0 || Number(plan.wanted_men || 0) > 0;
         const photos = planPhotos(plan);
-        const canChat = plan.is_owner || plan.viewer_member?.status === "accepted";
+        const canChat = isDonossAdmin || plan.is_owner || plan.viewer_member?.status === "accepted";
         const sideStatus = ["waiting", "removed"].includes(plan.viewer_member?.status) ? plan.viewer_member.status : "";
         const sideCount = sideStatus ? Number(counts[sideStatus] || 0) : 0;
         const canOpenSideGroup = plan.status === "confirmed" && sideStatus;
@@ -1319,6 +1319,7 @@
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
         const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
         const isBusinessAccount = profile?.account_type === "business";
+        const isDonossAdminAccount = String(profile?.email || "").toLowerCase() === "donoss.red@gmail.com";
         const freePlanCategories = isBusinessAccount ? BUSINESS_FREE_PLAN_CATEGORIES : USER_FREE_PLAN_CATEGORIES;
         const filteredTickets = tickets.filter((ticket) => {
           const query = ticketQuery.trim().toLowerCase();
@@ -1420,7 +1421,7 @@
                 )}
 
                 <section className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                  {visiblePlans.map((plan) => <PlanCard key={plan.id} plan={plan} isDonossAdmin={isDonossAdminAccount} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                   {visiblePlans.length === 0 && (
                     <div className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">
                       <p className="text-base font-black text-white">{hasActivePlanSearch ? "No hay planes para esta búsqueda." : "Todavía no hay planes de otros usuarios."}</p>
@@ -1441,7 +1442,7 @@
                       </button>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
-                      {otherDiscoverPlans.map((plan) => <PlanCard key={`other-${plan.id}`} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                      {otherDiscoverPlans.map((plan) => <PlanCard key={`other-${plan.id}`} plan={plan} isDonossAdmin={isDonossAdminAccount} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                     </div>
                   </section>
                 )}
@@ -1647,14 +1648,14 @@
 
             {mode === "mine" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                {ownedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} isDonossAdmin={isDonossAdminAccount} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {ownedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no has creado planes.</p>}
               </section>
             )}
 
             {mode === "joined" && (
               <section className="mt-5 grid gap-4 sm:grid-cols-2">
-                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
+                {joinedPlans.map((plan) => <PlanCard key={plan.id} plan={plan} isDonossAdmin={isDonossAdminAccount} onOpen={openDetailPlan} onJoin={openJoinFlow} onEdit={startEditPlan} onChat={openPlanChat} onSideGroup={openSideGroup} onWarmChat={warmPlanChat} onWarmSideGroup={warmSideGroup} chatUnreadCount={chatUnreadCountForPlan(plan.id)} sideUnreadCount={sideUnreadCountForPlan(plan.id, plan.viewer_member?.status)} chatEvent={firstChatUnreadEventForPlan(plan.id)} sideEvent={firstSideUnreadEventForPlan(plan.id, plan.viewer_member?.status)} updateEvent={firstUpdateEventForPlan(plan.id)} updateUnreadCount={updateUnreadCountForPlan(plan.id)} />)}
                 {joinedPlans.length === 0 && <p className="rounded-[28px] border border-white/10 bg-white/[0.055] p-6 text-sm font-bold text-slate-300">Todavía no te has apuntado a ningún plan.</p>}
               </section>
             )}
@@ -1917,7 +1918,7 @@
                         waiting: "border-sun/20 bg-sun/[0.055]",
                         removed: "border-coral/20 bg-coral/[0.045] opacity-90",
                       };
-                      const canChat = detailPlan.is_owner || detailPlan.viewer_member?.status === "accepted";
+                      const canChat = isDonossAdminAccount || detailPlan.is_owner || detailPlan.viewer_member?.status === "accepted";
                       const viewerStatus = detailPlan.viewer_member?.status || "";
                       const protectionDetail =
                         viewerStatus === "waiting"
