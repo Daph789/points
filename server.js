@@ -5773,7 +5773,9 @@ const socialPlanMessageSelect = "id, plan_id, sender_id, body, reply_to_message_
 const socialPlanMessageSelectLegacy = "id, plan_id, sender_id, body, edited_at, deleted_at, created_at";
 const sideGroupMessageSelect = "id, plan_id, group_status, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
 const sideGroupMessageSelectLegacy = "id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at";
-const chatPageSize = 80;
+const chatPageSize = 10;
+const chatUnreadContextSize = 4;
+const chatUnreadHardLimit = 50;
 
 function normalizeMessageReplyId(value) {
   const id = String(value || "").trim();
@@ -5783,6 +5785,64 @@ function normalizeMessageReplyId(value) {
 function normalizeChatBeforeCursor(value) {
   const date = new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+async function countUnreadPlanMessagesForProfile(planId, profileId) {
+  if (!planId || !profileId) return 0;
+  try {
+    const { data: lastRead } = await supabaseAdmin
+      .from("social_plan_message_reads")
+      .select("read_at")
+      .eq("plan_id", planId)
+      .eq("reader_id", profileId)
+      .order("read_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lastRead?.read_at) return 0;
+    const { count, error } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", planId)
+      .neq("sender_id", profileId)
+      .is("deleted_at", null)
+      .gt("created_at", lastRead.read_at);
+    if (error) return 0;
+    return Number(count || 0);
+  } catch (_error) {
+    return 0;
+  }
+}
+
+async function countUnreadSideGroupMessagesForProfile(planId, profileId, statuses = []) {
+  const cleanStatuses = [...new Set((statuses || []).filter(Boolean))];
+  if (!planId || !profileId || cleanStatuses.length === 0) return 0;
+  try {
+    const { data: lastRead } = await supabaseAdmin
+      .from("social_plan_side_group_message_reads")
+      .select("read_at")
+      .eq("plan_id", planId)
+      .eq("reader_id", profileId)
+      .order("read_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!lastRead?.read_at) return 0;
+    const { count, error } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("plan_id", planId)
+      .in("group_status", cleanStatuses)
+      .neq("sender_id", profileId)
+      .is("deleted_at", null)
+      .gt("created_at", lastRead.read_at);
+    if (error) return 0;
+    return Number(count || 0);
+  } catch (_error) {
+    return 0;
+  }
+}
+
+function chatLimitForUnread(unreadCount = 0) {
+  return Math.max(chatPageSize, Math.min(chatUnreadHardLimit, Number(unreadCount || 0) + chatUnreadContextSize));
 }
 
 function normalizeSideGroupStatus(value) {
@@ -7105,12 +7165,13 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
     const before = normalizeChatBeforeCursor(request.query?.before);
+    const messageLimit = before ? chatPageSize : chatLimitForUnread(await countUnreadPlanMessagesForProfile(access.plan.id, profile.id));
     let messagesQuery = supabaseAdmin
       .from("social_plan_messages")
       .select(socialPlanMessageSelect)
       .eq("plan_id", access.plan.id)
       .order("created_at", { ascending: false })
-      .limit(chatPageSize);
+      .limit(messageLimit);
     if (before) messagesQuery = messagesQuery.lt("created_at", before);
     let { data: messages, error } = await messagesQuery;
     if (error?.code === "42703") {
@@ -7119,7 +7180,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
         .select(socialPlanMessageSelectLegacy)
         .eq("plan_id", access.plan.id)
         .order("created_at", { ascending: false })
-        .limit(chatPageSize);
+        .limit(messageLimit);
       if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
       const fallback = await fallbackQuery;
       messages = fallback.data;
@@ -7135,7 +7196,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       role: access.role,
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
       messages: await enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
-      has_more: (messages || []).length >= chatPageSize,
+      has_more: (messages || []).length >= messageLimit,
     });
   } catch (error) {
     console.error("Social plan chat list fatal error:", error);
@@ -7405,13 +7466,14 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       .eq("status", otherStatus);
 
     const before = normalizeChatBeforeCursor(request.query?.before);
+    const messageLimit = before ? chatPageSize : chatLimitForUnread(await countUnreadSideGroupMessagesForProfile(access.plan.id, profile.id, messageStatuses));
     let sideMessagesQuery = supabaseAdmin
       .from("social_plan_side_group_messages")
       .select(sideGroupMessageSelect)
       .eq("plan_id", access.plan.id)
       .in("group_status", messageStatuses)
       .order("created_at", { ascending: false })
-      .limit(chatPageSize);
+      .limit(messageLimit);
     if (before) sideMessagesQuery = sideMessagesQuery.lt("created_at", before);
     let { data: messages, error: messagesError } = await sideMessagesQuery;
     if (messagesError?.code === "42703") {
@@ -7421,7 +7483,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
         .eq("plan_id", access.plan.id)
         .in("group_status", messageStatuses)
         .order("created_at", { ascending: false })
-        .limit(chatPageSize);
+        .limit(messageLimit);
       if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
       const fallback = await fallbackQuery;
       messages = fallback.data;
@@ -7448,7 +7510,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       merged: isMerged,
       members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
       messages: await enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
-      has_more: (messages || []).length >= chatPageSize,
+      has_more: (messages || []).length >= messageLimit,
       merge_requests: mergeRequests || [],
     });
   } catch (error) {
