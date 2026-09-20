@@ -5656,16 +5656,78 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
       }
     }
   }
+  const replyIds = [...new Set(messages.map((message) => message.reply_to_message_id).filter(Boolean))];
+  let repliesById = {};
+  if (replyIds.length > 0) {
+    let { data: replies, error: repliesError } = await supabaseAdmin
+      .from("social_plan_messages")
+      .select(socialPlanMessageSelect)
+      .in("id", replyIds);
+    if (repliesError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .select(socialPlanMessageSelectLegacy)
+        .in("id", replyIds);
+      replies = fallback.data;
+      repliesError = fallback.error;
+    }
+    if (repliesError) {
+      if (!["42P01", "42703"].includes(repliesError.code)) console.error("Social plan chat replies error:", repliesError);
+    } else {
+      const missingSenderIds = [...new Set((replies || [])
+        .map((reply) => reply.sender_id)
+        .filter((senderId) => senderId && !sendersById[senderId]))];
+      if (missingSenderIds.length > 0) {
+        let { data: replySenders, error: replySendersError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .in("id", missingSenderIds);
+        if (replySendersError?.code === "42703") {
+          const fallback = await supabaseAdmin
+            .from("profiles")
+            .select("id, display_name, email, transaction_id, is_verified")
+            .in("id", missingSenderIds);
+          replySenders = fallback.data;
+          replySendersError = fallback.error;
+        }
+        if (replySendersError) console.error("Social plan chat reply senders error:", replySendersError);
+        for (const profile of replySenders || []) {
+          sendersById[profile.id] = {
+            ...transferPublicProfile(profile),
+            plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+          };
+        }
+      }
+      repliesById = Object.fromEntries((replies || []).map((reply) => [reply.id, {
+        id: reply.id,
+        sender_id: reply.sender_id,
+        body: reply.deleted_at ? "Mensaje eliminado" : reply.body,
+        deleted_at: reply.deleted_at,
+        sender: sendersById[reply.sender_id] || null,
+      }]));
+    }
+  }
   return messages.map((message) => ({
     ...message,
     sender: sendersById[message.sender_id] || null,
     read_by: readsByMessageId[message.id] || [],
+    reply_to: repliesById[message.reply_to_message_id] || null,
   }));
 }
 
 function canEditChatMessage(message) {
   if (!message?.created_at || message.deleted_at) return false;
   return Date.now() - new Date(message.created_at).getTime() <= 15 * 60 * 1000;
+}
+
+const socialPlanMessageSelect = "id, plan_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
+const socialPlanMessageSelectLegacy = "id, plan_id, sender_id, body, edited_at, deleted_at, created_at";
+const sideGroupMessageSelect = "id, plan_id, group_status, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
+const sideGroupMessageSelectLegacy = "id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at";
+
+function normalizeMessageReplyId(value) {
+  const id = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : "";
 }
 
 function normalizeSideGroupStatus(value) {
@@ -5782,7 +5844,63 @@ async function enrichSideMessages(messages = [], options = {}) {
       }
     }
   }
-  return messages.map((message) => ({ ...message, sender: sendersById[message.sender_id] || null, read_by: readsByMessageId[message.id] || [] }));
+  const replyIds = [...new Set(messages.map((message) => message.reply_to_message_id).filter(Boolean))];
+  let repliesById = {};
+  if (replyIds.length > 0) {
+    let { data: replies, error: repliesError } = await supabaseAdmin
+      .from("social_plan_side_group_messages")
+      .select(sideGroupMessageSelect)
+      .in("id", replyIds);
+    if (repliesError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select(sideGroupMessageSelectLegacy)
+        .in("id", replyIds);
+      replies = fallback.data;
+      repliesError = fallback.error;
+    }
+    if (repliesError) {
+      if (!["42P01", "42703"].includes(repliesError.code)) console.error("Side group replies error:", repliesError);
+    } else {
+      const missingSenderIds = [...new Set((replies || [])
+        .map((reply) => reply.sender_id)
+        .filter((senderId) => senderId && !sendersById[senderId]))];
+      if (missingSenderIds.length > 0) {
+        let { data: replySenders, error: replySendersError } = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .in("id", missingSenderIds);
+        if (replySendersError?.code === "42703") {
+          const fallback = await supabaseAdmin
+            .from("profiles")
+            .select("id, display_name, email, transaction_id, is_verified")
+            .in("id", missingSenderIds);
+          replySenders = fallback.data;
+          replySendersError = fallback.error;
+        }
+        if (replySendersError) console.error("Side group reply senders error:", replySendersError);
+        for (const profile of replySenders || []) {
+          sendersById[profile.id] = {
+            ...transferPublicProfile(profile),
+            plan_photo_data_urls: parsePlanProfilePhotos(profile.plan_photo_data_url),
+          };
+        }
+      }
+      repliesById = Object.fromEntries((replies || []).map((reply) => [reply.id, {
+        id: reply.id,
+        sender_id: reply.sender_id,
+        body: reply.deleted_at ? "Mensaje eliminado" : reply.body,
+        deleted_at: reply.deleted_at,
+        sender: sendersById[reply.sender_id] || null,
+      }]));
+    }
+  }
+  return messages.map((message) => ({
+    ...message,
+    sender: sendersById[message.sender_id] || null,
+    read_by: readsByMessageId[message.id] || [],
+    reply_to: repliesById[message.reply_to_message_id] || null,
+  }));
 }
 
 async function markSideGroupMessagesRead(messages = [], planId, readerId) {
@@ -6931,12 +7049,22 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
     const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
-    const { data: messages, error } = await supabaseAdmin
+    let { data: messages, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(socialPlanMessageSelect)
       .eq("plan_id", access.plan.id)
       .order("created_at", { ascending: true })
       .limit(200);
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .select(socialPlanMessageSelectLegacy)
+        .eq("plan_id", access.plan.id)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      messages = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Social plan chat list error:", error);
@@ -6984,12 +7112,22 @@ app.get("/api/social-plans/:id/chat/:messageId/reads", async (request, response)
     const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
-    const { data: message, error: messageError } = await supabaseAdmin
+    let { data: message, error: messageError } = await supabaseAdmin
       .from("social_plan_messages")
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(socialPlanMessageSelect)
       .eq("id", request.params.messageId)
       .eq("plan_id", access.plan.id)
       .maybeSingle();
+    if (messageError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .select(socialPlanMessageSelectLegacy)
+        .eq("id", request.params.messageId)
+        .eq("plan_id", access.plan.id)
+        .maybeSingle();
+      message = fallback.data;
+      messageError = fallback.error;
+    }
     if (messageError) throw messageError;
     if (!message) return response.status(404).json({ error: "message_not_found" });
 
@@ -7014,12 +7152,35 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
     if (!body) return response.status(400).json({ error: "empty_message" });
+    const replyToMessageId = normalizeMessageReplyId(request.body?.reply_to_message_id);
+    let validReplyToMessageId = "";
+    if (replyToMessageId) {
+      const { data: replyTarget, error: replyTargetError } = await supabaseAdmin
+        .from("social_plan_messages")
+        .select("id")
+        .eq("id", replyToMessageId)
+        .eq("plan_id", access.plan.id)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (!replyTargetError && replyTarget?.id) validReplyToMessageId = replyTarget.id;
+    }
 
-    const { data: message, error } = await supabaseAdmin
+    let insertPayload = { plan_id: access.plan.id, sender_id: profile.id, body };
+    if (validReplyToMessageId) insertPayload.reply_to_message_id = validReplyToMessageId;
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .insert({ plan_id: access.plan.id, sender_id: profile.id, body })
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .insert(insertPayload)
+      .select(socialPlanMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .insert({ plan_id: access.plan.id, sender_id: profile.id, body })
+        .select(socialPlanMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
 
     if (error) {
       console.error("Social plan chat send error:", error);
@@ -7048,23 +7209,43 @@ app.patch("/api/social-plans/:id/chat/:messageId", async (request, response) => 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
     if (!body) return response.status(400).json({ error: "empty_message" });
 
-    const { data: current, error: currentError } = await supabaseAdmin
+    let { data: current, error: currentError } = await supabaseAdmin
       .from("social_plan_messages")
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(socialPlanMessageSelect)
       .eq("id", request.params.messageId)
       .eq("plan_id", access.plan.id)
       .maybeSingle();
+    if (currentError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .select(socialPlanMessageSelectLegacy)
+        .eq("id", request.params.messageId)
+        .eq("plan_id", access.plan.id)
+        .maybeSingle();
+      current = fallback.data;
+      currentError = fallback.error;
+    }
     if (currentError) throw currentError;
     const canModerate = access.role === "donoss_admin";
     if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
     if (!canModerate && !canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
 
-    const { data: message, error } = await supabaseAdmin
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
       .update({ body, edited_at: new Date().toISOString() })
       .eq("id", current.id)
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(socialPlanMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .update({ body, edited_at: new Date().toISOString() })
+        .eq("id", current.id)
+        .select(socialPlanMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     const [enriched] = await enrichPlanChatMessages([message]);
     response.json({ message: enriched });
@@ -7095,12 +7276,22 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
     const canModerate = access.role === "donoss_admin";
     if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
 
-    const { data: message, error } = await supabaseAdmin
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
       .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(socialPlanMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_messages")
+        .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+        .eq("id", current.id)
+        .select(socialPlanMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     const [enriched] = await enrichPlanChatMessages([message]);
     response.json({ message: enriched });
@@ -7152,13 +7343,24 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       .eq("plan_id", access.plan.id)
       .eq("status", otherStatus);
 
-    const { data: messages, error: messagesError } = await supabaseAdmin
+    let { data: messages, error: messagesError } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .select(sideGroupMessageSelect)
       .eq("plan_id", access.plan.id)
       .in("group_status", messageStatuses)
       .order("created_at", { ascending: true })
       .limit(240);
+    if (messagesError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select(sideGroupMessageSelectLegacy)
+        .eq("plan_id", access.plan.id)
+        .in("group_status", messageStatuses)
+        .order("created_at", { ascending: true })
+        .limit(240);
+      messages = fallback.data;
+      messagesError = fallback.error;
+    }
     if (messagesError) return response.status(500).json({ error: ["42P01", "42703"].includes(messagesError.code) ? "side_groups_sql_missing" : "side_group_failed" });
 
     const { data: mergeRequests, error: mergeError } = await supabaseAdmin
@@ -7220,12 +7422,22 @@ app.get("/api/social-plans/:id/side-group/:status/messages/:messageId/reads", as
     const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
 
-    const { data: message, error: messageError } = await supabaseAdmin
+    let { data: message, error: messageError } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .select(sideGroupMessageSelect)
       .eq("id", request.params.messageId)
       .eq("plan_id", access.plan.id)
       .maybeSingle();
+    if (messageError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select(sideGroupMessageSelectLegacy)
+        .eq("id", request.params.messageId)
+        .eq("plan_id", access.plan.id)
+        .maybeSingle();
+      message = fallback.data;
+      messageError = fallback.error;
+    }
     if (messageError) throw messageError;
     if (!message) return response.status(404).json({ error: "message_not_found" });
 
@@ -7251,12 +7463,37 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
     if (!body) return response.status(400).json({ error: "empty_message" });
     const merge = await getAcceptedSideMerge(access.plan.id);
     const groupStatus = merge ? "merged" : access.status;
+    const replyToMessageId = normalizeMessageReplyId(request.body?.reply_to_message_id);
+    let validReplyToMessageId = "";
+    if (replyToMessageId) {
+      const allowedReplyStatuses = merge ? [merge.from_status, merge.to_status, "merged"].filter(Boolean) : [access.status];
+      const { data: replyTarget, error: replyTargetError } = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select("id")
+        .eq("id", replyToMessageId)
+        .eq("plan_id", access.plan.id)
+        .in("group_status", allowedReplyStatuses)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (!replyTargetError && replyTarget?.id) validReplyToMessageId = replyTarget.id;
+    }
 
-    const { data: message, error } = await supabaseAdmin
+    let insertPayload = { plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body };
+    if (validReplyToMessageId) insertPayload.reply_to_message_id = validReplyToMessageId;
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .insert({ plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body })
-      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .insert(insertPayload)
+      .select(sideGroupMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .insert({ plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body })
+        .select(sideGroupMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
     if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_message_failed" });
     const [enriched] = await enrichSideMessages([message]);
     response.json({ message: enriched });
@@ -7280,23 +7517,43 @@ app.patch("/api/social-plans/:id/side-group/:status/messages/:messageId", async 
     const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
     if (!body) return response.status(400).json({ error: "empty_message" });
 
-    const { data: current, error: currentError } = await supabaseAdmin
+    let { data: current, error: currentError } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .select("id, plan_id, sender_id, body, edited_at, deleted_at, created_at")
+      .select(sideGroupMessageSelect)
       .eq("id", request.params.messageId)
       .eq("plan_id", access.plan.id)
       .maybeSingle();
+    if (currentError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .select(sideGroupMessageSelectLegacy)
+        .eq("id", request.params.messageId)
+        .eq("plan_id", access.plan.id)
+        .maybeSingle();
+      current = fallback.data;
+      currentError = fallback.error;
+    }
     if (currentError) throw currentError;
     const canModerate = access.role === "donoss_admin";
     if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
     if (!canModerate && !canEditChatMessage(current)) return response.status(403).json({ error: "edit_window_closed" });
 
-    const { data: message, error } = await supabaseAdmin
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
       .update({ body, edited_at: new Date().toISOString() })
       .eq("id", current.id)
-      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .select(sideGroupMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .update({ body, edited_at: new Date().toISOString() })
+        .eq("id", current.id)
+        .select(sideGroupMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     const [enriched] = await enrichSideMessages([message]);
     response.json({ message: enriched });
@@ -7327,12 +7584,22 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
     const canModerate = access.role === "donoss_admin";
     if (!current || (!canModerate && current.sender_id !== profile.id)) return response.status(404).json({ error: "message_not_found" });
 
-    const { data: message, error } = await supabaseAdmin
+    let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
       .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
-      .select("id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at")
+      .select(sideGroupMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plan_side_group_messages")
+        .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+        .eq("id", current.id)
+        .select(sideGroupMessageSelectLegacy)
+        .maybeSingle();
+      message = fallback.data;
+      error = fallback.error;
+    }
     if (error) throw error;
     const [enriched] = await enrichSideMessages([message]);
     response.json({ message: enriched });

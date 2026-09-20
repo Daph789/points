@@ -17,7 +17,11 @@ create index if not exists social_plan_side_group_messages_sender_idx
 
 alter table public.social_plan_side_group_messages
   add column if not exists edited_at timestamptz,
-  add column if not exists deleted_at timestamptz;
+  add column if not exists deleted_at timestamptz,
+  add column if not exists reply_to_message_id uuid references public.social_plan_side_group_messages(id) on delete set null;
+
+create index if not exists social_plan_side_group_messages_reply_idx
+  on public.social_plan_side_group_messages(reply_to_message_id);
 
 create table if not exists public.social_plan_side_group_message_reads (
   message_id uuid not null references public.social_plan_side_group_messages(id) on delete cascade,
