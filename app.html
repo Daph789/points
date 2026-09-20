@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="app-shell.css" />
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
+    <script src="country-guard.js"></script>
     <script src="donoss-i18n.js"></script>
     <script defer src="region-launch-lock.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -301,6 +302,41 @@
         let activeCategoryKey = "";
         let inicioReady = false;
         let sessionCheckPromise = null;
+
+        function validCountryCode(country) {
+          const code = String(country || "").toUpperCase();
+          return ["ES", "FR", "BE"].includes(code) ? code : "";
+        }
+
+        function applyAppCountry(country) {
+          const code = validCountryCode(country);
+          if (!code) return;
+          window.donossI18n?.setCountry?.(code);
+          window.donossI18n?.applyAll?.();
+          allFrames().forEach((frame) => {
+            try {
+              frame.contentWindow?.postMessage({ type: "donos:locale", country: code, locale: window.donossI18n?.getLocale?.() || "es" }, window.location.origin);
+            } catch (_error) {}
+          });
+        }
+
+        async function syncAppLocale() {
+          applyAppCountry(localStorage.getItem("donossCountryCode"));
+          try {
+            const detected = await window.donossCountryGuard?.detectCountry?.();
+            applyAppCountry(detected?.country);
+          } catch (_error) {}
+          if (!window.supabase?.createClient) return;
+          try {
+            const client = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
+            const { data: auth } = await client.auth.getSession();
+            const token = auth?.session?.access_token;
+            if (!token) return;
+            const response = await fetch("/api/me/profile", { headers: { Authorization: `Bearer ${token}` } });
+            const data = await response.json().catch(() => ({}));
+            applyAppCountry(data?.profile?.country_code);
+          } catch (_error) {}
+        }
 
         function currentTheme() {
           return window.donossTheme?.getTheme?.() || "dark";
@@ -818,6 +854,8 @@
           boot.classList.add("is-hidden");
         }, 1400);
         window.requestAnimationFrame(() => {
+          syncAppLocale();
+          window.setTimeout(syncAppLocale, 900);
           nav.classList.add("is-ready");
           window.setTimeout(hydrateNotificationBadges, 900);
           window.setTimeout(checkAppUpdate, 1800);
