@@ -1754,6 +1754,194 @@ app.post("/api/admin/accounts", async (request, response) => {
   });
 });
 
+app.post("/api/admin/resale-valuation", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  if (!adminPassword || request.body?.password !== adminPassword) {
+    return response.status(401).json({ error: "Mot de passe incorrect" });
+  }
+
+  const safeRows = (result, allowedCodes = ["42P01", "42703"]) => {
+    if (result?.error && !allowedCodes.includes(result.error.code)) {
+      console.error("Admin resale valuation load error:", result.error);
+    }
+    return result?.error ? [] : result?.data || [];
+  };
+
+  const [
+    accountsResult,
+    rechargesResult,
+    payoutsResult,
+    premiumChargesResult,
+    promotionsResult,
+    purchasesResult,
+    offersResult,
+    plansResult,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("profiles")
+      .select("id, account_type, points, is_verified, premium_status, created_at"),
+    supabaseAdmin
+      .from("stripe_point_recharges")
+      .select("id, points, amount_total, stripe_fee_amount, net_amount, created_at"),
+    supabaseAdmin
+      .from("business_payouts")
+      .select("id, amount_cents, bank_fee_cents, created_at"),
+    supabaseAdmin
+      .from("premium_subscription_charges")
+      .select("id, points, status, created_at"),
+    supabaseAdmin
+      .from("offer_promotions")
+      .select("id, price_cents, points_cost, is_admin_free, status, created_at"),
+    supabaseAdmin
+      .from("purchases")
+      .select("id, total_points, created_at"),
+    supabaseAdmin
+      .from("business_offers")
+      .select("id, is_hidden, created_at"),
+    supabaseAdmin
+      .from("social_plans")
+      .select("id, created_at"),
+  ]);
+
+  if (accountsResult.error) {
+    console.error("Admin resale accounts error:", accountsResult.error);
+    return response.status(500).json({ error: "No se han podido cargar las cuentas" });
+  }
+
+  const accounts = accountsResult.data || [];
+  const recharges = safeRows(rechargesResult).map(enrichRechargeAccounting);
+  const payouts = safeRows(payoutsResult);
+  const premiumCharges = safeRows(premiumChargesResult).filter((charge) => charge.status === "paid");
+  const promotions = safeRows(promotionsResult).filter((promotion) => promotion.status !== "cancelled" && !promotion.is_admin_free);
+  const purchases = safeRows(purchasesResult);
+  const offers = safeRows(offersResult);
+  const plans = safeRows(plansResult);
+
+  const monthKey = (value) => {
+    const date = value ? new Date(value) : new Date();
+    if (Number.isNaN(date.getTime())) return "Sin fecha";
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const addMonth = (map, dateValue, patch) => {
+    const key = monthKey(dateValue);
+    if (!map.has(key)) {
+      map.set(key, {
+        month: key,
+        gross_cash_cents: 0,
+        net_cash_cents: 0,
+        stripe_fees_cents: 0,
+        donoss_margin_cents: 0,
+        premium_cents: 0,
+        promotion_cents: 0,
+        payouts_cents: 0,
+        purchases_points: 0,
+        accounts: 0,
+      });
+    }
+    const row = map.get(key);
+    Object.entries(patch).forEach(([field, value]) => {
+      row[field] = Number(row[field] || 0) + Number(value || 0);
+    });
+  };
+
+  const monthsMap = new Map();
+  recharges.forEach((item) => addMonth(monthsMap, item.created_at, {
+    gross_cash_cents: item.amount_total,
+    net_cash_cents: item.net_amount,
+    stripe_fees_cents: item.stripe_fee_amount,
+    donoss_margin_cents: item.donos_company_margin_cents,
+  }));
+  premiumCharges.forEach((item) => addMonth(monthsMap, item.created_at, { premium_cents: Number(item.points || 0) * 10 }));
+  promotions.forEach((item) => addMonth(monthsMap, item.created_at, { promotion_cents: Number(item.points_cost || 0) * 10 }));
+  payouts.forEach((item) => addMonth(monthsMap, item.created_at, { payouts_cents: Number(item.amount_cents || 0) + Number(item.bank_fee_cents || 0) }));
+  purchases.forEach((item) => addMonth(monthsMap, item.created_at, { purchases_points: Number(item.total_points || 0) }));
+  accounts.forEach((item) => addMonth(monthsMap, item.created_at, { accounts: 1 }));
+
+  const monthly = Array.from(monthsMap.values())
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map((row) => ({
+      ...row,
+      donoss_revenue_cents: row.donoss_margin_cents + row.premium_cents + row.promotion_cents,
+      estimated_cash_after_payouts_cents: row.net_cash_cents - row.payouts_cents,
+    }));
+
+  const totalGrossCash = recharges.reduce((sum, item) => sum + Number(item.amount_total || 0), 0);
+  const totalStripeFees = recharges.reduce((sum, item) => sum + Number(item.stripe_fee_amount || 0), 0);
+  const totalNetCash = recharges.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
+  const totalPayouts = payouts.reduce((sum, item) => sum + Number(item.amount_cents || 0), 0);
+  const totalBankFees = payouts.reduce((sum, item) => sum + Number(item.bank_fee_cents || 0), 0);
+  const totalDonossMargin = recharges.reduce((sum, item) => sum + Number(item.donos_company_margin_cents || 0), 0);
+  const totalPremium = premiumCharges.reduce((sum, item) => sum + Number(item.points || 0) * 10, 0);
+  const totalPromotions = promotions.reduce((sum, item) => sum + Number(item.points_cost || 0) * 10, 0);
+  const totalDonossRevenue = totalDonossMargin + totalPremium + totalPromotions;
+  const totalLiability = accounts.reduce((sum, account) => sum + Number(account.points || 0) * 10, 0);
+  const estimatedCash = totalNetCash - totalPayouts - totalBankFees;
+  const reserveCoverage = estimatedCash - totalLiability;
+  const now = Date.now();
+  const last30Cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  const revenueLast30 = [
+    ...recharges.map((item) => ({ created_at: item.created_at, cents: Number(item.donos_company_margin_cents || 0) })),
+    ...premiumCharges.map((item) => ({ created_at: item.created_at, cents: Number(item.points || 0) * 10 })),
+    ...promotions.map((item) => ({ created_at: item.created_at, cents: Number(item.points_cost || 0) * 10 })),
+  ].reduce((sum, item) => {
+    const time = new Date(item.created_at || 0).getTime();
+    return time >= last30Cutoff ? sum + item.cents : sum;
+  }, 0);
+  const activeMonths = Math.max(monthly.filter((row) => row.donoss_revenue_cents > 0 || row.gross_cash_cents > 0).length, 1);
+  const averageMonthlyRevenue = Math.round(totalDonossRevenue / activeMonths);
+  const valuationBaseMonthly = revenueLast30 > 0 ? revenueLast30 : averageMonthlyRevenue;
+  const annualizedRevenue = valuationBaseMonthly * 12;
+  const lowValuation = Math.round(annualizedRevenue * 2);
+  const centralValuation = Math.round(annualizedRevenue * 3);
+  const highValuation = Math.round(annualizedRevenue * 4);
+  const growth = monthly.length >= 2
+    ? monthly[monthly.length - 1].donoss_revenue_cents - monthly[Math.max(monthly.length - 2, 0)].donoss_revenue_cents
+    : monthly[0]?.donoss_revenue_cents || 0;
+
+  response.json({
+    summary: {
+      total_gross_cash_cents: totalGrossCash,
+      total_stripe_fees_cents: totalStripeFees,
+      total_net_cash_cents: totalNetCash,
+      total_business_payouts_cents: totalPayouts,
+      total_bank_fees_cents: totalBankFees,
+      estimated_cash_cents: estimatedCash,
+      total_points_liability_cents: totalLiability,
+      reserve_coverage_cents: reserveCoverage,
+      total_donoss_revenue_cents: totalDonossRevenue,
+      recharge_margin_cents: totalDonossMargin,
+      premium_revenue_cents: totalPremium,
+      promotion_revenue_cents: totalPromotions,
+      revenue_last_30_days_cents: revenueLast30,
+      average_monthly_revenue_cents: averageMonthlyRevenue,
+      annualized_revenue_cents: annualizedRevenue,
+      resale_value_low_cents: lowValuation,
+      resale_value_central_cents: centralValuation,
+      resale_value_high_cents: highValuation,
+      monthly_growth_cents: growth,
+      total_accounts: accounts.length,
+      total_users: accounts.filter((account) => account.account_type !== "business").length,
+      total_businesses: accounts.filter((account) => account.account_type === "business").length,
+      total_verified: accounts.filter((account) => account.is_verified).length,
+      total_offers: offers.length,
+      visible_offers: offers.filter((offer) => !offer.is_hidden).length,
+      total_purchases: purchases.length,
+      total_plans: plans.length,
+    },
+    monthly,
+    formula: {
+      explanation: "Estimación interna: revenue mensual Donoss x 12 x múltiplo 2-4. Es una guía para negociar, no una tasación legal.",
+      low_multiple: 2,
+      central_multiple: 3,
+      high_multiple: 4,
+    },
+  });
+});
+
 app.post("/api/admin/city-opening-requests/:id/action", async (request, response) => {
   if (!supabaseAdmin) {
     return response.status(500).json({ error: "Supabase admin is not configured" });

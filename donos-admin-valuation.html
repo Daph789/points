@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Donoss | Valorisation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+            colors: { ink: "#060914", panel: "#0D111D", line: "#20273A", mint: "#42F2B3", coral: "#FF6B6B", sun: "#FFD166", sky: "#38BDF8" },
+            boxShadow: { glow: "0 24px 80px rgba(66, 242, 179, 0.16)" },
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
+      html { background: #060914; overflow-x: hidden; }
+      body {
+        overflow-x: hidden;
+        background:
+          radial-gradient(circle at 16% -5%, rgba(66, 242, 179, 0.18), transparent 28%),
+          radial-gradient(circle at 88% 8%, rgba(56, 189, 248, 0.12), transparent 30%),
+          linear-gradient(180deg, #0a0e19 0%, #060914 48%, #050711 100%);
+      }
+      * { min-width: 0; }
+    </style>
+  </head>
+  <body class="min-h-screen text-white antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      function money(cents) {
+        return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(Number(cents || 0) / 100);
+      }
+
+      function StatCard({ label, value, hint, tone = "white" }) {
+        const toneClass = tone === "mint" ? "text-mint border-mint/20 bg-mint/10" : tone === "coral" ? "text-coral border-coral/25 bg-coral/10" : tone === "sun" ? "text-sun border-sun/25 bg-sun/10" : "text-white border-white/10 bg-white/[0.055]";
+        return (
+          <article className={`rounded-[28px] border p-4 sm:p-5 ${toneClass}`}>
+            <p className="text-xs font-black uppercase tracking-[0.14em] opacity-75">{label}</p>
+            <p className="mt-2 break-words text-2xl font-black sm:text-3xl">{value}</p>
+            {hint && <p className="mt-2 text-xs font-bold leading-5 text-slate-300">{hint}</p>}
+          </article>
+        );
+      }
+
+      function LineChart({ rows }) {
+        const data = rows.length ? rows : [{ month: "-", donoss_revenue_cents: 0 }];
+        const width = 860;
+        const height = 280;
+        const padding = 34;
+        const maxValue = Math.max(...data.map((row) => Number(row.donoss_revenue_cents || 0)), 1);
+        const points = data.map((row, index) => {
+          const x = data.length === 1 ? width / 2 : padding + (index * (width - padding * 2)) / (data.length - 1);
+          const y = height - padding - (Number(row.donoss_revenue_cents || 0) / maxValue) * (height - padding * 2);
+          return { x, y, row };
+        });
+        const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+        const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - padding} L ${points[0].x} ${height - padding} Z`;
+
+        return (
+          <section className="overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055] p-4 sm:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Courbe de valeur</p>
+                <h2 className="mt-2 text-2xl font-black text-white">Revenu Donoss par mois</h2>
+              </div>
+              <p className="rounded-full bg-white/[0.06] px-4 py-2 text-xs font-black text-slate-300">Marge recharge + Premium + Promouvoir</p>
+            </div>
+            <div className="mt-5 overflow-x-auto">
+              <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[720px]">
+                <defs>
+                  <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="#42F2B3" stopOpacity="0.32" />
+                    <stop offset="100%" stopColor="#42F2B3" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+                <path d={areaPath} fill="url(#chartFill)" />
+                <path d={linePath} fill="none" stroke="#42F2B3" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+                {points.map((point) => (
+                  <g key={point.row.month}>
+                    <circle cx={point.x} cy={point.y} r="7" fill="#42F2B3" />
+                    <text x={point.x} y={height - 8} textAnchor="middle" fill="#94a3b8" fontSize="13" fontWeight="800">{point.row.month}</text>
+                    <text x={point.x} y={Math.max(point.y - 14, 18)} textAnchor="middle" fill="#fff" fontSize="13" fontWeight="900">{money(point.row.donoss_revenue_cents)}</text>
+                  </g>
+                ))}
+              </svg>
+            </div>
+          </section>
+        );
+      }
+
+      function App() {
+        const [password, setPassword] = React.useState(sessionStorage.getItem("donosAdminPassword") || "");
+        const [isUnlocked, setIsUnlocked] = React.useState(Boolean(sessionStorage.getItem("donosAdminPassword")));
+        const [data, setData] = React.useState({ summary: {}, monthly: [], formula: {} });
+        const [status, setStatus] = React.useState("");
+        const [isLoading, setIsLoading] = React.useState(false);
+
+        React.useEffect(() => {
+          if (isUnlocked) loadValuation();
+        }, [isUnlocked]);
+
+        async function loadValuation(event) {
+          event?.preventDefault();
+          setStatus("");
+          setIsLoading(true);
+          try {
+            const response = await fetch("/api/admin/resale-valuation", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ password }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.error || "No se ha podido cargar la valoración.");
+            sessionStorage.setItem("donosAdminPassword", password);
+            setIsUnlocked(true);
+            setData(payload);
+          } catch (error) {
+            setStatus(error.message || "No se ha podido cargar la valoración.");
+          } finally {
+            setIsLoading(false);
+          }
+        }
+
+        const summary = data.summary || {};
+        const monthly = data.monthly || [];
+        const valuationTone = Number(summary.resale_value_central_cents || 0) > 0 ? "mint" : "sun";
+
+        if (!isUnlocked) {
+          return (
+            <main className="grid min-h-screen place-items-center px-4">
+              <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-white/[0.055] p-6 shadow-glow" onSubmit={loadValuation}>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <h1 className="mt-2 text-3xl font-black text-white">Valorisation</h1>
+                <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Section privée pour estimer la valeur de revente de Donoss.</p>
+                <input
+                  className="mt-5 h-12 w-full rounded-2xl border border-line bg-white/[0.055] px-4 text-white outline-none placeholder:text-slate-500 focus:border-mint/70 focus:ring-4 focus:ring-mint/10"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Contraseña admin"
+                />
+                {status && <p className="mt-3 text-sm font-bold text-coral">{status}</p>}
+                <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-base font-black text-ink shadow-glow" disabled={isLoading}>
+                  {isLoading ? "Chargement..." : "Entrar"}
+                </button>
+              </form>
+            </main>
+          );
+        }
+
+        return (
+          <main className="mx-auto min-h-screen w-full max-w-7xl px-3 py-4 sm:px-6 lg:px-8">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-mint">Admin Donoss</p>
+                <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Valorisation entreprise</h1>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="donos-admin-accounts.html">Cuentas</a>
+                <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="donos-admin-payments.html">Pagos</a>
+                <a className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200" href="donos-admin-activity.html">Actividad</a>
+                <button className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow" onClick={loadValuation} disabled={isLoading}>{isLoading ? "..." : "Actualizar"}</button>
+              </div>
+            </header>
+
+            <section className={`mt-6 overflow-hidden rounded-[38px] border p-5 shadow-glow sm:p-7 ${valuationTone === "mint" ? "border-mint/25 bg-mint/10" : "border-sun/25 bg-sun/10"}`}>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Coût de revente estimé</p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                <div>
+                  <h2 className="text-4xl font-black leading-none text-white sm:text-6xl">{money(summary.resale_value_central_cents)}</h2>
+                  <p className="mt-3 max-w-3xl text-sm font-bold leading-6 text-slate-300">
+                    Estimation centrale basée sur le revenu Donoss annualisé x3. Ce n’est pas une vérité juridique : c’est une base de négociation pour comprendre combien Donoss pourrait valoir si un acheteur regarde les revenus, la croissance et la traction.
+                  </p>
+                </div>
+                <div className="grid gap-2 rounded-[30px] border border-white/10 bg-black/25 p-4 text-sm font-black">
+                  <span className="text-slate-400">Fourchette actuelle</span>
+                  <span className="text-coral">Basse : {money(summary.resale_value_low_cents)}</span>
+                  <span className="text-mint">Centrale : {money(summary.resale_value_central_cents)}</span>
+                  <span className="text-sky">Haute : {money(summary.resale_value_high_cents)}</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="mt-4 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Revenu Donoss total" value={money(summary.total_donoss_revenue_cents)} tone="mint" hint="Marge des recharges + Premium + Promouvoir. C’est le chiffre le plus utile pour une revente." />
+              <StatCard label="Argent encaissé brut" value={money(summary.total_gross_cash_cents)} hint="Tout ce que les clients ont payé à Stripe pour acheter des points." />
+              <StatCard label="Neto reçu Stripe" value={money(summary.total_net_cash_cents)} hint="Argent brut moins les frais Stripe." />
+              <StatCard label="Réserve après virements" value={money(summary.reserve_coverage_cents)} tone={Number(summary.reserve_coverage_cents || 0) >= 0 ? "mint" : "coral"} hint="Caisse estimée moins valeur des points encore existants." />
+            </section>
+
+            <section className="mt-4 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Marge recharge" value={money(summary.recharge_margin_cents)} hint="Ce que Donoss garde sur les packs après Stripe." />
+              <StatCard label="Premium" value={money(summary.premium_revenue_cents)} hint="Points payés pour les abonnements premium." />
+              <StatCard label="Promouvoir" value={money(summary.promotion_revenue_cents)} hint="Points payés par les entreprises pour mettre des offres en avant." />
+              <StatCard label="Revenu 30 jours" value={money(summary.revenue_last_30_days_cents)} tone="sun" hint="Base utilisée si elle est supérieure à la moyenne historique." />
+            </section>
+
+            <section className="mt-4 grid gap-3 min-[430px]:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="Comptes" value={summary.total_accounts || 0} hint={`${summary.total_users || 0} utilisateurs · ${summary.total_businesses || 0} entreprises`} />
+              <StatCard label="Publications" value={summary.total_offers || 0} hint={`${summary.visible_offers || 0} visibles actuellement`} />
+              <StatCard label="Achats" value={summary.total_purchases || 0} hint="Achats en points et redirections externes enregistrées." />
+              <StatCard label="Plans Quedar" value={summary.total_plans || 0} hint="Traction sociale de l’app." />
+            </section>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.25fr_.75fr]">
+              <LineChart rows={monthly} />
+
+              <section className="rounded-[34px] border border-white/10 bg-white/[0.055] p-5 sm:p-6">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-sun">Méthode simple</p>
+                <h2 className="mt-2 text-2xl font-black text-white">Comment lire le prix</h2>
+                <div className="mt-4 space-y-3 text-sm font-bold leading-6 text-slate-300">
+                  <p><span className="font-black text-white">1.</span> On regarde le revenu Donoss, pas seulement l’argent qui reste en caisse.</p>
+                  <p><span className="font-black text-white">2.</span> On annualise le revenu mensuel : revenu mensuel x 12.</p>
+                  <p><span className="font-black text-white">3.</span> On applique une fourchette simple : x2, x3, x4.</p>
+                  <p><span className="font-black text-white">4.</span> La valeur augmente si la courbe monte, si les entreprises reviennent, et si les jeunes achètent vraiment.</p>
+                </div>
+                <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
+                  <p className="text-sm font-black text-mint">Formule actuelle</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-300">
+                    {money(summary.annualized_revenue_cents)} annualisés x 3 = {money(summary.resale_value_central_cents)}.
+                  </p>
+                </div>
+              </section>
+            </div>
+
+            <section className="mt-5 overflow-hidden rounded-[34px] border border-white/10 bg-white/[0.055]">
+              <div className="border-b border-white/10 p-5">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">Historique mensuel</p>
+                <h2 className="mt-2 text-2xl font-black text-white">Ce que Donoss a fait depuis le début</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] text-left text-sm">
+                  <thead className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">Mois</th>
+                      <th className="px-5 py-4">Argent brut</th>
+                      <th className="px-5 py-4">Neto Stripe</th>
+                      <th className="px-5 py-4">Revenu Donoss</th>
+                      <th className="px-5 py-4">Virements</th>
+                      <th className="px-5 py-4">Achats points</th>
+                      <th className="px-5 py-4">Comptes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthly.map((row) => (
+                      <tr key={row.month} className="border-t border-white/10">
+                        <td className="px-5 py-4 font-black text-white">{row.month}</td>
+                        <td className="px-5 py-4 font-bold text-slate-300">{money(row.gross_cash_cents)}</td>
+                        <td className="px-5 py-4 font-bold text-slate-300">{money(row.net_cash_cents)}</td>
+                        <td className="px-5 py-4 font-black text-mint">{money(row.donoss_revenue_cents)}</td>
+                        <td className="px-5 py-4 font-bold text-coral">{money(row.payouts_cents)}</td>
+                        <td className="px-5 py-4 font-bold text-slate-300">{row.purchases_points || 0} ptos.</td>
+                        <td className="px-5 py-4 font-bold text-slate-300">{row.accounts || 0}</td>
+                      </tr>
+                    ))}
+                    {monthly.length === 0 && (
+                      <tr>
+                        <td className="px-5 py-8 text-center font-bold text-slate-400" colSpan="7">Pas encore assez de données pour calculer une courbe.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </main>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
