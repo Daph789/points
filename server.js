@@ -407,6 +407,8 @@ function premiumPublicStatus(subscription, profile) {
     started_at: subscription?.started_at || profile?.premium_started_at || null,
     next_charge_at: subscription?.next_charge_at || profile?.premium_next_charge_at || null,
     failed_at: subscription?.failed_at || profile?.premium_failed_at || null,
+    cancel_at_period_end: Boolean(subscription?.cancel_at_period_end),
+    cancelled_at: subscription?.cancelled_at || null,
   };
 }
 
@@ -440,7 +442,7 @@ async function syncBusinessVerification(profile) {
 async function loadPremiumSubscription(profileId) {
   const { data, error } = await supabaseAdmin
     .from("premium_subscriptions")
-    .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_customer_id, stripe_subscription_id, stripe_checkout_session_id")
+    .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_customer_id, stripe_subscription_id, stripe_checkout_session_id, cancel_at_period_end, cancelled_at")
     .eq("profile_id", profileId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -478,6 +480,38 @@ async function syncPremiumForProfile(profile) {
 
   if (subscription?.status === "active" && subscription.next_charge_at && new Date(subscription.next_charge_at).getTime() <= Date.now()) {
     if (subscription?.stripe_subscription_id) {
+      if (subscription.cancel_at_period_end) {
+        const keepAdminVerification = await loadAdminVerifiedForProfile(profile);
+        const now = new Date().toISOString();
+        const [{ data: updatedProfile, error: profileError }, { data: updatedSubscription, error: subscriptionError }] =
+          await Promise.all([
+            supabaseAdmin
+              .from("profiles")
+              .update({
+                is_verified: keepAdminVerification,
+                premium_status: "cancelled",
+                premium_failed_at: null,
+              })
+              .eq("id", profile.id)
+              .select("id, account_type, display_name, bio, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+              .maybeSingle(),
+            supabaseAdmin
+              .from("premium_subscriptions")
+              .update({
+                status: "cancelled",
+                cancelled_at: now,
+                updated_at: now,
+              })
+              .eq("id", subscription.id)
+              .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_subscription_id, cancel_at_period_end, cancelled_at")
+              .maybeSingle(),
+          ]);
+        if (profileError || subscriptionError) throw profileError || subscriptionError;
+        await syncBusinessVerification(updatedProfile || profile);
+        profile = updatedProfile || profile;
+        subscription = updatedSubscription || { ...subscription, status: "cancelled", cancelled_at: now };
+      }
+
       const { data: stripeCharges, error: stripeChargesError } = await supabaseAdmin
         .from("premium_subscription_charges")
         .select("id, points, status, reason, created_at")
@@ -624,6 +658,8 @@ async function activatePremiumFromStripe({ userId, session = null, subscription 
     last_charge_at: now,
     failed_at: null,
     updated_at: now,
+    cancel_at_period_end: false,
+    cancelled_at: null,
     stripe_customer_id: stripeCustomerId || null,
     stripe_subscription_id: stripeSubscriptionId || null,
     stripe_checkout_session_id: checkoutSessionId || null,
@@ -708,6 +744,37 @@ async function failPremiumFromStripe({ subscriptionId }) {
       .update({ premium_status: "failed", premium_failed_at: now, is_verified: keepAdminVerification })
       .eq("id", subscription.profile_id),
   ]);
+  return subscription;
+}
+
+async function cancelPremiumFromStripe({ subscriptionId }) {
+  if (!supabaseAdmin || !subscriptionId) return null;
+  const { data: subscription, error } = await supabaseAdmin
+    .from("premium_subscriptions")
+    .select("id, profile_id")
+    .eq("stripe_subscription_id", subscriptionId)
+    .maybeSingle();
+  if (error || !subscription) return null;
+
+  const now = new Date().toISOString();
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, account_type, admin_verified")
+    .eq("id", subscription.profile_id)
+    .maybeSingle();
+  const keepAdminVerification = Boolean(profile?.admin_verified);
+
+  await Promise.all([
+    supabaseAdmin
+      .from("premium_subscriptions")
+      .update({ status: "cancelled", cancelled_at: now, updated_at: now })
+      .eq("id", subscription.id),
+    supabaseAdmin
+      .from("profiles")
+      .update({ premium_status: "cancelled", premium_failed_at: null, is_verified: keepAdminVerification })
+      .eq("id", subscription.profile_id),
+  ]);
+  if (profile) await syncBusinessVerification({ ...profile, is_verified: keepAdminVerification });
   return subscription;
 }
 
@@ -1288,7 +1355,7 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 
   if (event.type === "customer.subscription.deleted") {
     const subscription = event.data.object;
-    await failPremiumFromStripe({ subscriptionId: subscription?.id });
+    await cancelPremiumFromStripe({ subscriptionId: subscription?.id });
   }
 
   response.json({ received: true });
@@ -4284,6 +4351,13 @@ app.post("/api/stripe/create-premium-subscription-session", async (request, resp
       return response.status(400).json({ error: "premium_identity_required" });
     }
 
+    if (current.subscription?.status === "active" && !current.subscription?.cancel_at_period_end) {
+      return response.status(409).json({
+        error: "premium_already_active",
+        premium: premiumPublicStatus(current.subscription, profile),
+      });
+    }
+
     const amount = premiumAmountForAccountType(profile.account_type);
     const points = premiumPointsForAccountType(profile.account_type);
     const origin = publicOriginForRequest(request);
@@ -4362,6 +4436,64 @@ app.get("/api/stripe/premium-subscription-status", async (request, response) => 
   } catch (error) {
     console.error("Premium Stripe status error:", error);
     response.status(500).json({ error: "premium_status_failed" });
+  }
+});
+
+app.post("/api/stripe/cancel-premium-subscription", async (request, response) => {
+  if (!supabaseAdmin) {
+    return response.status(500).json({ error: "Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const current = await syncPremiumForProfile(profile);
+    if (current.missingSql) {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+
+    const subscription = current.subscription;
+    if (!subscription?.id || subscription.status !== "active") {
+      return response.status(404).json({ error: "premium_subscription_not_found" });
+    }
+
+    let nextChargeAt = subscription.next_charge_at;
+    if (subscription.stripe_subscription_id) {
+      if (!stripe) return response.status(500).json({ error: "Stripe is not configured" });
+      const stripeSubscription = await stripe.subscriptions.update(subscription.stripe_subscription_id, {
+        cancel_at_period_end: true,
+      });
+      if (stripeSubscription?.current_period_end) {
+        nextChargeAt = new Date(stripeSubscription.current_period_end * 1000).toISOString();
+      }
+    }
+
+    const now = new Date().toISOString();
+    const { data: savedSubscription, error } = await supabaseAdmin
+      .from("premium_subscriptions")
+      .update({
+        cancel_at_period_end: true,
+        cancelled_at: now,
+        next_charge_at: nextChargeAt,
+        updated_at: now,
+      })
+      .eq("id", subscription.id)
+      .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_subscription_id, cancel_at_period_end, cancelled_at")
+      .maybeSingle();
+    if (error) throw error;
+
+    response.json({
+      premium: premiumPublicStatus(savedSubscription || { ...subscription, cancel_at_period_end: true, cancelled_at: now, next_charge_at: nextChargeAt }, current.profile || profile),
+      message: "Premium cancelado. No habrá más cobros, pero conservarás tus ventajas hasta el final del periodo pagado.",
+    });
+  } catch (error) {
+    console.error("Premium cancel error:", error);
+    if (error.code === "42P01" || error.code === "42703") {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+    response.status(500).json({ error: "premium_cancel_failed" });
   }
 });
 

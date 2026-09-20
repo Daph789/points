@@ -41,7 +41,9 @@ create table if not exists public.premium_subscription_charges (
 alter table public.premium_subscriptions
   add column if not exists stripe_customer_id text,
   add column if not exists stripe_subscription_id text,
-  add column if not exists stripe_checkout_session_id text;
+  add column if not exists stripe_checkout_session_id text,
+  add column if not exists cancel_at_period_end boolean not null default false,
+  add column if not exists cancelled_at timestamptz;
 
 alter table public.premium_subscription_charges
   add column if not exists stripe_invoice_id text,

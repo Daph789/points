@@ -216,6 +216,7 @@
         const [premiumSqlMissing, setPremiumSqlMissing] = React.useState(false);
         const [isPremiumOpen, setIsPremiumOpen] = React.useState(false);
         const [isActivatingPremium, setIsActivatingPremium] = React.useState(false);
+        const [isCancellingPremium, setIsCancellingPremium] = React.useState(false);
         const [isEditingName, setIsEditingName] = React.useState(false);
         const [displayNameDraft, setDisplayNameDraft] = React.useState("");
         const [isSavingName, setIsSavingName] = React.useState(false);
@@ -838,6 +839,34 @@
           }
         }
 
+        async function cancelPremium() {
+          if (!accessToken) return redirectToLogin();
+          if (!window.confirm("¿Quieres detener Premium? No habrá más cobros y conservarás tus ventajas hasta el final del periodo pagado.")) return;
+          setIsCancellingPremium(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/stripe/cancel-premium-subscription", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "premium_cancel_failed");
+            setPremium(data.premium || premium);
+            setStatus("Premium detenido. No habrá más cobros y conservarás tus ventajas hasta el final del periodo pagado.");
+          } catch (error) {
+            if (error.message === "premium_sql_missing") {
+              setStatus("Falta ejecutar el SQL de Premium en Supabase.");
+            } else {
+              setStatus("No se ha podido detener Premium.");
+            }
+          } finally {
+            setIsCancellingPremium(false);
+          }
+        }
+
         if (status === "Cargando perfil...") {
           return (
             <main className="grid min-h-screen place-items-center px-4">
@@ -852,6 +881,7 @@
         const premiumPrice = isBusiness ? "5€" : "3€";
         const premiumActive = premium?.status === "active";
         const premiumFailed = premium?.status === "failed";
+        const premiumCancellationPending = premiumActive && premium?.cancel_at_period_end;
         const premiumIdentity = profile.premium_identity || {};
         const premiumIdentityComplete = Boolean((premiumIdentity.dni || premiumDni) && (premiumIdentity.photo_data_url || premiumPhoto));
 
@@ -1308,12 +1338,17 @@
               </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                <InfoCard label="Estado" value={premiumActive ? "Pago al día" : premiumFailed ? "Pago fallido" : "Sin activar"} />
-                <InfoCard label="Próximo cobro" value={premiumActive ? formatDateTime(premium?.next_charge_at) : "Al activar Premium"} />
+                <InfoCard label="Estado" value={premiumCancellationPending ? "Se termina pronto" : premiumActive ? "Pago al día" : premiumFailed ? "Pago fallido" : "Sin activar"} />
+                <InfoCard label={premiumCancellationPending ? "Activo hasta" : "Próximo cobro"} value={premiumActive ? formatDateTime(premium?.next_charge_at) : "Al activar Premium"} />
                 <InfoCard label="Certificación" value={profile.is_verified ? "Activa" : "No activa"} />
                 <InfoCard label="Identidad" value={premiumIdentityComplete ? "Completa" : "Pendiente"} />
               </div>
 
+              {premiumCancellationPending && (
+                <p className="mt-4 rounded-2xl border border-sun/25 bg-sun/10 p-3 text-sm font-black leading-6 text-sun">
+                  Premium está detenido. No habrá más cobros y conservarás la certificación hasta el final del periodo pagado.
+                </p>
+              )}
               {premiumFailed && (
                 <p className="mt-4 rounded-2xl border border-coral/25 bg-black/20 p-3 text-sm font-black leading-6 text-coral">
                   El último cobro no se pudo hacer. Vuelve a activar Premium con tarjeta para recuperar la certificación.
@@ -1474,9 +1509,17 @@
                   <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
                     <p className="text-sm font-black text-mint">{premiumPrice} al mes</p>
                     <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
-                      Se cobra con tarjeta ahora y después automáticamente cada mes desde Stripe. Si el pago falla, Premium se pausa y desaparece la certificación hasta que lo actives otra vez.
+                      Se cobra con tarjeta ahora y después automáticamente cada mes desde Stripe. Puedes detener Premium cuando quieras: no habrá más cobros y conservarás tus ventajas hasta el final del periodo pagado.
                     </p>
                   </div>
+                  {premiumCancellationPending && (
+                    <div className="mt-5 rounded-3xl border border-sun/25 bg-sun/10 p-4">
+                      <p className="text-sm font-black text-sun">Premium detenido</p>
+                      <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
+                        Tu certificación sigue activa hasta {formatDateTime(premium?.next_charge_at)}. Después se quitará automáticamente.
+                      </p>
+                    </div>
+                  )}
                   <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1530,17 +1573,27 @@
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white" onClick={() => setIsPremiumOpen(false)}>
                       Cerrar
                     </button>
-                    <button
-                      className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
-                      onClick={() => premiumActive ? setIsPremiumOpen(false) : premiumIdentityComplete ? activatePremium() : savePremiumIdentity({ activateAfter: true })}
-                      disabled={isActivatingPremium || isSavingPremiumIdentity || premiumSqlMissing}
-                    >
-                      {isActivatingPremium || isSavingPremiumIdentity
-                        ? "Preparando..."
-                        : premiumIdentityComplete
-                          ? premiumActive ? "Activo" : "Activar"
-                          : "Guardar y activar"}
-                    </button>
+                    {premiumActive && !premiumCancellationPending ? (
+                      <button
+                        className="h-12 rounded-2xl border border-coral/30 bg-coral/10 text-sm font-black text-coral disabled:opacity-60"
+                        onClick={cancelPremium}
+                        disabled={isCancellingPremium || isActivatingPremium || isSavingPremiumIdentity}
+                      >
+                        {isCancellingPremium ? "Deteniendo..." : "Detener Premium"}
+                      </button>
+                    ) : (
+                      <button
+                        className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                        onClick={() => premiumCancellationPending ? setIsPremiumOpen(false) : premiumIdentityComplete ? activatePremium() : savePremiumIdentity({ activateAfter: true })}
+                        disabled={isActivatingPremium || isSavingPremiumIdentity || premiumSqlMissing}
+                      >
+                        {isActivatingPremium || isSavingPremiumIdentity
+                          ? "Preparando..."
+                          : premiumIdentityComplete
+                            ? premiumCancellationPending ? "Entendido" : "Activar"
+                            : "Guardar y activar"}
+                      </button>
+                    )}
                   </div>
                 </div>
                 </div>
