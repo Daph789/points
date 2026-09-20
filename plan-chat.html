@@ -109,6 +109,14 @@
         );
       }
 
+      function firstUnreadMessageId(chatMessages = [], profileId = "") {
+        const firstUnread = (chatMessages || []).find((message) => {
+          if (!message?.id || message.pending || message.deleted_at || message.sender_id === profileId) return false;
+          return !(message.read_by || []).some((read) => read.reader?.id === profileId);
+        });
+        return firstUnread?.id || "";
+      }
+
       function Avatar({ user, mine = false }) {
         const photo = user?.plan_photo_data_urls?.[0];
         return (
@@ -167,6 +175,7 @@
         const [messageToDelete, setMessageToDelete] = React.useState(null);
         const [replyingTo, setReplyingTo] = React.useState(null);
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
+        const [unreadDividerId, setUnreadDividerId] = React.useState("");
         const [showIntro, setShowIntro] = React.useState(false);
         const [isActiveChat, setIsActiveChat] = React.useState(!startsPrefetched);
         const listRef = React.useRef(null);
@@ -176,6 +185,8 @@
         const loadingChatRef = React.useRef(false);
         const swipeRef = React.useRef(null);
         const swipeBlockClickRef = React.useRef(false);
+        const positionedInitialChatRef = React.useRef(false);
+        const messageRefs = React.useRef({});
 
         React.useEffect(() => {
           bootstrap();
@@ -222,6 +233,17 @@
           });
         }
 
+        function scrollChatToMessage(messageId, behavior = "auto") {
+          window.requestAnimationFrame(() => {
+            const target = messageRefs.current[messageId];
+            if (target) {
+              target.scrollIntoView({ behavior, block: "center" });
+              return;
+            }
+            scrollChatToBottom(behavior);
+          });
+        }
+
         React.useEffect(() => {
           if (!forceScrollRef.current) return;
           forceScrollRef.current = false;
@@ -257,6 +279,17 @@
             setPlan(data.plan || null);
             setMessages((current) => mergeMessagesWithPending(data.messages || [], current));
             setStatus("");
+            if (!positionedInitialChatRef.current) {
+              positionedInitialChatRef.current = true;
+              const unreadId = firstUnreadMessageId(data.messages || [], data.profile?.id);
+              if (unreadId) {
+                setUnreadDividerId(unreadId);
+                scrollChatToMessage(unreadId, "auto");
+                window.setTimeout(() => setUnreadDividerId((current) => current === unreadId ? "" : current), 4500);
+              } else {
+                scrollChatToBottom("auto");
+              }
+            }
             if (options.markRead || isActiveRef.current) {
               markChatMessagesRead(accessToken);
               markChatNotificationsRead(accessToken, data.messages || [], data.profile?.id);
@@ -511,7 +544,17 @@
                   const canModerate = canModerateMessage(message, profile);
                   const swipe = swipeState.id === message.id ? swipeState : { x: 0, ready: false };
                   return (
-                    <div key={message.local_key || message.id} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
+                    <React.Fragment key={message.local_key || message.id}>
+                      {unreadDividerId === message.id && (
+                        <div className="flex items-center gap-3 py-2 transition-opacity duration-500">
+                          <span className="h-px flex-1 bg-mint/25"></span>
+                          <span className="rounded-full border border-mint/20 bg-mint/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] text-mint shadow-glow">No leído</span>
+                          <span className="h-px flex-1 bg-mint/25"></span>
+                        </div>
+                      )}
+                    <div ref={(node) => {
+                      if (node && message.id) messageRefs.current[message.id] = node;
+                    }} className={`flex items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                       {!mine && <Avatar user={message.sender} />}
                       <div className="relative max-w-[76%] sm:max-w-[68%]">
                         <span
@@ -555,6 +598,7 @@
                       </div>
                       {mine && <Avatar user={profile} mine />}
                     </div>
+                    </React.Fragment>
                   );
                 })}
                 {!status && messages.length === 0 && (

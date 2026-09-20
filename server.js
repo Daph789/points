@@ -4805,21 +4805,44 @@ async function buildNotificationsForProfile(profile) {
     const sideMemberByPlanId = new Map(sideMembers.map((member) => [member.plan_id, member]));
 
     if (sidePlanIds.length > 0) {
-      const { data: sideMessages, error: sideMessagesError } = await supabaseAdmin
+      let { data: sideMessages, error: sideMessagesError } = await supabaseAdmin
         .from("social_plan_side_group_messages")
-        .select("id, plan_id, group_status, sender_id, body, created_at")
+        .select("id, plan_id, group_status, sender_id, body, reply_to_message_id, created_at")
         .in("plan_id", sidePlanIds)
         .neq("sender_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(160);
+      if (sideMessagesError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("social_plan_side_group_messages")
+          .select("id, plan_id, group_status, sender_id, body, created_at")
+          .in("plan_id", sidePlanIds)
+          .neq("sender_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(160);
+        sideMessages = fallback.data;
+        sideMessagesError = fallback.error;
+      }
 
       if (sideMessagesError && sideMessagesError.code !== "42P01") console.error("Notification side messages error:", sideMessagesError);
       if (!sideMessagesError) {
+        const sideSenderIds = [...new Set((sideMessages || []).map((message) => message.sender_id).filter(Boolean))];
+        const sideReplyIds = [...new Set((sideMessages || []).map((message) => message.reply_to_message_id).filter(Boolean))];
+        const { data: sideSenders } = sideSenderIds.length > 0
+          ? await supabaseAdmin.from("profiles").select("id, display_name").in("id", sideSenderIds)
+          : { data: [] };
+        const { data: sideReplies } = sideReplyIds.length > 0
+          ? await supabaseAdmin.from("social_plan_side_group_messages").select("id, sender_id").in("id", sideReplyIds)
+          : { data: [] };
+        const sideSendersById = Object.fromEntries((sideSenders || []).map((sender) => [sender.id, sender]));
+        const sideRepliesById = Object.fromEntries((sideReplies || []).map((reply) => [reply.id, reply]));
         for (const message of sideMessages || []) {
           const member = sideMemberByPlanId.get(message.plan_id);
           if (!member) continue;
           if (![member.status, "merged"].includes(message.group_status)) continue;
           const plan = joinedPlansById[message.plan_id] || {};
+          const isDirectReply = sideRepliesById[message.reply_to_message_id]?.sender_id === profile.id;
+          const senderName = sideSendersById[message.sender_id]?.display_name || "Alguien";
           pushNotification(events, {
             section: "quedar",
             href: `side-group.html?id=${message.plan_id}&status=${member.status}`,
@@ -4828,7 +4851,7 @@ async function buildNotificationsForProfile(profile) {
             kind: "side_chat",
             plan_id: message.plan_id,
             side_status: member.status,
-            title: member.status === "waiting" ? "Mensaje en grupo alternativo" : "Mensaje en grupo aparte",
+            title: isDirectReply ? `${senderName} te ha respondido` : member.status === "waiting" ? "Mensaje en grupo alternativo" : "Mensaje en grupo aparte",
             detail: `${plan.title || "Plan Donoss"} · ${String(message.body || "").slice(0, 80)}`,
             created_at: message.created_at,
           });
@@ -4896,18 +4919,41 @@ async function buildNotificationsForProfile(profile) {
         .select("id, title")
         .in("id", chatPlanIds);
       const chatPlansById = Object.fromEntries((chatPlans || []).map((plan) => [plan.id, plan]));
-      const { data: messages, error: messagesError } = await supabaseAdmin
+      let { data: messages, error: messagesError } = await supabaseAdmin
         .from("social_plan_messages")
-        .select("id, plan_id, sender_id, body, created_at")
+        .select("id, plan_id, sender_id, body, reply_to_message_id, created_at")
         .in("plan_id", chatPlanIds)
         .neq("sender_id", profile.id)
         .order("created_at", { ascending: false })
         .limit(160);
+      if (messagesError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("social_plan_messages")
+          .select("id, plan_id, sender_id, body, created_at")
+          .in("plan_id", chatPlanIds)
+          .neq("sender_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(160);
+        messages = fallback.data;
+        messagesError = fallback.error;
+      }
 
       if (messagesError && messagesError.code !== "42P01") console.error("Notification social plan chat error:", messagesError);
       if (!messagesError) {
+        const senderIds = [...new Set((messages || []).map((message) => message.sender_id).filter(Boolean))];
+        const replyIds = [...new Set((messages || []).map((message) => message.reply_to_message_id).filter(Boolean))];
+        const { data: senders } = senderIds.length > 0
+          ? await supabaseAdmin.from("profiles").select("id, display_name").in("id", senderIds)
+          : { data: [] };
+        const { data: replies } = replyIds.length > 0
+          ? await supabaseAdmin.from("social_plan_messages").select("id, sender_id").in("id", replyIds)
+          : { data: [] };
+        const sendersById = Object.fromEntries((senders || []).map((sender) => [sender.id, sender]));
+        const repliesById = Object.fromEntries((replies || []).map((reply) => [reply.id, reply]));
         for (const message of messages || []) {
           const plan = chatPlansById[message.plan_id] || {};
+          const isDirectReply = repliesById[message.reply_to_message_id]?.sender_id === profile.id;
+          const senderName = sendersById[message.sender_id]?.display_name || "Alguien";
           pushNotification(events, {
             section: "quedar",
             href: `plan-chat.html?id=${message.plan_id}`,
@@ -4915,7 +4961,7 @@ async function buildNotificationsForProfile(profile) {
             subsection: chatPlanSubsections.get(message.plan_id) || "joined",
             kind: "chat",
             plan_id: message.plan_id,
-            title: "Nuevo mensaje en el grupo",
+            title: isDirectReply ? `${senderName} te ha respondido` : "Nuevo mensaje en el grupo",
             detail: `${plan.title || "Plan Donoss"} · ${String(message.body || "").slice(0, 80)}`,
             created_at: message.created_at,
           });
