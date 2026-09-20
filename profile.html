@@ -211,6 +211,7 @@
         const [accessToken, setAccessToken] = React.useState("");
         const [planPhotos, setPlanPhotos] = React.useState([]);
         const [isSavingPhotos, setIsSavingPhotos] = React.useState(false);
+        const [planPhotoOverlay, setPlanPhotoOverlay] = React.useState(null);
         const [isSavingPlanGender, setIsSavingPlanGender] = React.useState(false);
         const [premium, setPremium] = React.useState(null);
         const [premiumSqlMissing, setPremiumSqlMissing] = React.useState(false);
@@ -502,8 +503,22 @@
             setPlanPhotos(data.photos || []);
             setProfile((current) => current ? { ...current, plan_photo_data_urls: data.photos || [] } : current);
             setStatus("Fotos para planes guardadas correctamente.");
+            setPlanPhotoOverlay({
+              tone: "success",
+              title: "Fotos guardadas",
+              message: "Tus fotos de Quedar se han actualizado correctamente. Tus planes publicados usarán estas fotos.",
+            });
           } catch (error) {
-            setStatus(error.message === "plan_photos_sql_missing" ? "Falta ejecutar el SQL de fotos para planes." : "No se han podido guardar las fotos.");
+            if (error.message === "active_plans_need_minimum_photos") {
+              setPlanPhotoOverlay({
+                tone: "warning",
+                title: "Mínimo 2 fotos",
+                message: "No puedes eliminar todas tus fotos porque tienes planes publicados. Deja mínimo 2 fotos para que tus planes sigan visibles y seguros.",
+              });
+              setStatus("");
+            } else {
+              setStatus(error.message === "plan_photos_sql_missing" ? "Falta ejecutar el SQL de fotos para planes." : "No se han podido guardar las fotos.");
+            }
           } finally {
             setIsSavingPhotos(false);
           }
@@ -1596,6 +1611,31 @@
                     )}
                   </div>
                 </div>
+                </div>
+              </div>
+            )}
+
+            {planPhotoOverlay && (
+              <div className="fixed inset-0 z-[60] grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                <div className={`w-full max-w-sm rounded-[34px] border p-5 text-center shadow-2xl shadow-black/50 ${
+                  planPhotoOverlay.tone === "success"
+                    ? "border-mint/30 bg-[#0f1d1d]"
+                    : "border-sun/35 bg-[#1d1820]"
+                }`}>
+                  <div className={`mx-auto grid h-16 w-16 place-items-center rounded-[24px] text-3xl font-black ${
+                    planPhotoOverlay.tone === "success" ? "bg-mint text-ink" : "bg-sun text-ink"
+                  }`}>
+                    {planPhotoOverlay.tone === "success" ? "✓" : "!"}
+                  </div>
+                  <h3 className="mt-4 text-2xl font-black text-white">{i18n.t(planPhotoOverlay.title)}</h3>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-300">{i18n.t(planPhotoOverlay.message)}</p>
+                  <button
+                    className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow"
+                    type="button"
+                    onClick={() => setPlanPhotoOverlay(null)}
+                  >
+                    {i18n.t("Entendido")}
+                  </button>
                 </div>
               </div>
             )}

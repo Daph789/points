@@ -4550,6 +4550,22 @@ app.put("/api/me/plan-photos", async (request, response) => {
   try {
     const profile = await ensureProfileForUser(auth.user);
     const encoded = normalizedPlanProfilePhotos(request.body?.photos || []);
+    const nextPhotos = parsePlanProfilePhotos(encoded);
+    const { count: activePlansCount, error: activePlansError } = await supabaseAdmin
+      .from("social_plans")
+      .select("id", { count: "exact", head: true })
+      .eq("creator_id", profile.id)
+      .neq("status", "cancelled");
+
+    if (activePlansError && activePlansError.code !== "42P01") {
+      console.error("Plan photos active plans check error:", activePlansError);
+      return response.status(500).json({ error: activePlansError.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    }
+
+    if (Number(activePlansCount || 0) > 0 && nextPhotos.length < 2) {
+      return response.status(400).json({ error: "active_plans_need_minimum_photos" });
+    }
+
     const { data, error } = await supabaseAdmin
       .from("profiles")
       .update({ plan_photo_data_url: encoded, updated_at: new Date().toISOString() })
@@ -4560,6 +4576,15 @@ app.put("/api/me/plan-photos", async (request, response) => {
     if (error) {
       console.error("Plan photos save error:", error);
       return response.status(500).json({ error: error.code === "42703" ? "plan_photos_sql_missing" : "plan_photos_failed" });
+    }
+
+    const { error: planSyncError } = await supabaseAdmin
+      .from("social_plans")
+      .update({ photo_data_url: encoded, updated_at: new Date().toISOString() })
+      .eq("creator_id", profile.id)
+      .neq("status", "cancelled");
+    if (planSyncError && planSyncError.code !== "42P01") {
+      console.error("Plan photos social plans sync error:", planSyncError);
     }
 
     response.json({ photos: parsePlanProfilePhotos(data?.plan_photo_data_url) });
@@ -5312,6 +5337,10 @@ function privatePlanProfile(profile) {
   };
 }
 
+function publicCreatorPlanPhotos(profile) {
+  return parsePlanProfilePhotos(profile?.plan_photo_data_url);
+}
+
 function countPlanMembers(members = []) {
   const accepted = members.filter((member) => member.status === "accepted");
   const waiting = members.filter((member) => member.status === "waiting");
@@ -5482,6 +5511,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
     return {
       ...plan,
       photo_data_urls: parseSocialPlanPhotos(plan.photo_data_url),
+      creator_plan_photo_data_urls: publicCreatorPlanPhotos(creatorsById[plan.creator_id]),
       creator: canViewParticipantPhotos || plan.creator_id === viewerId
         ? privatePlanProfile(creatorsById[plan.creator_id])
         : publicPlanProfile(creatorsById[plan.creator_id]),
