@@ -132,6 +132,23 @@
         const [isSending, setIsSending] = React.useState(false);
         const [token, setToken] = React.useState("");
         const [activeLine, setActiveLine] = React.useState(0);
+        const [premiumBlocked, setPremiumBlocked] = React.useState(false);
+        const locale = window.donossI18n?.getLocale?.() || "es";
+        const premiumCopy = locale === "fr"
+          ? {
+              eyebrow: "Premium requis",
+              title: "Passe au mode Premium pour débloquer l’automatisation.",
+              text: "Cette fonction copie une offre depuis ton site et demande un traitement avancé. Active Premium depuis ton profil pour l’utiliser.",
+              button: "Aller au profil",
+              back: "Retour",
+            }
+          : {
+              eyebrow: "Premium necesario",
+              title: "Tienes que pasar al modo Premium para desbloquear la automatización.",
+              text: "Esta función copia una oferta desde tu web y usa una preparación avanzada. Activa Premium desde tu perfil para usarla.",
+              button: "Ir al perfil",
+              back: "Volver",
+            };
 
         const pendingRequest = requests.find((item) => normalizeRequestStatus(item.status) === "pending");
         const formLocked = Boolean(pendingRequest) || isSending;
@@ -178,6 +195,7 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "requests_failed");
+            setPremiumBlocked(false);
             const remoteRequests = data.requests || [];
             const pending = remoteRequests.find((item) => normalizeRequestStatus(item.status) === "pending");
             if (pending) {
@@ -191,6 +209,11 @@
             }
             setStatus("");
           } catch (error) {
+            if (error.message === "premium_required") {
+              setPremiumBlocked(true);
+              setStatus("");
+              return;
+            }
             setStatus(error.message === "offer_automation_sql_missing"
               ? "Falta ejecutar el SQL de automatización en Supabase."
               : "No se han podido cargar tus solicitudes.");
@@ -218,6 +241,7 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "create_failed");
+            setPremiumBlocked(false);
             savePendingAutomationDraft(data.request);
             setRequests((current) => [data.request, ...current]);
             setSourceUrl(data.request?.source_url || sourceUrl.trim());
@@ -231,6 +255,8 @@
               type: "error",
               message: error.message === "offer_automation_sql_missing"
                 ? "Falta ejecutar el SQL de automatización en Supabase."
+                : error.message === "premium_required"
+                  ? "Tienes que pasar al modo Premium para desbloquear la automatización."
                 : error.message === "automation_request_already_pending"
                   ? "Ya tienes una publicación en preparación. Podrás enviar otra cuando esta esté terminada."
                 : "Pega un enlace válido para enviar la solicitud.",
@@ -242,6 +268,29 @@
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+            {premiumBlocked && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 py-6 backdrop-blur-2xl">
+                <section className="w-full max-w-lg overflow-hidden rounded-[36px] border border-mint/25 bg-[#0D111D] shadow-[0_34px_120px_rgba(0,0,0,0.55)]">
+                  <div className="relative p-6 sm:p-8">
+                    <div className="absolute right-6 top-6 grid h-14 w-14 place-items-center rounded-2xl bg-mint text-2xl font-black text-ink shadow-glow">★</div>
+                    <p className="max-w-[70%] text-xs font-black uppercase tracking-[0.18em] text-mint">{premiumCopy.eyebrow}</p>
+                    <h2 className="mt-4 max-w-sm text-3xl font-black leading-tight text-white sm:text-4xl">{premiumCopy.title}</h2>
+                    <p className="mt-4 text-sm font-bold leading-6 text-slate-300">{premiumCopy.text}</p>
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                      <a className="grid h-[52px] place-items-center rounded-2xl bg-mint px-5 text-center text-sm font-black text-ink shadow-glow" href="profile.html">
+                        {premiumCopy.button}
+                      </a>
+                      <a className="grid h-[52px] place-items-center rounded-2xl border border-white/10 bg-white/[0.06] px-5 text-center text-sm font-black text-white" href="create-offer.html">
+                        {premiumCopy.back}
+                      </a>
+                    </div>
+                  </div>
+                  <div className="border-t border-white/10 bg-white/[0.035] px-6 py-4 text-xs font-bold leading-5 text-slate-400 sm:px-8">
+                    Premium también ayuda a publicar más rápido, copiar varias ofertas y reforzar la posición de Donoss para negociar mejores precios.
+                  </div>
+                </section>
+              </div>
+            )}
             <header className="flex items-center justify-between gap-3">
               <a href="create-offer.html" className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">Volver</a>
               <a href="my-offers.html" className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow">Mis publicaciones</a>

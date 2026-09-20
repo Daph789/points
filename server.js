@@ -390,7 +390,7 @@ function addDays(date, days) {
 }
 
 function premiumPointsForAccountType(accountType) {
-  return accountType === "business" ? 30 : 20;
+  return accountType === "business" ? 50 : 30;
 }
 
 function premiumPublicStatus(subscription, profile) {
@@ -3733,6 +3733,11 @@ app.get("/api/me/offer-automation-requests", async (request, response) => {
     if (profile?.account_type !== "business") {
       return response.status(403).json({ error: "business_account_required" });
     }
+    const premium = await syncPremiumForProfile(profile);
+    const premiumStatus = premiumPublicStatus(premium.subscription, premium.profile || profile);
+    if (!premiumStatus.is_active && !premium.profile?.admin_verified && !profile?.admin_verified) {
+      return response.status(403).json({ error: "premium_required" });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("offer_automation_requests")
@@ -3774,6 +3779,11 @@ app.post("/api/me/offer-automation-requests", async (request, response) => {
     const profile = await ensureProfileForUser(auth.user);
     if (profile?.account_type !== "business") {
       return response.status(403).json({ error: "business_account_required" });
+    }
+    const premium = await syncPremiumForProfile(profile);
+    const premiumStatus = premiumPublicStatus(premium.subscription, premium.profile || profile);
+    if (!premiumStatus.is_active && !premium.profile?.admin_verified && !profile?.admin_verified) {
+      return response.status(403).json({ error: "premium_required" });
     }
 
     const { data: pendingRequest, error: pendingError } = await supabaseAdmin

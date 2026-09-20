@@ -434,6 +434,8 @@
       "Para modificarlo, contacta con Donoss.": "Pour le modifier, contacte Donoss.",
       "Certificación para ganar confianza.": "Certification pour gagner en confiance.",
       "Tus ofertas oficiales se muestran con más autoridad.": "Tes offres officielles s’affichent avec plus d’autorité.",
+      "Gana confianza, muestra tus ofertas oficiales con más autoridad y desbloquea la automatización para copiar publicaciones desde tu web oficial.": "Gagne en confiance, affiche tes offres officielles avec plus d’autorité et débloque l’automatisation pour copier des publications depuis ton site officiel.",
+      "Puedes copiar publicaciones desde tu web oficial sin volver a rellenar todo el formulario de datos.": "Tu peux copier des publications depuis ton site officiel sans remplir à nouveau tout le formulaire de données.",
       "Certificación para demostrar que eres una persona real.": "Certification pour montrer que tu es une vraie personne.",
       "Servicio de ayuda más rápido cuando lo necesites.": "Aide plus rapide quand tu en as besoin.",
       "Renovar ahora": "Renouveler maintenant",

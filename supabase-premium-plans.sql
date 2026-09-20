@@ -18,8 +18,14 @@ create table if not exists public.premium_subscriptions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint premium_subscriptions_status_check check (status in ('active', 'failed', 'cancelled')),
-  constraint premium_subscriptions_points_check check (points in (20, 30))
+  constraint premium_subscriptions_points_check check (points in (20, 30, 50))
 );
+
+alter table public.premium_subscriptions
+  drop constraint if exists premium_subscriptions_points_check;
+
+alter table public.premium_subscriptions
+  add constraint premium_subscriptions_points_check check (points in (20, 30, 50));
 
 create table if not exists public.premium_subscription_charges (
   id uuid primary key default gen_random_uuid(),
