@@ -357,6 +357,7 @@ function transferPublicProfile(profile) {
     account_type: profile.account_type,
     transaction_id: profile.transaction_id,
     is_verified: Boolean(profile.is_verified),
+    profile_photo_data_url: profile.profile_photo_data_url || "",
   };
 }
 
@@ -5371,10 +5372,12 @@ function publicPlanProfile(profile) {
   if (!profile) return null;
   return {
     id: profile.id,
+    account_type: profile.account_type,
     display_name: profile.display_name,
     neighborhood: profile.neighborhood,
     transaction_id: profile.transaction_id,
     is_verified: Boolean(profile.is_verified),
+    profile_photo_data_url: profile.profile_photo_data_url || "",
   };
 }
 
@@ -5483,7 +5486,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
   if (creatorIds.length > 0) {
     let { data: creators, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
+      .select("id, account_type, display_name, neighborhood, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
       .in("id", creatorIds);
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
@@ -5519,7 +5522,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
     if (memberUserIds.length > 0) {
       let { data: users, error: usersError } = await supabaseAdmin
         .from("profiles")
-        .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
+        .select("id, account_type, display_name, neighborhood, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
         .in("id", memberUserIds);
       if (usersError?.code === "42703") {
         const fallback = await supabaseAdmin
@@ -5644,12 +5647,12 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
   if (senderIds.length > 0) {
     let { data: senders, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+        .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
       .in("id", senderIds);
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("profiles")
-        .select("id, display_name, email, transaction_id, is_verified")
+        .select("id, account_type, display_name, email, transaction_id, is_verified")
         .in("id", senderIds);
       senders = fallback.data;
       error = fallback.error;
@@ -5674,12 +5677,12 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
       if (includeReadProfiles && readerIds.length > 0) {
         let { data: readers, error: readersError } = await supabaseAdmin
           .from("profiles")
-          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
           .in("id", readerIds);
         if (readersError?.code === "42703") {
           const fallback = await supabaseAdmin
             .from("profiles")
-            .select("id, display_name, email, transaction_id, is_verified")
+            .select("id, account_type, display_name, email, transaction_id, is_verified")
             .in("id", readerIds);
           readers = fallback.data;
           readersError = fallback.error;
@@ -5726,12 +5729,12 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
       if (missingSenderIds.length > 0) {
         let { data: replySenders, error: replySendersError } = await supabaseAdmin
           .from("profiles")
-          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
           .in("id", missingSenderIds);
         if (replySendersError?.code === "42703") {
           const fallback = await supabaseAdmin
             .from("profiles")
-            .select("id, display_name, email, transaction_id, is_verified")
+            .select("id, account_type, display_name, email, transaction_id, is_verified")
             .in("id", missingSenderIds);
           replySenders = fallback.data;
           replySendersError = fallback.error;
@@ -5747,7 +5750,7 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
       repliesById = Object.fromEntries((replies || []).map((reply) => [reply.id, {
         id: reply.id,
         sender_id: reply.sender_id,
-        body: reply.deleted_at ? "Mensaje eliminado" : reply.body,
+        body: reply.deleted_at ? "" : reply.body,
         deleted_at: reply.deleted_at,
         sender: sendersById[reply.sender_id] || null,
       }]));
@@ -5770,10 +5773,16 @@ const socialPlanMessageSelect = "id, plan_id, sender_id, body, reply_to_message_
 const socialPlanMessageSelectLegacy = "id, plan_id, sender_id, body, edited_at, deleted_at, created_at";
 const sideGroupMessageSelect = "id, plan_id, group_status, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
 const sideGroupMessageSelectLegacy = "id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at";
+const chatPageSize = 80;
 
 function normalizeMessageReplyId(value) {
   const id = String(value || "").trim();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ? id : "";
+}
+
+function normalizeChatBeforeCursor(value) {
+  const date = new Date(String(value || ""));
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
 function normalizeSideGroupStatus(value) {
@@ -5832,12 +5841,12 @@ async function enrichSideMessages(messages = [], options = {}) {
   if (senderIds.length > 0) {
     let { data: senders, error } = await supabaseAdmin
       .from("profiles")
-      .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+        .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
       .in("id", senderIds);
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("profiles")
-        .select("id, display_name, email, transaction_id, is_verified")
+        .select("id, account_type, display_name, email, transaction_id, is_verified")
         .in("id", senderIds);
       senders = fallback.data;
       error = fallback.error;
@@ -5862,12 +5871,12 @@ async function enrichSideMessages(messages = [], options = {}) {
       if (includeReadProfiles && readerIds.length > 0) {
         let { data: readers, error: readersError } = await supabaseAdmin
           .from("profiles")
-          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
           .in("id", readerIds);
         if (readersError?.code === "42703") {
           const fallback = await supabaseAdmin
             .from("profiles")
-            .select("id, display_name, email, transaction_id, is_verified")
+            .select("id, account_type, display_name, email, transaction_id, is_verified")
             .in("id", readerIds);
           readers = fallback.data;
           readersError = fallback.error;
@@ -5914,12 +5923,12 @@ async function enrichSideMessages(messages = [], options = {}) {
       if (missingSenderIds.length > 0) {
         let { data: replySenders, error: replySendersError } = await supabaseAdmin
           .from("profiles")
-          .select("id, display_name, email, transaction_id, is_verified, plan_photo_data_url")
+          .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
           .in("id", missingSenderIds);
         if (replySendersError?.code === "42703") {
           const fallback = await supabaseAdmin
             .from("profiles")
-            .select("id, display_name, email, transaction_id, is_verified")
+            .select("id, account_type, display_name, email, transaction_id, is_verified")
             .in("id", missingSenderIds);
           replySenders = fallback.data;
           replySendersError = fallback.error;
@@ -5935,7 +5944,7 @@ async function enrichSideMessages(messages = [], options = {}) {
       repliesById = Object.fromEntries((replies || []).map((reply) => [reply.id, {
         id: reply.id,
         sender_id: reply.sender_id,
-        body: reply.deleted_at ? "Mensaje eliminado" : reply.body,
+        body: reply.deleted_at ? "" : reply.body,
         deleted_at: reply.deleted_at,
         sender: sendersById[reply.sender_id] || null,
       }]));
@@ -7095,19 +7104,24 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
     const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
-    let { data: messages, error } = await supabaseAdmin
+    const before = normalizeChatBeforeCursor(request.query?.before);
+    let messagesQuery = supabaseAdmin
       .from("social_plan_messages")
       .select(socialPlanMessageSelect)
       .eq("plan_id", access.plan.id)
-      .order("created_at", { ascending: true })
-      .limit(200);
+      .order("created_at", { ascending: false })
+      .limit(chatPageSize);
+    if (before) messagesQuery = messagesQuery.lt("created_at", before);
+    let { data: messages, error } = await messagesQuery;
     if (error?.code === "42703") {
-      const fallback = await supabaseAdmin
+      let fallbackQuery = supabaseAdmin
         .from("social_plan_messages")
         .select(socialPlanMessageSelectLegacy)
         .eq("plan_id", access.plan.id)
-        .order("created_at", { ascending: true })
-        .limit(200);
+        .order("created_at", { ascending: false })
+        .limit(chatPageSize);
+      if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
+      const fallback = await fallbackQuery;
       messages = fallback.data;
       error = fallback.error;
     }
@@ -7120,7 +7134,8 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
       role: access.role,
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
-      messages: await enrichPlanChatMessages(messages || [], { includeReadProfiles: false }),
+      messages: await enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
+      has_more: (messages || []).length >= chatPageSize,
     });
   } catch (error) {
     console.error("Social plan chat list fatal error:", error);
@@ -7324,14 +7339,14 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(socialPlanMessageSelect)
       .maybeSingle();
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_messages")
-        .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+        .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
         .eq("id", current.id)
         .select(socialPlanMessageSelectLegacy)
         .maybeSingle();
@@ -7377,7 +7392,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
     if (memberUserIds.length > 0) {
       const { data: users, error: usersError } = await supabaseAdmin
         .from("profiles")
-        .select("id, display_name, neighborhood, transaction_id, is_verified, plan_photo_data_url")
+        .select("id, account_type, display_name, neighborhood, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
         .in("id", memberUserIds);
       if (usersError) throw usersError;
       usersById = Object.fromEntries((users || []).map((user) => [user.id, user]));
@@ -7389,21 +7404,26 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       .eq("plan_id", access.plan.id)
       .eq("status", otherStatus);
 
-    let { data: messages, error: messagesError } = await supabaseAdmin
+    const before = normalizeChatBeforeCursor(request.query?.before);
+    let sideMessagesQuery = supabaseAdmin
       .from("social_plan_side_group_messages")
       .select(sideGroupMessageSelect)
       .eq("plan_id", access.plan.id)
       .in("group_status", messageStatuses)
-      .order("created_at", { ascending: true })
-      .limit(240);
+      .order("created_at", { ascending: false })
+      .limit(chatPageSize);
+    if (before) sideMessagesQuery = sideMessagesQuery.lt("created_at", before);
+    let { data: messages, error: messagesError } = await sideMessagesQuery;
     if (messagesError?.code === "42703") {
-      const fallback = await supabaseAdmin
+      let fallbackQuery = supabaseAdmin
         .from("social_plan_side_group_messages")
         .select(sideGroupMessageSelectLegacy)
         .eq("plan_id", access.plan.id)
         .in("group_status", messageStatuses)
-        .order("created_at", { ascending: true })
-        .limit(240);
+        .order("created_at", { ascending: false })
+        .limit(chatPageSize);
+      if (before) fallbackQuery = fallbackQuery.lt("created_at", before);
+      const fallback = await fallbackQuery;
       messages = fallback.data;
       messagesError = fallback.error;
     }
@@ -7427,7 +7447,8 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       other_count: Number(otherCount || 0),
       merged: isMerged,
       members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
-      messages: await enrichSideMessages(messages || [], { includeReadProfiles: false }),
+      messages: await enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
+      has_more: (messages || []).length >= chatPageSize,
       merge_requests: mergeRequests || [],
     });
   } catch (error) {
@@ -7632,14 +7653,14 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(sideGroupMessageSelect)
       .maybeSingle();
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_side_group_messages")
-        .update({ body: "Mensaje eliminado", deleted_at: new Date().toISOString(), edited_at: null })
+        .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
         .eq("id", current.id)
         .select(sideGroupMessageSelectLegacy)
         .maybeSingle();

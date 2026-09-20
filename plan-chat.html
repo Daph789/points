@@ -118,7 +118,7 @@
       }
 
       function Avatar({ user, mine = false }) {
-        const photo = user?.plan_photo_data_urls?.[0];
+        const photo = user?.account_type === "business" ? (user?.profile_photo_data_url || user?.plan_photo_data_urls?.[0]) : user?.plan_photo_data_urls?.[0];
         return (
           <span className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-2xl text-xs font-black ${mine ? "bg-mint text-ink" : "bg-white/[0.08] text-white ring-1 ring-white/10"}`}>
             {photo ? <img className="h-full w-full object-cover" src={photo} alt="" /> : String(user?.display_name || "D").slice(0, 1).toUpperCase()}
@@ -158,6 +158,13 @@
         return [...hydratedConfirmed, ...localStillNeeded];
       }
 
+      function prependOlderMessages(olderMessages, currentMessages) {
+        const current = Array.isArray(currentMessages) ? currentMessages : [];
+        const currentIds = new Set(current.map((message) => message.id).filter(Boolean));
+        const cleanOlder = (Array.isArray(olderMessages) ? olderMessages : []).filter((message) => message.id && !currentIds.has(message.id));
+        return [...cleanOlder, ...current];
+      }
+
       function App() {
         const [token, setToken] = React.useState("");
         const [profile, setProfile] = React.useState(null);
@@ -176,6 +183,8 @@
         const [replyingTo, setReplyingTo] = React.useState(null);
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
         const [unreadDividerId, setUnreadDividerId] = React.useState("");
+        const [hasMoreMessages, setHasMoreMessages] = React.useState(false);
+        const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
         const [showIntro, setShowIntro] = React.useState(false);
         const [isActiveChat, setIsActiveChat] = React.useState(!startsPrefetched);
         const listRef = React.useRef(null);
@@ -270,14 +279,16 @@
           if (loadingChatRef.current) return;
           loadingChatRef.current = true;
           try {
-            const response = await fetch(`/api/social-plans/${planId}/chat`, {
+            const query = options.before ? `?before=${encodeURIComponent(options.before)}` : "";
+            const response = await fetch(`/api/social-plans/${planId}/chat${query}`, {
               headers: { Authorization: `Bearer ${accessToken}` },
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "plan_chat_failed");
             setProfile(data.profile || null);
             setPlan(data.plan || null);
-            setMessages((current) => mergeMessagesWithPending(data.messages || [], current));
+            setMessages((current) => options.prepend ? prependOlderMessages(data.messages || [], current) : mergeMessagesWithPending(data.messages || [], current));
+            setHasMoreMessages(Boolean(data.has_more));
             setStatus("");
             if (!positionedInitialChatRef.current) {
               positionedInitialChatRef.current = true;
@@ -298,6 +309,18 @@
             if (!silent) setStatus(friendlyChatError(error.message));
           } finally {
             loadingChatRef.current = false;
+          }
+        }
+
+        async function loadOlderMessages() {
+          if (isLoadingOlder || !hasMoreMessages || messages.length === 0) return;
+          const oldest = messages.find((message) => message?.created_at);
+          if (!oldest?.created_at) return;
+          setIsLoadingOlder(true);
+          try {
+            await loadChat(token, true, { before: oldest.created_at, prepend: true, markRead: false });
+          } finally {
+            setIsLoadingOlder(false);
           }
         }
 
@@ -500,6 +523,8 @@
           }
         }
 
+        const visibleMessages = messages.filter((message) => !message.deleted_at);
+
         return (
           <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4 pb-4 pt-4 sm:px-6">
             <header className="sticky top-0 z-20 -mx-4 border-b border-white/10 bg-[#080C16]/85 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6">
@@ -539,7 +564,14 @@
 
             <section ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-5">
               <div className="space-y-3">
-                {messages.map((message) => {
+                {hasMoreMessages && (
+                  <div className="flex justify-center pb-2">
+                    <button className="rounded-full border border-white/10 bg-white/[0.055] px-4 py-2 text-xs font-black text-slate-300 transition hover:bg-white/[0.09] disabled:opacity-50" type="button" disabled={isLoadingOlder} onClick={loadOlderMessages}>
+                      {isLoadingOlder ? "Cargando..." : "Cargar mensajes anteriores"}
+                    </button>
+                  </div>
+                )}
+                {visibleMessages.map((message) => {
                   const mine = message.sender_id === profile?.id;
                   const canModerate = canModerateMessage(message, profile);
                   const swipe = swipeState.id === message.id ? swipeState : { x: 0, ready: false };
@@ -601,7 +633,7 @@
                     </React.Fragment>
                   );
                 })}
-                {!status && messages.length === 0 && (
+                {!status && visibleMessages.length === 0 && (
                   <div className="rounded-[30px] border border-white/10 bg-white/[0.055] p-6 text-center">
                     <p className="text-lg font-black text-white">Todavía no hay mensajes</p>
                     <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Sé la primera persona en escribir al grupo.</p>
@@ -749,7 +781,7 @@
                 <section className="w-full max-w-md rounded-[34px] border border-coral/20 bg-[#0D111D] p-5 text-center shadow-2xl">
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-coral/10 text-2xl font-black text-coral ring-1 ring-coral/25">!</div>
                   <h2 className="mt-4 text-2xl font-black text-white">¿Eliminar mensaje?</h2>
-                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Se mostrará como “Mensaje eliminado” para que el chat siga claro.</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">El mensaje desaparecerá del chat para mantener la conversación limpia.</p>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setMessageToDelete(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-coral text-sm font-black text-white" disabled={isSending} onClick={deleteMessage}>Eliminar</button>
