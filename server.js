@@ -393,6 +393,10 @@ function premiumPointsForAccountType(accountType) {
   return accountType === "business" ? 50 : 30;
 }
 
+function premiumAmountForAccountType(accountType) {
+  return accountType === "business" ? 500 : 300;
+}
+
 function premiumPublicStatus(subscription, profile) {
   const points = premiumPointsForAccountType(profile?.account_type);
   const status = subscription?.status || profile?.premium_status || "inactive";
@@ -436,7 +440,7 @@ async function syncBusinessVerification(profile) {
 async function loadPremiumSubscription(profileId) {
   const { data, error } = await supabaseAdmin
     .from("premium_subscriptions")
-    .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at")
+    .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_customer_id, stripe_subscription_id, stripe_checkout_session_id")
     .eq("profile_id", profileId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -473,6 +477,17 @@ async function syncPremiumForProfile(profile) {
   }
 
   if (subscription?.status === "active" && subscription.next_charge_at && new Date(subscription.next_charge_at).getTime() <= Date.now()) {
+    if (subscription?.stripe_subscription_id) {
+      const { data: stripeCharges, error: stripeChargesError } = await supabaseAdmin
+        .from("premium_subscription_charges")
+        .select("id, points, status, reason, created_at")
+        .eq("profile_id", profile.id)
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (stripeChargesError && stripeChargesError.code !== "42P01") throw stripeChargesError;
+      return { profile, subscription, charges: stripeCharges || [], missingSql: false };
+    }
+
     const points = premiumPointsForAccountType(profile.account_type);
     const currentPoints = Number(profile.points || 0);
     const now = new Date().toISOString();
@@ -569,6 +584,131 @@ async function syncPremiumForProfile(profile) {
 
   if (chargesError && chargesError.code !== "42P01") throw chargesError;
   return { profile, subscription, charges: charges || [], missingSql: false };
+}
+
+async function activatePremiumFromStripe({ userId, session = null, subscription = null, invoice = null }) {
+  if (!supabaseAdmin || !userId) return null;
+  let profile = await ensureProfileForUserId(userId);
+  if (!profile) return null;
+
+  const now = new Date().toISOString();
+  const points = premiumPointsForAccountType(profile.account_type);
+  const rawSubscriptionId = subscription?.id || session?.subscription || invoice?.subscription || "";
+  const rawCustomerId = subscription?.customer || session?.customer || invoice?.customer || "";
+  const stripeSubscriptionId = String(typeof rawSubscriptionId === "string" ? rawSubscriptionId : rawSubscriptionId?.id || "").trim();
+  const stripeCustomerId = String(typeof rawCustomerId === "string" ? rawCustomerId : rawCustomerId?.id || "").trim();
+  const checkoutSessionId = String(session?.id || "").trim();
+  const invoiceId = String(invoice?.id || "").trim();
+  const rawPaymentIntent = invoice?.payment_intent || session?.payment_intent || "";
+  const paymentIntentId = String(typeof rawPaymentIntent === "string" ? rawPaymentIntent : rawPaymentIntent?.id || "").trim();
+  const periodEndSeconds = Number(subscription?.current_period_end || invoice?.lines?.data?.[0]?.period?.end || 0);
+  const nextChargeAt = periodEndSeconds ? new Date(periodEndSeconds * 1000).toISOString() : addDays(now, 31);
+
+  let savedSubscription = null;
+  const existing = stripeSubscriptionId
+    ? await supabaseAdmin
+        .from("premium_subscriptions")
+        .select("id, started_at")
+        .eq("stripe_subscription_id", stripeSubscriptionId)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (existing.error && existing.error.code !== "PGRST116") throw existing.error;
+
+  const subscriptionPayload = {
+    profile_id: profile.id,
+    account_type: profile.account_type,
+    points,
+    status: "active",
+    started_at: existing.data?.started_at || now,
+    next_charge_at: nextChargeAt,
+    last_charge_at: now,
+    failed_at: null,
+    updated_at: now,
+    stripe_customer_id: stripeCustomerId || null,
+    stripe_subscription_id: stripeSubscriptionId || null,
+    stripe_checkout_session_id: checkoutSessionId || null,
+  };
+
+  if (existing.data?.id) {
+    const { data, error } = await supabaseAdmin
+      .from("premium_subscriptions")
+      .update(subscriptionPayload)
+      .eq("id", existing.data.id)
+      .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_subscription_id")
+      .maybeSingle();
+    if (error) throw error;
+    savedSubscription = data;
+  } else {
+    const { data, error } = await supabaseAdmin
+      .from("premium_subscriptions")
+      .insert(subscriptionPayload)
+      .select("id, profile_id, account_type, points, status, started_at, next_charge_at, last_charge_at, failed_at, created_at, updated_at, stripe_subscription_id")
+      .maybeSingle();
+    if (error) throw error;
+    savedSubscription = data;
+  }
+
+  const { data: updatedProfile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .update({
+      is_verified: true,
+      premium_status: "active",
+      premium_started_at: profile.premium_started_at || now,
+      premium_next_charge_at: nextChargeAt,
+      premium_failed_at: null,
+    })
+    .eq("id", profile.id)
+    .select("id, account_type, display_name, bio, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  if (invoiceId) {
+    const { error: chargeError } = await supabaseAdmin
+      .from("premium_subscription_charges")
+      .insert({
+        subscription_id: savedSubscription.id,
+        profile_id: profile.id,
+        points,
+        status: "paid",
+        reason: "stripe_subscription",
+        stripe_invoice_id: invoiceId,
+        stripe_payment_intent_id: paymentIntentId || null,
+      });
+    if (chargeError && chargeError.code !== "23505") throw chargeError;
+  }
+
+  await syncBusinessVerification(updatedProfile);
+  return { profile: updatedProfile, subscription: savedSubscription };
+}
+
+async function failPremiumFromStripe({ subscriptionId }) {
+  if (!supabaseAdmin || !subscriptionId) return null;
+  const { data: subscription, error } = await supabaseAdmin
+    .from("premium_subscriptions")
+    .select("id, profile_id")
+    .eq("stripe_subscription_id", subscriptionId)
+    .maybeSingle();
+  if (error || !subscription) return null;
+
+  const now = new Date().toISOString();
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id, account_type, admin_verified")
+    .eq("id", subscription.profile_id)
+    .maybeSingle();
+  const keepAdminVerification = Boolean(profile?.admin_verified);
+
+  await Promise.all([
+    supabaseAdmin
+      .from("premium_subscriptions")
+      .update({ status: "failed", failed_at: now, updated_at: now })
+      .eq("id", subscription.id),
+    supabaseAdmin
+      .from("profiles")
+      .update({ premium_status: "failed", premium_failed_at: now, is_verified: keepAdminVerification })
+      .eq("id", subscription.profile_id),
+  ]);
+  return subscription;
 }
 
 function parsePlanProfilePhotos(value) {
@@ -1073,6 +1213,21 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
+    if (session.metadata?.kind === "premium_subscription") {
+      if (session.payment_status === "paid") {
+        try {
+          const subscription = session.subscription
+            ? await stripe.subscriptions.retrieve(String(session.subscription))
+            : null;
+          await activatePremiumFromStripe({ userId: session.metadata?.user_id, session, subscription });
+        } catch (error) {
+          console.error("Premium checkout webhook error:", error);
+          return response.status(500).send("Could not activate premium");
+        }
+      }
+      return response.json({ received: true });
+    }
+
     const userId = session.metadata?.user_id;
     const points = Number(session.metadata?.points || 0);
 
@@ -1096,6 +1251,44 @@ app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async
       }
       await markReferralRecharge(userId);
     }
+  }
+
+  if (event.type === "invoice.paid") {
+    const invoice = event.data.object;
+    const subscriptionId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (subscriptionId) {
+      try {
+        const subscription = typeof invoice.subscription === "string"
+          ? await stripe.subscriptions.retrieve(subscriptionId)
+          : invoice.subscription;
+        if (subscription?.metadata?.kind === "premium_subscription" || invoice.metadata?.kind === "premium_subscription") {
+          const userId = invoice.metadata?.user_id || subscription?.metadata?.user_id;
+          await activatePremiumFromStripe({ userId, subscription, invoice });
+        }
+      } catch (error) {
+        console.error("Premium invoice paid webhook error:", error);
+        return response.status(500).send("Could not renew premium");
+      }
+    }
+  }
+
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object;
+    const subscriptionId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id;
+    if (subscriptionId) {
+      await failPremiumFromStripe({ subscriptionId });
+    }
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object;
+    await failPremiumFromStripe({ subscriptionId: subscription?.id });
   }
 
   response.json({ received: true });
@@ -4068,6 +4261,107 @@ app.post("/api/me/premium/subscribe", async (request, response) => {
       return response.status(500).json({ error: "premium_sql_missing" });
     }
     response.status(500).json({ error: "premium_subscribe_failed" });
+  }
+});
+
+app.post("/api/stripe/create-premium-subscription-session", async (request, response) => {
+  if (!stripe || !supabaseAdmin) {
+    return response.status(500).json({ error: "Stripe or Supabase admin is not configured" });
+  }
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    let profile = await ensureProfileForUser(auth.user);
+    const current = await syncPremiumForProfile(profile);
+    if (current.missingSql) {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+    profile = current.profile || profile;
+
+    if (!premiumIdentityPublic(profile).is_complete) {
+      return response.status(400).json({ error: "premium_identity_required" });
+    }
+
+    const amount = premiumAmountForAccountType(profile.account_type);
+    const points = premiumPointsForAccountType(profile.account_type);
+    const origin = publicOriginForRequest(request);
+    const productName = profile.account_type === "business" ? "Donoss Premium Empresa" : "Donoss Premium Usuario";
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      payment_method_types: ["card"],
+      customer_email: auth.user.email || profile.email || undefined,
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "eur",
+            unit_amount: amount,
+            recurring: { interval: "month" },
+            product_data: {
+              name: productName,
+              description: profile.account_type === "business"
+                ? "Certificación Donoss, autoridad en ofertas oficiales y automatización desde web oficial."
+                : "Certificación Donoss para demostrar que eres una persona real.",
+            },
+          },
+        },
+      ],
+      metadata: {
+        kind: "premium_subscription",
+        user_id: profile.id,
+        account_type: profile.account_type || "user",
+        points: String(points),
+      },
+      subscription_data: {
+        metadata: {
+          kind: "premium_subscription",
+          user_id: profile.id,
+          account_type: profile.account_type || "user",
+          points: String(points),
+        },
+      },
+      success_url: `${origin}/profile.html?premium=stripe_success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/profile.html?premium=stripe_cancelled`,
+    });
+
+    response.json({ url: session.url });
+  } catch (error) {
+    console.error("Premium Stripe checkout error:", error);
+    if (error.code === "42P01" || error.code === "42703") {
+      return response.status(500).json({ error: "premium_sql_missing" });
+    }
+    response.status(500).json({ error: error.message || "premium_checkout_failed" });
+  }
+});
+
+app.get("/api/stripe/premium-subscription-status", async (request, response) => {
+  if (!stripe || !supabaseAdmin) {
+    return response.status(500).json({ error: "Stripe or Supabase admin is not configured" });
+  }
+
+  const sessionId = String(request.query.session_id || "");
+  if (!sessionId) return response.status(400).json({ error: "Missing session_id" });
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["subscription"] });
+    if (session.metadata?.kind !== "premium_subscription") {
+      return response.status(400).json({ error: "invalid_premium_session" });
+    }
+    if (session.payment_status !== "paid") {
+      return response.json({ status: session.payment_status || "open" });
+    }
+    const userId = session.metadata?.user_id;
+    const result = await activatePremiumFromStripe({ userId, session, subscription: session.subscription });
+    response.json({
+      status: "active",
+      profile: result?.profile || null,
+      premium: result?.subscription ? premiumPublicStatus(result.subscription, result.profile) : null,
+    });
+  } catch (error) {
+    console.error("Premium Stripe status error:", error);
+    response.status(500).json({ error: "premium_status_failed" });
   }
 });
 

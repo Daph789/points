@@ -346,6 +346,34 @@
             setPremiumPhoto(data?.premium_identity?.photo_data_url || data?.premium_identity_photo_data_url || "");
             setStatus("");
 
+            const premiumParams = new URLSearchParams(window.location.search);
+            const premiumReturn = premiumParams.get("premium");
+            const premiumSessionId = premiumParams.get("session_id");
+            if (premiumReturn === "stripe_success" && premiumSessionId) {
+              setStatus("Verificando tu pago Premium...");
+              try {
+                const premiumResponse = await fetch(`/api/stripe/premium-subscription-status?session_id=${encodeURIComponent(premiumSessionId)}`);
+                const premiumData = await premiumResponse.json().catch(() => ({}));
+                if (!premiumResponse.ok) throw new Error(premiumData.error || "premium_status_failed");
+                if (premiumData.status === "active") {
+                  setPremium(premiumData.premium || null);
+                  setProfile((current) => current ? { ...current, ...(premiumData.profile || {}) } : current);
+                  setStatus("Premium activado correctamente. Tu certificación ya está activa.");
+                } else {
+                  setStatus("El pago Premium todavía se está verificando.");
+                }
+              } catch (_error) {
+                setStatus("No se ha podido verificar el pago Premium.");
+              } finally {
+                const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`;
+                window.history.replaceState({}, "", cleanUrl);
+              }
+            } else if (premiumReturn === "stripe_cancelled") {
+              setStatus("Pago Premium cancelado.");
+              const cleanUrl = `${window.location.pathname}${window.location.hash || ""}`;
+              window.history.replaceState({}, "", cleanUrl);
+            }
+
             if (accessToken) {
               const photosResponse = await fetch("/api/me/plan-photos", {
                 headers: { Authorization: `Bearer ${accessToken}` },
@@ -786,7 +814,7 @@
           setIsActivatingPremium(true);
           setStatus("");
           try {
-            const response = await fetch("/api/me/premium/subscribe", {
+            const response = await fetch("/api/stripe/create-premium-subscription-session", {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -795,19 +823,15 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "premium_failed");
-            setPremium(data.premium || null);
-            setProfile((current) => current ? { ...current, ...(data.profile || {}) } : current);
-            setIsPremiumOpen(false);
-            setStatus("Premium activado correctamente. Tu certificación ya está activa.");
+            if (!data.url) throw new Error("premium_failed");
+            window.location.href = data.url;
           } catch (error) {
             if (error.message === "premium_sql_missing") {
               setStatus("Falta ejecutar el SQL de Premium en Supabase.");
-            } else if (error.message === "insufficient_points") {
-              setStatus("No tienes puntos suficientes para activar Premium.");
             } else if (error.message === "premium_identity_required") {
               setStatus("Completa tu NIE/DNI y una foto visible antes de activar Premium.");
             } else {
-              setStatus("No se ha podido activar Premium.");
+              setStatus("No se ha podido abrir el pago Premium.");
             }
           } finally {
             setIsActivatingPremium(false);
@@ -824,7 +848,8 @@
 
         const isBusiness = profile.account_type === "business";
         const displayedDonosId = formatDonosId(profile.transaction_id);
-        const premiumPoints = isBusiness ? 30 : 20;
+        const premiumPoints = isBusiness ? 50 : 30;
+        const premiumPrice = isBusiness ? "5€" : "3€";
         const premiumActive = premium?.status === "active";
         const premiumFailed = premium?.status === "failed";
         const premiumIdentity = profile.premium_identity || {};
@@ -1277,8 +1302,8 @@
                   </p>
                 </div>
                 <div className="rounded-3xl border border-white/10 bg-black/25 px-4 py-3 text-right">
-                  <p className="text-2xl font-black text-white">{premiumPoints} puntos</p>
-                  <p className="text-xs font-black text-slate-400">cada 31 días</p>
+                  <p className="text-2xl font-black text-white">{premiumPrice}</p>
+                  <p className="text-xs font-black text-slate-400">al mes</p>
                 </div>
               </div>
 
@@ -1291,7 +1316,7 @@
 
               {premiumFailed && (
                 <p className="mt-4 rounded-2xl border border-coral/25 bg-black/20 p-3 text-sm font-black leading-6 text-coral">
-                  El último cobro no se pudo hacer. Recarga puntos y vuelve a activar Premium para recuperar la certificación.
+                  El último cobro no se pudo hacer. Vuelve a activar Premium con tarjeta para recuperar la certificación.
                 </p>
               )}
               {premiumSqlMissing && (
@@ -1447,9 +1472,9 @@
                     ))}
                   </div>
                   <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">
-                    <p className="text-sm font-black text-mint">{premiumPoints} puntos cada 31 días</p>
+                    <p className="text-sm font-black text-mint">{premiumPrice} al mes</p>
                     <p className="mt-1 text-xs font-bold leading-5 text-slate-300">
-                      Se cobra ahora y después cada 31 días cuando entres en Donoss. Si no hay puntos suficientes, Premium se pausa y desaparece la certificación hasta que lo actives otra vez.
+                      Se cobra con tarjeta ahora y después automáticamente cada mes desde Stripe. Si el pago falla, Premium se pausa y desaparece la certificación hasta que lo actives otra vez.
                     </p>
                   </div>
                   <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
@@ -1507,13 +1532,13 @@
                     </button>
                     <button
                       className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
-                      onClick={() => premiumIdentityComplete ? activatePremium() : savePremiumIdentity({ activateAfter: true })}
+                      onClick={() => premiumActive ? setIsPremiumOpen(false) : premiumIdentityComplete ? activatePremium() : savePremiumIdentity({ activateAfter: true })}
                       disabled={isActivatingPremium || isSavingPremiumIdentity || premiumSqlMissing}
                     >
                       {isActivatingPremium || isSavingPremiumIdentity
                         ? "Preparando..."
                         : premiumIdentityComplete
-                          ? premiumActive ? "Renovar ahora" : "Activar"
+                          ? premiumActive ? "Activo" : "Activar"
                           : "Guardar y activar"}
                     </button>
                   </div>

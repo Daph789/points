@@ -38,6 +38,23 @@ create table if not exists public.premium_subscription_charges (
   constraint premium_subscription_charges_status_check check (status in ('paid', 'failed'))
 );
 
+alter table public.premium_subscriptions
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text,
+  add column if not exists stripe_checkout_session_id text;
+
+alter table public.premium_subscription_charges
+  add column if not exists stripe_invoice_id text,
+  add column if not exists stripe_payment_intent_id text;
+
+create unique index if not exists premium_subscriptions_stripe_subscription_uidx
+  on public.premium_subscriptions(stripe_subscription_id)
+  where stripe_subscription_id is not null;
+
+create unique index if not exists premium_subscription_charges_stripe_invoice_uidx
+  on public.premium_subscription_charges(stripe_invoice_id)
+  where stripe_invoice_id is not null;
+
 create index if not exists premium_subscriptions_profile_id_idx on public.premium_subscriptions(profile_id);
 create index if not exists premium_subscriptions_status_next_charge_idx on public.premium_subscriptions(status, next_charge_at);
 create index if not exists premium_subscription_charges_profile_id_idx on public.premium_subscription_charges(profile_id);
