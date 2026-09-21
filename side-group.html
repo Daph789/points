@@ -148,6 +148,8 @@
         return [...cleanOlder, ...current];
       }
 
+      const reactionEmojis = ["❤️", "😂", "🔥", "👏", "😮", "😢"];
+
       function App() {
         const [token, setToken] = React.useState("");
         const [profile, setProfile] = React.useState(null);
@@ -168,6 +170,7 @@
         const [editDraft, setEditDraft] = React.useState("");
         const [messageToDelete, setMessageToDelete] = React.useState(null);
         const [replyingTo, setReplyingTo] = React.useState(null);
+        const [activeReactionMessageId, setActiveReactionMessageId] = React.useState("");
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
         const [unreadDividerId, setUnreadDividerId] = React.useState("");
         const [hasMoreMessages, setHasMoreMessages] = React.useState(false);
@@ -498,6 +501,27 @@
           }
         }
 
+        function setMessageReactions(messageId, reactions) {
+          setMessages((current) => current.map((item) => item.id === messageId ? { ...item, reactions: reactions || [] } : item));
+        }
+
+        async function reactToMessage(message, emoji) {
+          if (!message?.id || message.pending || message.deleted_at || !reactionEmojis.includes(emoji)) return;
+          setActiveReactionMessageId("");
+          try {
+            const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/messages/${message.id}/reaction`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ emoji }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "reaction_failed");
+            setMessageReactions(message.id, data.reactions || []);
+          } catch (error) {
+            setStatus(error.message === "side_group_reactions_sql_missing" ? "Falta actualizar supabase-side-groups.sql para activar reacciones." : "No se ha podido guardar la reacción.");
+          }
+        }
+
         async function proposeMerge() {
           setIsSaving(true);
           try {
@@ -631,7 +655,9 @@
                           }}
                           onClick={() => {
                             if (swipeBlockClickRef.current) return;
-                            if ((mine || canModerate) && !message.pending && !message.deleted_at) setSelectedMessage(message);
+                            if (!message.pending && !message.deleted_at) {
+                              setActiveReactionMessageId((current) => current === message.id ? "" : message.id);
+                            }
                           }}
                         >
                           {!mine && <p className="mb-1 text-xs font-black text-sun">{message.sender?.display_name || "Usuario Donoss"}</p>}
@@ -642,6 +668,46 @@
                             {mine && !message.deleted_at && <ReadTicks message={message} />}
                           </p>
                         </article>
+                        {(message.reactions || []).length > 0 && (
+                          <div className={`mt-1 flex flex-wrap gap-1.5 ${mine ? "justify-end" : "justify-start"}`}>
+                            {(message.reactions || []).map((reaction) => (
+                              <button
+                                key={reaction.emoji}
+                                type="button"
+                                className={`rounded-full border px-2 py-1 text-xs font-black shadow-lg transition ${reaction.mine ? "border-sun/50 bg-sun/20 text-sun" : "border-white/10 bg-white/[0.08] text-white"}`}
+                                onClick={() => reactToMessage(message, reaction.emoji)}
+                              >
+                                {reaction.emoji} {reaction.count > 1 ? reaction.count : ""}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {activeReactionMessageId === message.id && !message.pending && !message.deleted_at && (
+                          <div className={`mt-2 flex flex-wrap items-center gap-1.5 rounded-[22px] border border-white/10 bg-[#0D111D]/95 p-2 shadow-2xl shadow-black/30 ${mine ? "justify-end" : "justify-start"}`}>
+                            {reactionEmojis.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.08] text-lg transition hover:scale-110 hover:bg-white/[0.14]"
+                                onClick={() => reactToMessage(message, emoji)}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                            {(mine || canModerate) && (
+                              <button
+                                type="button"
+                                className="h-9 rounded-full bg-white/[0.08] px-3 text-xs font-black text-slate-200 ring-1 ring-white/10"
+                                onClick={() => {
+                                  setSelectedMessage(message);
+                                  setActiveReactionMessageId("");
+                                }}
+                              >
+                                Opciones
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {mine && <Avatar user={profile} mine />}
                     </div>

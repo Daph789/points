@@ -5707,10 +5707,12 @@ async function markPlanChatReadForProfile(planId, readerId) {
 
 async function enrichPlanChatMessages(messages = [], options = {}) {
   const includeReadProfiles = options.includeReadProfiles !== false;
+  const viewerId = options.viewerId || "";
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
   const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
   let readsByMessageId = {};
+  let reactionsByMessageId = {};
   if (senderIds.length > 0) {
     let { data: senders, error } = await supabaseAdmin
       .from("profiles")
@@ -5731,6 +5733,7 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
     }]));
   }
   if (messageIds.length > 0) {
+    reactionsByMessageId = await loadMessageReactions("social_plan_message_reactions", messageIds, viewerId);
     const { data: reads, error } = await supabaseAdmin
       .from("social_plan_message_reads")
       .select("message_id, reader_id, read_at")
@@ -5827,6 +5830,7 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
     ...message,
     sender: sendersById[message.sender_id] || null,
     read_by: readsByMessageId[message.id] || [],
+    reactions: reactionsByMessageId[message.id] || [],
     reply_to: repliesById[message.reply_to_message_id] || null,
   }));
 }
@@ -5843,6 +5847,7 @@ const sideGroupMessageSelectLegacy = "id, plan_id, group_status, sender_id, body
 const chatPageSize = 10;
 const chatUnreadContextSize = 4;
 const chatUnreadHardLimit = 50;
+const chatReactionEmojis = ["❤️", "😂", "🔥", "👏", "😮", "😢"];
 
 function normalizeMessageReplyId(value) {
   const id = String(value || "").trim();
@@ -5852,6 +5857,82 @@ function normalizeMessageReplyId(value) {
 function normalizeChatBeforeCursor(value) {
   const date = new Date(String(value || ""));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+async function loadMessageReactions(tableName, messageIds = [], viewerId = "") {
+  const ids = [...new Set((messageIds || []).filter(Boolean))];
+  if (ids.length === 0) return {};
+  try {
+    const { data, error } = await supabaseAdmin
+      .from(tableName)
+      .select("message_id, user_id, emoji, created_at")
+      .in("message_id", ids)
+      .order("created_at", { ascending: true });
+    if (error) {
+      if (!["42P01", "42703"].includes(error.code)) console.error("Chat reactions load error:", error);
+      return {};
+    }
+    const grouped = {};
+    for (const reaction of data || []) {
+      if (!chatReactionEmojis.includes(reaction.emoji)) continue;
+      if (!grouped[reaction.message_id]) grouped[reaction.message_id] = {};
+      if (!grouped[reaction.message_id][reaction.emoji]) grouped[reaction.message_id][reaction.emoji] = { emoji: reaction.emoji, count: 0, mine: false };
+      grouped[reaction.message_id][reaction.emoji].count += 1;
+      if (viewerId && reaction.user_id === viewerId) grouped[reaction.message_id][reaction.emoji].mine = true;
+    }
+    return Object.fromEntries(Object.entries(grouped).map(([messageId, reactions]) => [messageId, Object.values(reactions)]));
+  } catch (error) {
+    console.error("Chat reactions fatal error:", error);
+    return {};
+  }
+}
+
+async function toggleMessageReaction({ tableName, messageTableName, messageId, planId, userId, emoji, extraMessageFilters = {} }) {
+  if (!chatReactionEmojis.includes(emoji)) {
+    const error = new Error("invalid_reaction");
+    error.code = "invalid_reaction";
+    throw error;
+  }
+  let query = supabaseAdmin
+    .from(messageTableName)
+    .select("id, plan_id, deleted_at")
+    .eq("id", messageId)
+    .eq("plan_id", planId)
+    .is("deleted_at", null);
+  for (const [key, value] of Object.entries(extraMessageFilters)) {
+    if (Array.isArray(value)) query = query.in(key, value);
+    else query = query.eq(key, value);
+  }
+  const { data: message, error: messageError } = await query.maybeSingle();
+  if (messageError) throw messageError;
+  if (!message) {
+    const error = new Error("message_not_found");
+    error.code = "message_not_found";
+    throw error;
+  }
+
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from(tableName)
+    .select("id, emoji")
+    .eq("message_id", message.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError && !["42P01", "42703"].includes(existingError.code)) throw existingError;
+  if (existing?.emoji === emoji) {
+    const { error: deleteError } = await supabaseAdmin
+      .from(tableName)
+      .delete()
+      .eq("id", existing.id);
+    if (deleteError) throw deleteError;
+  } else {
+    const { error: upsertError } = await supabaseAdmin
+      .from(tableName)
+      .upsert({ message_id: message.id, plan_id: planId, user_id: userId, emoji }, { onConflict: "message_id,user_id" });
+    if (upsertError) throw upsertError;
+  }
+
+  const reactionsByMessageId = await loadMessageReactions(tableName, [message.id], userId);
+  return reactionsByMessageId[message.id] || [];
 }
 
 async function countUnreadPlanMessagesForProfile(planId, profileId) {
@@ -5961,10 +6042,12 @@ async function getAcceptedSideMerge(planId) {
 
 async function enrichSideMessages(messages = [], options = {}) {
   const includeReadProfiles = options.includeReadProfiles !== false;
+  const viewerId = options.viewerId || "";
   const senderIds = [...new Set(messages.map((message) => message.sender_id).filter(Boolean))];
   const messageIds = [...new Set(messages.map((message) => message.id).filter(Boolean))];
   let sendersById = {};
   let readsByMessageId = {};
+  let reactionsByMessageId = {};
   if (senderIds.length > 0) {
     let { data: senders, error } = await supabaseAdmin
       .from("profiles")
@@ -5985,6 +6068,7 @@ async function enrichSideMessages(messages = [], options = {}) {
     }]));
   }
   if (messageIds.length > 0) {
+    reactionsByMessageId = await loadMessageReactions("social_plan_side_group_message_reactions", messageIds, viewerId);
     const { data: reads, error } = await supabaseAdmin
       .from("social_plan_side_group_message_reads")
       .select("message_id, reader_id, read_at")
@@ -6081,6 +6165,7 @@ async function enrichSideMessages(messages = [], options = {}) {
     ...message,
     sender: sendersById[message.sender_id] || null,
     read_by: readsByMessageId[message.id] || [],
+    reactions: reactionsByMessageId[message.id] || [],
     reply_to: repliesById[message.reply_to_message_id] || null,
   }));
 }
@@ -7297,7 +7382,7 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
       role: access.role,
       plan: (await enrichSocialPlans([access.plan], profile.id))[0],
-      messages: await enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
+      messages: await enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
       has_more: (messages || []).length >= messageLimit,
     });
   } catch (error) {
@@ -7355,11 +7440,39 @@ app.get("/api/social-plans/:id/chat/:messageId/reads", async (request, response)
     if (messageError) throw messageError;
     if (!message) return response.status(404).json({ error: "message_not_found" });
 
-    const [enriched] = await enrichPlanChatMessages([message], { includeReadProfiles: true });
+    const [enriched] = await enrichPlanChatMessages([message], { includeReadProfiles: true, viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Social plan reads fatal error:", error);
     response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "message_reads_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/chat/:messageId/reaction", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSocialPlanChatAccess(request.params.id, profile);
+    if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
+    const emoji = String(request.body?.emoji || "").trim();
+    const reactions = await toggleMessageReaction({
+      tableName: "social_plan_message_reactions",
+      messageTableName: "social_plan_messages",
+      messageId: request.params.messageId,
+      planId: access.plan.id,
+      userId: profile.id,
+      emoji,
+    });
+    response.json({ reactions });
+  } catch (error) {
+    console.error("Social plan reaction fatal error:", error);
+    response.status(error.code === "message_not_found" ? 404 : error.code === "invalid_reaction" ? 400 : 500).json({
+      error: ["42P01", "42703"].includes(error.code) ? "plan_chat_reactions_sql_missing" : error.code || "reaction_failed",
+    });
   }
 });
 
@@ -7411,7 +7524,7 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
       return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "send_message_failed" });
     }
 
-    const [enriched] = await enrichPlanChatMessages([message]);
+    const [enriched] = await enrichPlanChatMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Social plan chat send fatal error:", error);
@@ -7471,7 +7584,7 @@ app.patch("/api/social-plans/:id/chat/:messageId", async (request, response) => 
       error = fallback.error;
     }
     if (error) throw error;
-    const [enriched] = await enrichPlanChatMessages([message]);
+    const [enriched] = await enrichPlanChatMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Social plan chat edit fatal error:", error);
@@ -7517,7 +7630,7 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
       error = fallback.error;
     }
     if (error) throw error;
-    const [enriched] = await enrichPlanChatMessages([message]);
+    const [enriched] = await enrichPlanChatMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Social plan chat delete fatal error:", error);
@@ -7611,7 +7724,7 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       other_count: Number(otherCount || 0),
       merged: isMerged,
       members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
-      messages: await enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false }),
+      messages: await enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
       has_more: (messages || []).length >= messageLimit,
       merge_requests: mergeRequests || [],
     });
@@ -7672,11 +7785,42 @@ app.get("/api/social-plans/:id/side-group/:status/messages/:messageId/reads", as
     if (messageError) throw messageError;
     if (!message) return response.status(404).json({ error: "message_not_found" });
 
-    const [enriched] = await enrichSideMessages([message], { includeReadProfiles: true });
+    const [enriched] = await enrichSideMessages([message], { includeReadProfiles: true, viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Side group reads fatal error:", error);
     response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "message_reads_failed" });
+  }
+});
+
+app.post("/api/social-plans/:id/side-group/:status/messages/:messageId/reaction", async (request, response) => {
+  if (!supabaseAdmin) return response.status(500).json({ error: "Supabase admin is not configured" });
+
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  try {
+    const profile = await ensureProfileForUser(auth.user);
+    const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
+    if (!access.allowed) return response.status(access.reason === "side_group_not_ready" ? 404 : 403).json({ error: access.reason });
+    const merge = await getAcceptedSideMerge(access.plan.id);
+    const allowedStatuses = merge ? [merge.from_status, merge.to_status, "merged"].filter(Boolean) : [access.status];
+    const emoji = String(request.body?.emoji || "").trim();
+    const reactions = await toggleMessageReaction({
+      tableName: "social_plan_side_group_message_reactions",
+      messageTableName: "social_plan_side_group_messages",
+      messageId: request.params.messageId,
+      planId: access.plan.id,
+      userId: profile.id,
+      emoji,
+      extraMessageFilters: { group_status: allowedStatuses },
+    });
+    response.json({ reactions });
+  } catch (error) {
+    console.error("Side group reaction fatal error:", error);
+    response.status(error.code === "message_not_found" ? 404 : error.code === "invalid_reaction" ? 400 : 500).json({
+      error: ["42P01", "42703"].includes(error.code) ? "side_group_reactions_sql_missing" : error.code || "reaction_failed",
+    });
   }
 });
 
@@ -7726,7 +7870,7 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
       error = fallback.error;
     }
     if (error) return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "side_groups_sql_missing" : "side_message_failed" });
-    const [enriched] = await enrichSideMessages([message]);
+    const [enriched] = await enrichSideMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Side group message fatal error:", error);
@@ -7786,7 +7930,7 @@ app.patch("/api/social-plans/:id/side-group/:status/messages/:messageId", async 
       error = fallback.error;
     }
     if (error) throw error;
-    const [enriched] = await enrichSideMessages([message]);
+    const [enriched] = await enrichSideMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Side group edit fatal error:", error);
@@ -7832,7 +7976,7 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
       error = fallback.error;
     }
     if (error) throw error;
-    const [enriched] = await enrichSideMessages([message]);
+    const [enriched] = await enrichSideMessages([message], { viewerId: profile.id });
     response.json({ message: enriched });
   } catch (error) {
     console.error("Side group delete fatal error:", error);

@@ -21,6 +21,22 @@ alter table public.social_plan_messages
 create index if not exists social_plan_messages_reply_idx
   on public.social_plan_messages(reply_to_message_id);
 
+create table if not exists public.social_plan_message_reactions (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.social_plan_messages(id) on delete cascade,
+  plan_id uuid not null references public.social_plans(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  emoji text not null,
+  created_at timestamptz not null default now(),
+  constraint social_plan_message_reactions_emoji_check check (emoji in ('❤️', '😂', '🔥', '👏', '😮', '😢'))
+);
+
+create unique index if not exists social_plan_message_reactions_once_idx
+  on public.social_plan_message_reactions(message_id, user_id);
+
+create index if not exists social_plan_message_reactions_message_idx
+  on public.social_plan_message_reactions(message_id, created_at desc);
+
 create table if not exists public.social_plan_message_reads (
   message_id uuid not null references public.social_plan_messages(id) on delete cascade,
   plan_id uuid not null references public.social_plans(id) on delete cascade,
@@ -37,6 +53,7 @@ create index if not exists social_plan_message_reads_reader_idx
 
 alter table public.social_plan_messages enable row level security;
 alter table public.social_plan_message_reads enable row level security;
+alter table public.social_plan_message_reactions enable row level security;
 
 notify pgrst, 'reload schema';
 
