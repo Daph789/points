@@ -242,6 +242,11 @@
           purchase_not_found: "No encontramos este billete en tu cuenta.",
           photo_too_large: "La foto es demasiado pesada. Prueba con otra imagen.",
           invalid_group_size: "Indica entre 1 y 20 plazas para el grupo.",
+          invalid_age_range: "Indica una franja de edad válida entre 13 y 99 años.",
+          invalid_age: "Indica una edad válida entre 13 y 99 años.",
+          age_required: "Añade tu edad para participar en este plan.",
+          age_too_young: "Eres más joven que los participantes de este grupo. El acceso no está autorizado.",
+          age_too_old: "Eres mayor que los participantes de este grupo. El acceso no está autorizado.",
           group_size_below_accepted: "No puedes poner menos plazas que personas ya aceptadas.",
           plan_confirmed: "Este grupo ya está confirmado y no se puede editar.",
           plan_cancelled: "Este plan está cancelado.",
@@ -390,7 +395,7 @@
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent"></div>
               {photos[0] && (
                 <div className="absolute right-4 top-4 z-10 h-24 w-24 overflow-hidden rounded-[30px] border border-white/25 bg-black/30 shadow-2xl shadow-black/40 backdrop-blur">
-                  <img className="h-full w-full object-cover" src={photos[0]} alt="" />
+                  <img className="h-full w-full object-cover object-center" src={photos[0]} alt="" />
                   {photos.length > 1 && (
                     <span className="absolute bottom-1 right-1 rounded-full bg-black/65 px-2 py-1 text-[10px] font-black text-white backdrop-blur">+{photos.length - 1}</span>
                   )}
@@ -427,6 +432,9 @@
                 {free && plan.event_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Es para el día: {formatDate(plan.event_date)}</p>}
                 {!free && offer.start_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Evento: {formatDate(offer.start_date)}</p>}
                 {!free && offer.end_date && <p className="rounded-2xl bg-black/20 px-3 py-2">Compra disponible hasta: {formatDate(offer.end_date)}</p>}
+                {(isDonossAdmin || plan.is_owner) && (plan.wanted_age_min || plan.wanted_age_max) && (
+                  <p className="rounded-2xl border border-sun/20 bg-sun/10 px-3 py-2 text-sun">Edad privada: {plan.wanted_age_min || "13"} - {plan.wanted_age_max || "99"} años</p>
+                )}
               </div>
               {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
@@ -504,7 +512,11 @@
         const [freePreference, setFreePreference] = React.useState(true);
         const [wantedWomen, setWantedWomen] = React.useState(0);
         const [wantedMen, setWantedMen] = React.useState(0);
+        const [wantedAgeMin, setWantedAgeMin] = React.useState("");
+        const [wantedAgeMax, setWantedAgeMax] = React.useState("");
         const [joinPlan, setJoinPlan] = React.useState(null);
+        const [ageGatePlan, setAgeGatePlan] = React.useState(null);
+        const [joinAge, setJoinAge] = React.useState("");
         const [purchaseRequiredPlan, setPurchaseRequiredPlan] = React.useState(null);
         const [photoGatePlan, setPhotoGatePlan] = React.useState(null);
         const [planProfilePhotos, setPlanProfilePhotos] = React.useState([]);
@@ -984,6 +996,14 @@
           if (totalWanted <= 0) return setStatus("Indica cuántas personas pueden apuntarse como máximo.");
           if (totalWanted > 20) return setStatus("El máximo para un plan es de 20 personas.");
           if (!freePreference && womenWanted + menWanted > totalWanted) return setStatus("La suma de chicas y chicos no puede superar el máximo de personas.");
+          const ageMin = wantedAgeMin === "" ? "" : Math.floor(Number(wantedAgeMin));
+          const ageMax = wantedAgeMax === "" ? "" : Math.floor(Number(wantedAgeMax));
+          const ageMinValid = ageMin === "" || (ageMin >= 13 && ageMin <= 99);
+          const ageMaxValid = ageMax === "" || (ageMax >= 13 && ageMax <= 99);
+          if (!ageMinValid || !ageMaxValid || (ageMin !== "" && ageMax !== "" && ageMin > ageMax)) {
+            setStatus("Indica una franja de edad válida entre 13 y 99 años.");
+            return;
+          }
           setIsSaving(true);
           setStatus("");
           try {
@@ -1009,6 +1029,8 @@
                 wantedWomen: womenWanted,
                 wantedMen: menWanted,
                 wantedOpen: openWanted,
+                wantedAgeMin: ageMin,
+                wantedAgeMax: ageMax,
               }),
             });
             setStatus(editingPlanId ? "Plan actualizado correctamente." : "Plan publicado correctamente.");
@@ -1028,6 +1050,8 @@
             setFreePreference(true);
             setWantedWomen(0);
             setWantedMen(0);
+            setWantedAgeMin("");
+            setWantedAgeMax("");
             await reloadAll();
           } catch (error) {
             setStatus(friendlyError(error.message, "No se ha podido publicar el plan."));
@@ -1065,7 +1089,49 @@
               setStatus("Añade mínimo 2 fotos para que puedan reconocerte en el plan.");
               return;
             }
+            if (error.message === "age_required") {
+              setAgeGatePlan(joinPlan);
+              setJoinAge(profile?.age ? String(profile.age) : "");
+              setJoinPlan(null);
+              setStatus("");
+              return;
+            }
+            if (["age_too_young", "age_too_old"].includes(error.message)) {
+              setJoinPlan(null);
+              setStatus(friendlyError(error.message, "No puedes entrar en este grupo."));
+              return;
+            }
             setStatus(friendlyError(error.message, "No se ha podido enviar tu solicitud."));
+          } finally {
+            setIsSaving(false);
+          }
+        }
+
+        async function saveAgeAndJoin() {
+          if (!token || !ageGatePlan) return;
+          const cleanAge = Math.floor(Number(joinAge || 0));
+          if (cleanAge < 13 || cleanAge > 99) {
+            setStatus("Indica una edad válida entre 13 y 99 años.");
+            return;
+          }
+          setIsSaving(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ age: cleanAge }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "invalid_age");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), age: cleanAge } : { ...(data.profile || {}), age: cleanAge });
+            setJoinPlan(ageGatePlan);
+            setAgeGatePlan(null);
+          } catch (error) {
+            setStatus(friendlyError(error.message, "No se ha podido guardar tu edad."));
           } finally {
             setIsSaving(false);
           }
@@ -1126,6 +1192,8 @@
           setFreePreference(women === 0 && men === 0);
           setWantedWomen(women);
           setWantedMen(men);
+          setWantedAgeMin(plan.wanted_age_min ? String(plan.wanted_age_min) : "");
+          setWantedAgeMax(plan.wanted_age_max ? String(plan.wanted_age_max) : "");
           setDetailPlan(null);
           setStatus("Editando tu plan. Guarda los cambios cuando termines.");
           setMode("create");
@@ -1148,6 +1216,8 @@
           setFreePreference(true);
           setWantedWomen(0);
           setWantedMen(0);
+          setWantedAgeMin("");
+          setWantedAgeMax("");
           setStatus("");
         }
 
@@ -1632,6 +1702,20 @@
                           </p>
                         </>
                       )}
+                      <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.035] p-3">
+                        <p className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">Preferencia privada de edad</p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Opcional. Solo Donoss y tú pueden verla. Si alguien intenta entrar fuera de esta franja, Donoss bloquea el acceso sin mostrar la edad buscada.</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <label className="rounded-2xl bg-black/20 p-3">
+                            <span className="text-xs font-bold text-slate-500">Edad mínima</span>
+                            <input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="13" max="99" inputMode="numeric" value={wantedAgeMin} onChange={(event) => setWantedAgeMin(event.target.value)} placeholder="18" />
+                          </label>
+                          <label className="rounded-2xl bg-black/20 p-3">
+                            <span className="text-xs font-bold text-slate-500">Edad máxima</span>
+                            <input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="13" max="99" inputMode="numeric" value={wantedAgeMax} onChange={(event) => setWantedAgeMax(event.target.value)} placeholder="25" />
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   )}
                   <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donoss lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
@@ -1716,6 +1800,30 @@
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setJoinPlan(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={submitJoin}>Enviar</button>
+                  </div>
+                </section>
+              </div>
+            )}
+
+            {ageGatePlan && (
+              <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
+                <section className="mx-auto w-full max-w-md rounded-[34px] border border-mint/20 bg-[#0D111D] p-5 shadow-2xl">
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Edad necesaria</p>
+                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">Indica tu edad para participar</h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Donoss la usará para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.</p>
+                  <input
+                    className="mt-4 h-14 w-full rounded-2xl border border-line bg-black/20 px-4 text-2xl font-black text-white outline-none focus:border-mint/70"
+                    type="number"
+                    min="13"
+                    max="99"
+                    inputMode="numeric"
+                    value={joinAge}
+                    onChange={(event) => setJoinAge(event.target.value)}
+                    placeholder="18"
+                  />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setAgeGatePlan(null)}>Cancelar</button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={saveAgeAndJoin}>Guardar</button>
                   </div>
                 </section>
               </div>

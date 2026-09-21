@@ -151,6 +151,8 @@
           bioBusiness: "Bio de la empresa",
           bioUser: "Bio personal",
           bioMin: "Mínimo 20 caracteres para que otros entiendan quién eres.",
+          ageUser: "Edad",
+          ageHint: "Escribe tu edad en número. No hace falta calendario.",
           categories: "Categorías",
           emailBusiness: "Correo electrónico profesional",
           emailUser: "Correo electrónico",
@@ -203,6 +205,7 @@
           needAccountType: "Elige si quieres crear una cuenta de usuario o de empresa.",
           needDisplayName: "Escribe tu nombre o el nombre del comercio.",
           needBio: "Añade una bio de mínimo 20 caracteres.",
+          needAge: "Añade una edad válida entre 13 y 99 años.",
           needEmail: "Escribe tu correo electrónico.",
           needEmailConfirm: "Repite tu correo electrónico.",
           needPhone: "Añade tu teléfono.",
@@ -246,6 +249,8 @@
           bioBusiness: "Bio de l’entreprise",
           bioUser: "Bio personnelle",
           bioMin: "Minimum 20 caractères pour que les autres comprennent qui tu es.",
+          ageUser: "Âge",
+          ageHint: "Écris ton âge en chiffre. Pas besoin de calendrier.",
           categories: "Catégories",
           emailBusiness: "Adresse e-mail professionnelle",
           emailUser: "Adresse e-mail",
@@ -298,6 +303,7 @@
           needAccountType: "Choisis si tu veux créer un compte utilisateur ou entreprise.",
           needDisplayName: "Écris ton nom ou le nom du commerce.",
           needBio: "Ajoute une bio de minimum 20 caractères.",
+          needAge: "Ajoute un âge valide entre 13 et 99 ans.",
           needEmail: "Écris ton adresse e-mail.",
           needEmailConfirm: "Répète ton adresse e-mail.",
           needPhone: "Ajoute ton téléphone.",
@@ -497,6 +503,7 @@
         const [accountType, setAccountType] = React.useState(initialSignupDraft.accountType || "");
         const [displayName, setDisplayName] = React.useState(initialSignupDraft.displayName || "");
         const [bio, setBio] = React.useState(initialSignupDraft.bio || "");
+        const [age, setAge] = React.useState(initialSignupDraft.age || "");
         const [email, setEmail] = React.useState(initialSignupDraft.email || "");
         const [emailConfirm, setEmailConfirm] = React.useState(initialSignupDraft.emailConfirm || "");
         const [phone, setPhone] = React.useState(initialSignupDraft.phone || "");
@@ -549,10 +556,13 @@
         const ibansMatch = normalizedIban && normalizedIban === normalizedIbanConfirm;
         const bankDetailsComplete = bankAccountHolder.trim() && ibanIsValid && ibansMatch;
         const bioText = bio.trim();
+        const cleanAge = Math.floor(Number(age || 0));
+        const ageIsValid = cleanAge >= 13 && cleanAge <= 99;
         const canSubmit =
           accountType &&
           displayName.trim() &&
           bioText.length >= 20 &&
+          (!isUser || ageIsValid) &&
           emailsMatch &&
           phone.trim() &&
           finalCityLabel &&
@@ -567,6 +577,7 @@
           if (!accountType) return t.needAccountType;
           if (!displayName.trim()) return t.needDisplayName;
           if (bioText.length < 20) return t.needBio;
+          if (isUser && !ageIsValid) return t.needAge;
           if (!normalizedEmail) return t.needEmail;
           if (!normalizedEmailConfirm) return t.needEmailConfirm;
           if (!emailsMatch) return t.emailsDoNotMatch;
@@ -607,6 +618,7 @@
             accountType,
             displayName,
             bio,
+            age,
             email,
             emailConfirm,
             phone,
@@ -625,6 +637,7 @@
           accountType,
           displayName,
           bio,
+          age,
           email,
           emailConfirm,
           phone,
@@ -719,6 +732,7 @@
             account_type: accountType,
             display_name: displayName.trim(),
             bio: bioText,
+            age: isUser ? cleanAge : null,
             email: normalizedEmail,
             phone: `${selectedCountry.dialCode} ${phone.trim()}`,
             country_code: selectedCountry.code,
@@ -1038,6 +1052,24 @@
                           <span className="text-slate-500">{bio.length}/500</span>
                         </div>
                       </Field>
+
+                      {isUser && (
+                        <Field label={t.ageUser}>
+                          <input
+                            className={inputClass}
+                            type="number"
+                            min="13"
+                            max="99"
+                            inputMode="numeric"
+                            placeholder="18"
+                            value={age}
+                            onChange={(event) => setAge(event.target.value)}
+                          />
+                          <p className={`mt-2 text-xs font-bold ${age && !ageIsValid ? "text-coral" : "text-slate-500"}`}>
+                            {t.ageHint}
+                          </p>
+                        </Field>
+                      )}
 
                       {isBusiness && (
                         <>

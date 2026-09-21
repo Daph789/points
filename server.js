@@ -911,12 +911,18 @@ function metadataText(metadata, key) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
+function normalizeAge(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const age = Math.floor(Number(value));
+  return Number.isInteger(age) && age >= 13 && age <= 99 ? age : null;
+}
+
 async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const legacyBaseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
   const marketProfileColumns = "country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country";
-  const baseProfileColumns = `${legacyBaseProfileColumns}, ${marketProfileColumns}`;
+  const baseProfileColumns = `${legacyBaseProfileColumns}, age, ${marketProfileColumns}`;
   const profileIdentityColumns = `${baseProfileColumns}, bio`;
   const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
   const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at`;
@@ -979,6 +985,21 @@ async function ensureProfileForUser(user) {
         if (error?.code !== "42703") console.error("Profile bio backfill fatal error:", error);
       }
     }
+    const metadataAge = normalizeAge(metadata.age);
+    if (metadataAge && !existing.age) {
+      try {
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({ age: metadataAge })
+          .eq("id", user.id)
+          .select(profileColumns)
+          .maybeSingle();
+        if (!updateError && updated) return updated;
+        if (updateError?.code !== "42703") console.error("Profile age backfill error:", updateError);
+      } catch (error) {
+        if (error?.code !== "42703") console.error("Profile age backfill fatal error:", error);
+      }
+    }
     const metadataBankIban = metadataText(metadata, "bank_iban").replace(/[^A-Z0-9]/gi, "").toUpperCase();
     if (existing.account_type === "business" && metadataBankIban && !existing.bank_iban) {
       try {
@@ -1019,6 +1040,7 @@ async function ensureProfileForUser(user) {
     bio: metadataText(metadata, "bio") || null,
     email: user.email || metadataText(metadata, "email"),
     phone: metadataText(metadata, "phone") || null,
+    age: normalizeAge(metadata.age),
     country_code: metadataText(metadata, "country_code") || "ES",
     country_label: metadataText(metadata, "country_label") || "España",
     city_market: metadataText(metadata, "city_market") || "donostia",
@@ -1059,6 +1081,7 @@ async function ensureProfileForUser(user) {
     if (error?.code === "42703") {
       const {
         bio: _bio,
+        age: _age,
         country_code: _countryCode,
         country_label: _countryLabel,
         city_market: _cityMarket,
@@ -3641,14 +3664,16 @@ app.put("/api/me/profile", async (request, response) => {
 
   const hasDisplayName = Object.prototype.hasOwnProperty.call(request.body || {}, "display_name");
   const hasBio = Object.prototype.hasOwnProperty.call(request.body || {}, "bio");
+  const hasAge = Object.prototype.hasOwnProperty.call(request.body || {}, "age");
   const hasProfilePhoto = Object.prototype.hasOwnProperty.call(request.body || {}, "profile_photo_data_url");
   const hasNeighborhood = Object.prototype.hasOwnProperty.call(request.body || {}, "neighborhood");
   const hasMarket = Object.prototype.hasOwnProperty.call(request.body || {}, "country_code") || Object.prototype.hasOwnProperty.call(request.body || {}, "city_market");
   const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
   const bio = String(request.body?.bio || "").trim().replace(/\s+/g, " ");
+  const age = normalizeAge(request.body?.age);
   const profilePhoto = String(request.body?.profile_photo_data_url || "");
   const neighborhood = String(request.body?.neighborhood || "").trim().replace(/\s+/g, " ");
-  if (!hasDisplayName && !hasBio && !hasProfilePhoto && !hasNeighborhood && !hasMarket) {
+  if (!hasDisplayName && !hasBio && !hasAge && !hasProfilePhoto && !hasNeighborhood && !hasMarket) {
     return response.status(400).json({ error: "nothing_to_update" });
   }
   if (hasDisplayName && (displayName.length < 2 || displayName.length > 60)) {
@@ -3656,6 +3681,9 @@ app.put("/api/me/profile", async (request, response) => {
   }
   if (hasBio && (bio.length < 20 || bio.length > 500)) {
     return response.status(400).json({ error: "invalid_bio" });
+  }
+  if (hasAge && age === null) {
+    return response.status(400).json({ error: "invalid_age" });
   }
   if (hasProfilePhoto && profilePhoto && (!profilePhoto.startsWith("data:image/") || profilePhoto.length > 1400000)) {
     return response.status(400).json({ error: "invalid_profile_photo" });
@@ -3672,6 +3700,7 @@ app.put("/api/me/profile", async (request, response) => {
     const payload = {};
     if (hasDisplayName) payload.display_name = displayName;
     if (hasBio) payload.bio = bio;
+    if (hasAge) payload.age = age;
     if (hasProfilePhoto) payload.profile_photo_data_url = profilePhoto || null;
     if (hasNeighborhood) payload.neighborhood = neighborhood;
     if (hasMarket) {
@@ -3717,7 +3746,7 @@ app.put("/api/me/profile", async (request, response) => {
       .from("profiles")
       .update(payload)
       .eq("id", profile.id)
-      .select("id, account_type, display_name, bio, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .select("id, account_type, display_name, bio, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (error?.code === "42703") return response.status(500).json({ error: hasProfilePhoto ? "profile_photo_sql_missing" : "profile_bio_sql_missing" });
@@ -5428,6 +5457,44 @@ function isSocialPlanExpired(plan) {
   return hasPastDate(plan?.purchase?.qr_valid_until, plan?.purchase?.offer?.qr_valid_until);
 }
 
+const socialPlanSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, wanted_age_min, wanted_age_max, country_code, city_market, city_label, status, confirmed_at, created_at, updated_at";
+const legacySocialPlanSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at";
+
+function normalizeWantedAgeRange(body = {}) {
+  const rawMin = body.wantedAgeMin === "" || body.wantedAgeMin === undefined ? null : normalizeAge(body.wantedAgeMin);
+  const rawMax = body.wantedAgeMax === "" || body.wantedAgeMax === undefined ? null : normalizeAge(body.wantedAgeMax);
+  if ((body.wantedAgeMin !== "" && body.wantedAgeMin !== undefined && rawMin === null) || (body.wantedAgeMax !== "" && body.wantedAgeMax !== undefined && rawMax === null)) {
+    const error = new Error("invalid_age_range");
+    error.code = "invalid_age_range";
+    throw error;
+  }
+  if (rawMin !== null && rawMax !== null && rawMin > rawMax) {
+    const error = new Error("invalid_age_range");
+    error.code = "invalid_age_range";
+    throw error;
+  }
+  return { wanted_age_min: rawMin, wanted_age_max: rawMax };
+}
+
+function ageGateForPlan(plan, profile) {
+  const min = normalizeAge(plan?.wanted_age_min);
+  const max = normalizeAge(plan?.wanted_age_max);
+  if (min === null && max === null) return null;
+  const age = normalizeAge(profile?.age);
+  if (age === null) return "age_required";
+  if (min !== null && age < min) return "age_too_young";
+  if (max !== null && age > max) return "age_too_old";
+  return null;
+}
+
+function hidePrivateSocialPlanPreferences(plan, viewerId = "", viewerProfile = null) {
+  if (!plan) return plan;
+  const canSee = plan.creator_id === viewerId || isDonossMainAdminProfile(viewerProfile);
+  if (canSee) return plan;
+  const { wanted_age_min: _min, wanted_age_max: _max, ...publicPlan } = plan;
+  return publicPlan;
+}
+
 function filterPublicSocialPlans(plans, viewerId) {
   return (plans || []).filter((plan) => {
     if (!isSocialPlanExpired(plan)) return true;
@@ -5474,7 +5541,7 @@ function normalizedSocialPlanCover(value) {
   return photo;
 }
 
-async function enrichSocialPlans(plans, viewerId = "") {
+async function enrichSocialPlans(plans, viewerId = "", viewerProfile = null) {
   const planRows = plans || [];
   const creatorIds = [...new Set(planRows.map((plan) => plan.creator_id).filter(Boolean))];
   const purchaseIds = [...new Set(planRows.map((plan) => plan.purchase_id).filter(Boolean))];
@@ -5561,7 +5628,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
       ...plan,
       purchase,
     };
-    return {
+    return hidePrivateSocialPlanPreferences({
       ...plan,
       photo_data_urls: parseSocialPlanPhotos(plan.photo_data_url),
       creator_plan_photo_data_urls: publicCreatorPlanPhotos(creatorsById[plan.creator_id]),
@@ -5577,7 +5644,7 @@ async function enrichSocialPlans(plans, viewerId = "") {
       } : null,
       is_owner: plan.creator_id === viewerId,
       is_expired: isSocialPlanExpired(enrichedPlan),
-    };
+    }, viewerId, viewerProfile);
   });
 }
 
@@ -6646,11 +6713,9 @@ app.get("/api/social-plans", async (request, response) => {
 
   try {
     const viewer = auth.error ? null : await ensureProfileForUser(auth.user);
-    const socialPlanPublicSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, country_code, city_market, city_label, status, confirmed_at, created_at, updated_at";
-    const legacySocialPlanPublicSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at";
     let { data: plans, error } = await supabaseAdmin
       .from("social_plans")
-      .select(socialPlanPublicSelect)
+      .select(socialPlanSelect)
       .neq("status", "cancelled")
       .order("created_at", { ascending: false })
       .limit(120);
@@ -6658,7 +6723,7 @@ app.get("/api/social-plans", async (request, response) => {
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plans")
-        .select(legacySocialPlanPublicSelect)
+        .select(legacySocialPlanSelect)
         .neq("status", "cancelled")
         .order("created_at", { ascending: false })
         .limit(120);
@@ -6674,7 +6739,7 @@ app.get("/api/social-plans", async (request, response) => {
     const viewerId = viewer?.id || "";
     const viewerMarket = viewer ? effectiveProfileMarket(viewer) : null;
     const localPlans = filterItemsByMarket(plans || [], viewerMarket);
-    const enriched = await enrichSocialPlans(localPlans, viewerId);
+    const enriched = await enrichSocialPlans(localPlans, viewerId, viewer);
     response.json({ plans: filterPublicSocialPlans(enriched, viewerId), guest: !viewerId, market: viewerMarket });
   } catch (error) {
     console.error("Social plans list fatal error:", error);
@@ -6690,12 +6755,23 @@ app.get("/api/social-plans/me", async (request, response) => {
 
   try {
     const viewer = await ensureProfileForUser(auth.user);
-    const { data: owned, error: ownedError } = await supabaseAdmin
+    let { data: owned, error: ownedError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select(socialPlanSelect)
       .eq("creator_id", viewer.id)
       .order("created_at", { ascending: false })
       .limit(100);
+
+    if (ownedError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .select(legacySocialPlanSelect)
+        .eq("creator_id", viewer.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      owned = fallback.data;
+      ownedError = fallback.error;
+    }
 
     if (ownedError) {
       console.error("My social plans owned error:", ownedError);
@@ -6713,18 +6789,27 @@ app.get("/api/social-plans/me", async (request, response) => {
     const memberPlanIds = [...new Set((memberRows || []).map((row) => row.plan_id).filter(Boolean))];
     let joined = [];
     if (memberPlanIds.length > 0) {
-      const { data: joinedPlans, error: joinedError } = await supabaseAdmin
+      let { data: joinedPlans, error: joinedError } = await supabaseAdmin
         .from("social_plans")
-        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .select(socialPlanSelect)
         .in("id", memberPlanIds)
         .order("created_at", { ascending: false });
+      if (joinedError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("social_plans")
+          .select(legacySocialPlanSelect)
+          .in("id", memberPlanIds)
+          .order("created_at", { ascending: false });
+        joinedPlans = fallback.data;
+        joinedError = fallback.error;
+      }
       if (joinedError) console.error("My social plans joined error:", joinedError);
       joined = joinedError ? [] : (joinedPlans || []);
     }
 
     response.json({
-      owned: await enrichSocialPlans(owned || [], viewer.id),
-      joined: await enrichSocialPlans(joined || [], viewer.id),
+      owned: await enrichSocialPlans(owned || [], viewer.id, viewer),
+      joined: await enrichSocialPlans(joined || [], viewer.id, viewer),
     });
   } catch (error) {
     console.error("My social plans fatal error:", error);
@@ -6828,6 +6913,7 @@ app.post("/api/social-plans", async (request, response) => {
     const wantedWomen = Math.max(Math.floor(Number(request.body?.wantedWomen || 0)), 0);
     const wantedMen = Math.max(Math.floor(Number(request.body?.wantedMen || 0)), 0);
     const wantedOpen = Math.max(Math.floor(Number(request.body?.wantedOpen || 0)), 0);
+    const wantedAgeRange = normalizeWantedAgeRange(request.body || {});
     const totalWanted = wantedWomen + wantedMen + wantedOpen;
     if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
     const planPhotoDataUrl = normalizedSocialPlanPhotos(request.body?.photoDataUrls || request.body?.photoDataUrl);
@@ -6863,20 +6949,21 @@ app.post("/api/social-plans", async (request, response) => {
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
+        ...wantedAgeRange,
       };
 
     let { data: plan, error } = await supabaseAdmin
       .from("social_plans")
       .insert(planPayload)
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select(socialPlanSelect)
       .maybeSingle();
 
     if (error?.code === "42703") {
-      const { country_code, city_market, city_label, ...legacyPlanPayload } = planPayload;
+      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, ...legacyPlanPayload } = planPayload;
       const fallback = await supabaseAdmin
         .from("social_plans")
         .insert(legacyPlanPayload)
-        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .select(legacySocialPlanSelect)
         .maybeSingle();
       plan = fallback.data;
       error = fallback.error;
@@ -6889,10 +6976,11 @@ app.post("/api/social-plans", async (request, response) => {
       });
     }
 
-    response.json({ plan: (await enrichSocialPlans([plan], creator.id))[0] });
+    response.json({ plan: (await enrichSocialPlans([plan], creator.id, creator))[0] });
   } catch (error) {
     console.error("Create social plan fatal error:", error);
     if (error.code === "photo_too_large") return response.status(413).json({ error: "photo_too_large" });
+    if (error.code === "invalid_age_range") return response.status(400).json({ error: "invalid_age_range" });
     response.status(500).json({ error: "create_plan_failed" });
   }
 });
@@ -6919,6 +7007,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
     const wantedWomen = Math.max(Math.floor(Number(request.body?.wantedWomen || 0)), 0);
     const wantedMen = Math.max(Math.floor(Number(request.body?.wantedMen || 0)), 0);
     const wantedOpen = Math.max(Math.floor(Number(request.body?.wantedOpen || 0)), 0);
+    const wantedAgeRange = normalizeWantedAgeRange(request.body || {});
     const totalWanted = wantedWomen + wantedMen + wantedOpen;
     if (totalWanted <= 0 || totalWanted > 20) return response.status(400).json({ error: "invalid_group_size" });
 
@@ -6989,6 +7078,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
         wanted_women: wantedWomen,
         wanted_men: wantedMen,
         wanted_open: wantedOpen,
+        ...wantedAgeRange,
         updated_at: new Date().toISOString(),
       };
 
@@ -6997,17 +7087,17 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       .update(planPayload)
       .eq("id", existing.id)
       .eq("creator_id", owner.id)
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select(socialPlanSelect)
       .maybeSingle();
 
     if (error?.code === "42703") {
-      const { country_code, city_market, city_label, ...legacyPlanPayload } = planPayload;
+      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, ...legacyPlanPayload } = planPayload;
       const fallback = await supabaseAdmin
         .from("social_plans")
         .update(legacyPlanPayload)
         .eq("id", existing.id)
         .eq("creator_id", owner.id)
-        .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+        .select(legacySocialPlanSelect)
         .maybeSingle();
       plan = fallback.data;
       error = fallback.error;
@@ -7020,10 +7110,11 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       });
     }
 
-    response.json({ plan: (await enrichSocialPlans([plan], owner.id))[0] });
+    response.json({ plan: (await enrichSocialPlans([plan], owner.id, owner))[0] });
   } catch (error) {
     console.error("Update social plan fatal error:", error);
     if (error.code === "photo_too_large") return response.status(413).json({ error: "photo_too_large" });
+    if (error.code === "invalid_age_range") return response.status(400).json({ error: "invalid_age_range" });
     response.status(500).json({ error: "update_plan_failed" });
   }
 });
@@ -7038,15 +7129,26 @@ app.post("/api/social-plans/:id/join", async (request, response) => {
     const user = await ensureProfileForUser(auth.user);
     if (user.account_type === "business") return response.status(403).json({ error: "users_only" });
 
-    const { data: plan, error: planError } = await supabaseAdmin
+    let { data: plan, error: planError } = await supabaseAdmin
       .from("social_plans")
-      .select("id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at")
+      .select(socialPlanSelect)
       .eq("id", request.params.id)
       .maybeSingle();
+    if (planError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .select(legacySocialPlanSelect)
+        .eq("id", request.params.id)
+        .maybeSingle();
+      plan = fallback.data;
+      planError = fallback.error;
+    }
     if (planError) throw planError;
     if (!plan || plan.status === "cancelled") return response.status(404).json({ error: "plan_not_found" });
     if (plan.creator_id === user.id) return response.status(400).json({ error: "owner_cannot_join" });
     if (plan.status === "confirmed") return response.status(400).json({ error: "plan_confirmed" });
+    const ageGate = ageGateForPlan(plan, user);
+    if (ageGate) return response.status(403).json({ error: ageGate });
 
     if ((plan.plan_type || "ticket") !== "free") {
       const { data: planPurchase, error: planPurchaseError } = await supabaseAdmin

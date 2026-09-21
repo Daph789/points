@@ -223,6 +223,7 @@
         const [isSavingName, setIsSavingName] = React.useState(false);
         const [isEditingBio, setIsEditingBio] = React.useState(false);
         const [bioDraft, setBioDraft] = React.useState("");
+        const [ageDraft, setAgeDraft] = React.useState("");
         const [isSavingBio, setIsSavingBio] = React.useState(false);
         const [isEditingNeighborhood, setIsEditingNeighborhood] = React.useState(false);
         const [neighborhoodDraft, setNeighborhoodDraft] = React.useState("");
@@ -262,7 +263,7 @@
               return;
             }
 
-            const columns = "id, display_name, bio, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
+            const columns = "id, display_name, bio, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
             let data = null;
             let error = null;
 
@@ -330,6 +331,7 @@
               window.setTimeout(() => window.donossI18n?.applyAll?.(), 0);
             }
             setBioDraft(data?.bio || "");
+            setAgeDraft(data?.age ? String(data.age) : "");
             const initialNeighborhood = data?.neighborhood || "";
             const initialNeighborhoods = neighborhoodsByCountry[String(data?.country_code || "ES").toUpperCase()] || neighborhoodsByCountry.ES;
             if (initialNeighborhood && initialNeighborhoods.includes(initialNeighborhood)) {
@@ -610,6 +612,36 @@
             setStatus("Bio actualizada correctamente.");
           } catch (error) {
             setStatus(error.message === "profile_bio_sql_missing" ? "Falta ejecutar el SQL de bio de perfiles." : "No se ha podido actualizar tu bio.");
+          } finally {
+            setIsSavingBio(false);
+          }
+        }
+
+        async function saveAge() {
+          if (!accessToken) return redirectToLogin();
+          const cleanAge = Math.floor(Number(ageDraft || 0));
+          if (cleanAge < 13 || cleanAge > 99) {
+            setStatus("Indica una edad válida entre 13 y 99 años.");
+            return;
+          }
+
+          setIsSavingBio(true);
+          setStatus("");
+          try {
+            const response = await fetch("/api/me/profile", {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ age: cleanAge }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || "profile_update_failed");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), age: cleanAge } : current);
+            setStatus("Edad actualizada correctamente.");
+          } catch (error) {
+            setStatus(error.message === "invalid_age" ? "Indica una edad válida entre 13 y 99 años." : "No se ha podido actualizar tu edad.");
           } finally {
             setIsSavingBio(false);
           }
@@ -1047,6 +1079,37 @@
                   </form>
                 )}
               </div>
+
+              {!isBusiness && (
+                <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Edad</p>
+                      <p className="mt-2 text-2xl font-black text-white">{profile.age ? `${profile.age} años` : "No indicada"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="h-11 w-24 rounded-2xl border border-line bg-white/[0.04] px-4 text-sm font-black text-white outline-none focus:border-mint/70"
+                        type="number"
+                        min="13"
+                        max="99"
+                        inputMode="numeric"
+                        value={ageDraft}
+                        onChange={(event) => setAgeDraft(event.target.value)}
+                        placeholder="18"
+                      />
+                      <button
+                        className="h-11 rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow disabled:opacity-60"
+                        type="button"
+                        disabled={isSavingBio}
+                        onClick={saveAge}
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {isBusiness && (
                 <div className="mt-5 rounded-3xl border border-mint/20 bg-mint/10 p-4">

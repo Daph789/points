@@ -13,6 +13,8 @@ create table if not exists public.social_plans (
   wanted_women integer not null default 0,
   wanted_men integer not null default 0,
   wanted_open integer not null default 0,
+  wanted_age_min integer,
+  wanted_age_max integer,
   status text not null default 'open',
   confirmed_at timestamptz,
   created_at timestamptz not null default now(),
@@ -32,6 +34,14 @@ alter table public.social_plans add column if not exists free_category text;
 alter table public.social_plans add column if not exists location text;
 alter table public.social_plans add column if not exists event_date date;
 alter table public.social_plans add column if not exists free_cover_data_url text;
+alter table public.social_plans add column if not exists wanted_age_min integer;
+alter table public.social_plans add column if not exists wanted_age_max integer;
+alter table public.social_plans drop constraint if exists social_plans_wanted_age_check;
+alter table public.social_plans add constraint social_plans_wanted_age_check check (
+  (wanted_age_min is null or wanted_age_min between 13 and 99)
+  and (wanted_age_max is null or wanted_age_max between 13 and 99)
+  and (wanted_age_min is null or wanted_age_max is null or wanted_age_min <= wanted_age_max)
+);
 alter table public.social_plans drop constraint if exists social_plans_type_check;
 alter table public.social_plans add constraint social_plans_type_check check (plan_type in ('ticket', 'free'));
 alter table public.social_plans drop constraint if exists social_plans_ticket_or_free_check;

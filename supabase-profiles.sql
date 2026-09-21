@@ -3,6 +3,7 @@ create table if not exists public.profiles (
   display_name text not null,
   email text not null,
   phone text,
+  age integer,
   neighborhood text not null,
   account_type text not null default 'user' check (account_type in ('user', 'business')),
   business_categories text[],
@@ -38,6 +39,15 @@ alter table public.profiles
 
 alter table public.profiles
   alter column phone drop not null;
+
+alter table public.profiles
+  add column if not exists age integer;
+
+alter table public.profiles
+  drop constraint if exists profiles_age_check;
+
+alter table public.profiles
+  add constraint profiles_age_check check (age is null or (age between 13 and 99));
 
 alter table public.profiles
   drop column if exists business_category;
