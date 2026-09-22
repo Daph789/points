@@ -5872,13 +5872,32 @@ async function loadMessageReactions(tableName, messageIds = [], viewerId = "") {
       if (!["42P01", "42703"].includes(error.code)) console.error("Chat reactions load error:", error);
       return {};
     }
+    const reactorIds = [...new Set((data || []).map((reaction) => reaction.user_id).filter(Boolean))];
+    let reactorsById = {};
+    if (reactorIds.length > 0) {
+      let { data: reactors, error: reactorsError } = await supabaseAdmin
+        .from("profiles")
+        .select("id, account_type, display_name, email, transaction_id, is_verified, profile_photo_data_url, plan_photo_data_url")
+        .in("id", reactorIds);
+      if (reactorsError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("profiles")
+          .select("id, display_name, email, transaction_id, is_verified")
+          .in("id", reactorIds);
+        reactors = fallback.data;
+        reactorsError = fallback.error;
+      }
+      if (reactorsError) console.error("Chat reaction profiles load error:", reactorsError);
+      reactorsById = Object.fromEntries((reactors || []).map((profile) => [profile.id, privatePlanProfile(profile)]));
+    }
     const grouped = {};
     for (const reaction of data || []) {
       if (!chatReactionEmojis.includes(reaction.emoji)) continue;
       if (!grouped[reaction.message_id]) grouped[reaction.message_id] = {};
-      if (!grouped[reaction.message_id][reaction.emoji]) grouped[reaction.message_id][reaction.emoji] = { emoji: reaction.emoji, count: 0, mine: false };
+      if (!grouped[reaction.message_id][reaction.emoji]) grouped[reaction.message_id][reaction.emoji] = { emoji: reaction.emoji, count: 0, mine: false, users: [] };
       grouped[reaction.message_id][reaction.emoji].count += 1;
       if (viewerId && reaction.user_id === viewerId) grouped[reaction.message_id][reaction.emoji].mine = true;
+      if (reactorsById[reaction.user_id]) grouped[reaction.message_id][reaction.emoji].users.push(reactorsById[reaction.user_id]);
     }
     return Object.fromEntries(Object.entries(grouped).map(([messageId, reactions]) => [messageId, Object.values(reactions)]));
   } catch (error) {

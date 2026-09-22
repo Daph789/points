@@ -184,6 +184,7 @@
         const [messageToDelete, setMessageToDelete] = React.useState(null);
         const [replyingTo, setReplyingTo] = React.useState(null);
         const [activeReactionMessageId, setActiveReactionMessageId] = React.useState("");
+        const [reactionList, setReactionList] = React.useState(null);
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
         const [unreadDividerId, setUnreadDividerId] = React.useState("");
         const [hasMoreMessages, setHasMoreMessages] = React.useState(false);
@@ -196,6 +197,7 @@
         const isActiveRef = React.useRef(!startsPrefetched);
         const loadingChatRef = React.useRef(false);
         const swipeRef = React.useRef(null);
+        const longPressTimerRef = React.useRef(null);
         const swipeBlockClickRef = React.useRef(false);
         const positionedInitialChatRef = React.useRef(false);
         const messageRefs = React.useRef({});
@@ -388,14 +390,39 @@
           window.navigator?.vibrate?.(12);
         }
 
+        function clearLongPressTimer() {
+          if (longPressTimerRef.current) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+          }
+        }
+
+        function openReactionPicker(message) {
+          if (!message || message.pending || message.deleted_at) return;
+          setActiveReactionMessageId((current) => current === message.id ? "" : message.id);
+          swipeBlockClickRef.current = true;
+          window.navigator?.vibrate?.(12);
+          window.setTimeout(() => {
+            swipeBlockClickRef.current = false;
+          }, 180);
+        }
+
+        function openReactionList(message, reaction) {
+          if (!reaction?.emoji) return;
+          setActiveReactionMessageId("");
+          setReactionList({ message, reaction });
+        }
+
         function handleBubblePointerDown(event, message) {
           if (!message || message.pending || message.deleted_at || event.button > 0) return;
+          clearLongPressTimer();
           swipeRef.current = {
             id: message.id,
             startX: event.clientX,
             startY: event.clientY,
             active: false,
           };
+          longPressTimerRef.current = window.setTimeout(() => openReactionPicker(message), 420);
           event.currentTarget.setPointerCapture?.(event.pointerId);
         }
 
@@ -405,10 +432,12 @@
           const dx = event.clientX - swipe.startX;
           const dy = Math.abs(event.clientY - swipe.startY);
           if (dx < 0 || dy > 42) {
+            clearLongPressTimer();
             setSwipeState({ id: "", x: 0, ready: false });
             return;
           }
           if (dx > 8) {
+            clearLongPressTimer();
             swipe.active = true;
             swipeBlockClickRef.current = true;
             const x = Math.min(dx, 86);
@@ -417,6 +446,7 @@
         }
 
         function handleBubblePointerUp(message) {
+          clearLongPressTimer();
           const swipe = swipeRef.current;
           const x = swipeState.id === message.id ? swipeState.x : 0;
           swipeRef.current = null;
@@ -530,9 +560,35 @@
           setMessages((current) => current.map((item) => item.id === messageId ? { ...item, reactions: reactions || [] } : item));
         }
 
+        function optimisticReactionToggle(message, emoji) {
+          const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
+          const currentMine = currentReactions.find((reaction) => reaction.mine);
+          const removeOnly = currentMine?.emoji === emoji;
+          const nextReactions = currentReactions
+            .map((reaction) => {
+              if (!reaction.mine) return reaction;
+              const users = (reaction.users || []).filter((user) => user.id !== profile?.id);
+              return { ...reaction, mine: false, count: Math.max(Number(reaction.count || 0) - 1, 0), users };
+            })
+            .filter((reaction) => Number(reaction.count || 0) > 0);
+          if (!removeOnly) {
+            const target = nextReactions.find((reaction) => reaction.emoji === emoji);
+            const publicMe = profile ? { id: profile.id, display_name: profile.display_name, transaction_id: profile.transaction_id, is_verified: profile.is_verified, account_type: profile.account_type, profile_photo_data_url: profile.profile_photo_data_url, plan_photo_data_urls: profile.plan_photo_data_urls } : null;
+            if (target) {
+              target.mine = true;
+              target.count = Number(target.count || 0) + 1;
+              if (publicMe && !(target.users || []).some((user) => user.id === publicMe.id)) target.users = [...(target.users || []), publicMe];
+            } else {
+              nextReactions.push({ emoji, count: 1, mine: true, users: publicMe ? [publicMe] : [] });
+            }
+          }
+          setMessageReactions(message.id, nextReactions);
+        }
+
         async function reactToMessage(message, emoji) {
           if (!message?.id || message.pending || message.deleted_at || !reactionEmojis.includes(emoji)) return;
           setActiveReactionMessageId("");
+          optimisticReactionToggle(message, emoji);
           try {
             const response = await fetch(`/api/social-plans/${planId}/chat/${message.id}/reaction`, {
               method: "POST",
@@ -630,14 +686,13 @@
                           onPointerMove={(event) => handleBubblePointerMove(event, message)}
                           onPointerUp={() => handleBubblePointerUp(message)}
                           onPointerCancel={() => {
+                            clearLongPressTimer();
                             swipeRef.current = null;
                             setSwipeState({ id: "", x: 0, ready: false });
                           }}
                           onClick={() => {
                             if (swipeBlockClickRef.current) return;
-                            if (!message.pending && !message.deleted_at) {
-                              setActiveReactionMessageId((current) => current === message.id ? "" : message.id);
-                            }
+                            if (!message.pending && !message.deleted_at) setSelectedMessage(message);
                           }}
                         >
                           {!mine && (
@@ -660,15 +715,15 @@
                                 key={reaction.emoji}
                                 type="button"
                                 className={`rounded-full border px-2 py-1 text-xs font-black shadow-lg transition ${reaction.mine ? "border-mint/50 bg-mint/20 text-mint" : "border-white/10 bg-white/[0.08] text-white"}`}
-                                onClick={() => reactToMessage(message, reaction.emoji)}
+                                onClick={() => openReactionList(message, reaction)}
                               >
-                                {reaction.emoji} {reaction.count > 1 ? reaction.count : ""}
+                                {reaction.emoji} {reaction.count > 1 ? `+${reaction.count - 1}` : ""}
                               </button>
                             ))}
                           </div>
                         )}
                         {activeReactionMessageId === message.id && !message.pending && !message.deleted_at && (
-                          <div className={`mt-2 flex flex-wrap items-center gap-1.5 rounded-[22px] border border-white/10 bg-[#0D111D]/95 p-2 shadow-2xl shadow-black/30 ${mine ? "justify-end" : "justify-start"}`}>
+                          <div className={`absolute bottom-full z-40 mb-2 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#0D111D]/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl ${mine ? "right-0" : "left-0"}`}>
                             {reactionEmojis.map((emoji) => (
                               <button
                                 key={emoji}
@@ -679,18 +734,6 @@
                                 {emoji}
                               </button>
                             ))}
-                            {(mine || canModerate) && (
-                              <button
-                                type="button"
-                                className="h-9 rounded-full bg-white/[0.08] px-3 text-xs font-black text-slate-200 ring-1 ring-white/10"
-                                onClick={() => {
-                                  setSelectedMessage(message);
-                                  setActiveReactionMessageId("");
-                                }}
-                              >
-                                Opciones
-                              </button>
-                            )}
                           </div>
                         )}
                       </div>
@@ -733,6 +776,35 @@
               </div>
             </form>
 
+            {reactionList && (
+              <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 px-4 pb-5 backdrop-blur-sm" onClick={() => setReactionList(null)}>
+                <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-black text-white">Personas que reaccionaron</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">{reactionList.reaction.emoji} {reactionList.reaction.count || 0} reacción(es)</p>
+                    </div>
+                    <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setReactionList(null)}>×</button>
+                  </div>
+                  <div className="mt-4 grid gap-2">
+                    {(reactionList.reaction.users || []).map((user) => (
+                      <div key={user.id} className="flex items-center gap-3 rounded-2xl bg-white/[0.055] p-3">
+                        <Avatar user={user} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-black text-white">{user.display_name || "Usuario Donoss"}</p>
+                          <p className="truncate text-xs font-bold text-slate-500">{user.transaction_id || ""}</p>
+                        </div>
+                        {user.is_verified && verifiedBadge()}
+                      </div>
+                    ))}
+                    {(reactionList.reaction.users || []).length === 0 && (
+                      <p className="rounded-2xl bg-white/[0.055] p-4 text-sm font-bold text-slate-400">No se ha podido cargar la lista.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+            )}
+
             {selectedMessage && (
               <div className="fixed inset-0 z-50 grid place-items-end bg-black/45 px-4 pb-5 backdrop-blur-sm" onClick={() => setSelectedMessage(null)}>
                 <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -741,6 +813,12 @@
                     {profile?.is_donoss_admin ? "Modo Donoss: puedes moderar este mensaje sin aparecer como miembro." : "Puedes modificarlo solo durante 15 minutos."}
                   </p>
                   <div className="mt-4 grid gap-2">
+                    <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => {
+                      startReplyToMessage(selectedMessage);
+                      setSelectedMessage(null);
+                    }}>
+                      Responder
+                    </button>
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => openReadList(selectedMessage)}>
                       Ver quién lo ha leído
                     </button>
@@ -753,12 +831,14 @@
                         Modificar
                       </button>
                     )}
-                    <button className="h-12 rounded-2xl bg-coral/10 text-sm font-black text-coral ring-1 ring-coral/20" onClick={() => {
-                      setMessageToDelete(selectedMessage);
-                      setSelectedMessage(null);
-                    }}>
-                      Eliminar
-                    </button>
+                    {(selectedMessage.sender_id === profile?.id || profile?.is_donoss_admin) && (
+                      <button className="h-12 rounded-2xl bg-coral/10 text-sm font-black text-coral ring-1 ring-coral/20" onClick={() => {
+                        setMessageToDelete(selectedMessage);
+                        setSelectedMessage(null);
+                      }}>
+                        Eliminar
+                      </button>
+                    )}
                     <button className="h-12 rounded-2xl bg-white/[0.04] text-sm font-black text-slate-300 ring-1 ring-white/10" onClick={() => setSelectedMessage(null)}>Cancelar</button>
                   </div>
                 </section>
