@@ -151,8 +151,8 @@
           bioBusiness: "Bio de la empresa",
           bioUser: "Bio personal",
           bioMin: "Mínimo 20 caracteres para que otros entiendan quién eres.",
-          ageUser: "Edad",
-          ageHint: "Escribe tu edad en número. No hace falta calendario.",
+          birthDateUser: "Fecha de nacimiento",
+          birthDateHint: "Escribe día, mes y año. Sin calendario largo.",
           categories: "Categorías",
           emailBusiness: "Correo electrónico profesional",
           emailUser: "Correo electrónico",
@@ -205,7 +205,7 @@
           needAccountType: "Elige si quieres crear una cuenta de usuario o de empresa.",
           needDisplayName: "Escribe tu nombre o el nombre del comercio.",
           needBio: "Añade una bio de mínimo 20 caracteres.",
-          needAge: "Añade una edad válida entre 13 y 99 años.",
+          needBirthDate: "Añade una fecha de nacimiento válida. Debes tener entre 13 y 99 años.",
           needEmail: "Escribe tu correo electrónico.",
           needEmailConfirm: "Repite tu correo electrónico.",
           needPhone: "Añade tu teléfono.",
@@ -249,8 +249,8 @@
           bioBusiness: "Bio de l’entreprise",
           bioUser: "Bio personnelle",
           bioMin: "Minimum 20 caractères pour que les autres comprennent qui tu es.",
-          ageUser: "Âge",
-          ageHint: "Écris ton âge en chiffre. Pas besoin de calendrier.",
+          birthDateUser: "Date de naissance",
+          birthDateHint: "Écris jour, mois et année. Pas de calendrier interminable.",
           categories: "Catégories",
           emailBusiness: "Adresse e-mail professionnelle",
           emailUser: "Adresse e-mail",
@@ -303,7 +303,7 @@
           needAccountType: "Choisis si tu veux créer un compte utilisateur ou entreprise.",
           needDisplayName: "Écris ton nom ou le nom du commerce.",
           needBio: "Ajoute une bio de minimum 20 caractères.",
-          needAge: "Ajoute un âge valide entre 13 et 99 ans.",
+          needBirthDate: "Ajoute une date de naissance valide. Tu dois avoir entre 13 et 99 ans.",
           needEmail: "Écris ton adresse e-mail.",
           needEmailConfirm: "Répète ton adresse e-mail.",
           needPhone: "Ajoute ton téléphone.",
@@ -503,7 +503,9 @@
         const [accountType, setAccountType] = React.useState(initialSignupDraft.accountType || "");
         const [displayName, setDisplayName] = React.useState(initialSignupDraft.displayName || "");
         const [bio, setBio] = React.useState(initialSignupDraft.bio || "");
-        const [age, setAge] = React.useState(initialSignupDraft.age || "");
+        const [birthDay, setBirthDay] = React.useState(initialSignupDraft.birthDay || "");
+        const [birthMonth, setBirthMonth] = React.useState(initialSignupDraft.birthMonth || "");
+        const [birthYear, setBirthYear] = React.useState(initialSignupDraft.birthYear || "");
         const [email, setEmail] = React.useState(initialSignupDraft.email || "");
         const [emailConfirm, setEmailConfirm] = React.useState(initialSignupDraft.emailConfirm || "");
         const [phone, setPhone] = React.useState(initialSignupDraft.phone || "");
@@ -556,13 +558,13 @@
         const ibansMatch = normalizedIban && normalizedIban === normalizedIbanConfirm;
         const bankDetailsComplete = bankAccountHolder.trim() && ibanIsValid && ibansMatch;
         const bioText = bio.trim();
-        const cleanAge = Math.floor(Number(age || 0));
-        const ageIsValid = cleanAge >= 13 && cleanAge <= 99;
+        const birthDate = buildBirthDate(birthDay, birthMonth, birthYear);
+        const birthDateIsValid = Boolean(birthDate);
         const canSubmit =
           accountType &&
           displayName.trim() &&
           bioText.length >= 20 &&
-          (!isUser || ageIsValid) &&
+          (!isUser || birthDateIsValid) &&
           emailsMatch &&
           phone.trim() &&
           finalCityLabel &&
@@ -577,7 +579,7 @@
           if (!accountType) return t.needAccountType;
           if (!displayName.trim()) return t.needDisplayName;
           if (bioText.length < 20) return t.needBio;
-          if (isUser && !ageIsValid) return t.needAge;
+          if (isUser && !birthDateIsValid) return t.needBirthDate;
           if (!normalizedEmail) return t.needEmail;
           if (!normalizedEmailConfirm) return t.needEmailConfirm;
           if (!emailsMatch) return t.emailsDoNotMatch;
@@ -618,7 +620,9 @@
             accountType,
             displayName,
             bio,
-            age,
+            birthDay,
+            birthMonth,
+            birthYear,
             email,
             emailConfirm,
             phone,
@@ -637,7 +641,9 @@
           accountType,
           displayName,
           bio,
-          age,
+          birthDay,
+          birthMonth,
+          birthYear,
           email,
           emailConfirm,
           phone,
@@ -704,6 +710,21 @@
           return clean.length === 12 && letters === 4 && digits === 8 ? clean : "";
         }
 
+        function buildBirthDate(dayValue, monthValue, yearValue) {
+          const day = Math.floor(Number(dayValue || 0));
+          const month = Math.floor(Number(monthValue || 0));
+          const year = Math.floor(Number(yearValue || 0));
+          if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1927 || year > new Date().getFullYear()) return "";
+          const date = new Date(Date.UTC(year, month - 1, day, 12));
+          if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+          const today = new Date();
+          let age = today.getUTCFullYear() - year;
+          const monthDiff = today.getUTCMonth() - (month - 1);
+          if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < day)) age -= 1;
+          if (age < 13 || age > 99) return "";
+          return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+
         function chooseAccountType(type) {
           setAccountType(type);
           setStatus({
@@ -732,7 +753,7 @@
             account_type: accountType,
             display_name: displayName.trim(),
             bio: bioText,
-            age: isUser ? cleanAge : null,
+            birth_date: isUser ? birthDate : null,
             email: normalizedEmail,
             phone: `${selectedCountry.dialCode} ${phone.trim()}`,
             country_code: selectedCountry.code,
@@ -1054,19 +1075,41 @@
                       </Field>
 
                       {isUser && (
-                        <Field label={t.ageUser}>
-                          <input
-                            className={inputClass}
-                            type="number"
-                            min="13"
-                            max="99"
-                            inputMode="numeric"
-                            placeholder="18"
-                            value={age}
-                            onChange={(event) => setAge(event.target.value)}
-                          />
-                          <p className={`mt-2 text-xs font-bold ${age && !ageIsValid ? "text-coral" : "text-slate-500"}`}>
-                            {t.ageHint}
+                        <Field label={t.birthDateUser}>
+                          <div className="grid grid-cols-[0.75fr_0.75fr_1fr] gap-2">
+                            <input
+                              className={inputClass}
+                              type="number"
+                              min="1"
+                              max="31"
+                              inputMode="numeric"
+                              placeholder="JJ"
+                              value={birthDay}
+                              onChange={(event) => setBirthDay(event.target.value)}
+                            />
+                            <input
+                              className={inputClass}
+                              type="number"
+                              min="1"
+                              max="12"
+                              inputMode="numeric"
+                              placeholder="MM"
+                              value={birthMonth}
+                              onChange={(event) => setBirthMonth(event.target.value)}
+                            />
+                            <input
+                              className={inputClass}
+                              type="number"
+                              min="1927"
+                              max={new Date().getFullYear()}
+                              inputMode="numeric"
+                              placeholder="AAAA"
+                              value={birthYear}
+                              onChange={(event) => setBirthYear(event.target.value)}
+                            />
+                          </div>
+                          <p className={`mt-2 text-xs font-bold ${(birthDay || birthMonth || birthYear) && !birthDateIsValid ? "text-coral" : "text-slate-500"}`}>
+                            {t.birthDateHint}
                           </p>
                         </Field>
                       )}

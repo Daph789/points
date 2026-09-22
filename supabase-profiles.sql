@@ -3,6 +3,7 @@ create table if not exists public.profiles (
   display_name text not null,
   email text not null,
   phone text,
+  birth_date date,
   age integer,
   neighborhood text not null,
   account_type text not null default 'user' check (account_type in ('user', 'business')),
@@ -39,6 +40,18 @@ alter table public.profiles
 
 alter table public.profiles
   alter column phone drop not null;
+
+alter table public.profiles
+  add column if not exists birth_date date;
+
+alter table public.profiles
+  drop constraint if exists profiles_birth_date_check;
+
+alter table public.profiles
+  add constraint profiles_birth_date_check check (
+    birth_date is null
+    or (birth_date between date '1900-01-01' and date '2100-01-01')
+  );
 
 alter table public.profiles
   add column if not exists age integer;

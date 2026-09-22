@@ -231,6 +231,21 @@
         return value === "woman" ? "Chica" : value === "man" ? "Chico" : "Libre";
       }
 
+      function buildBirthDate(dayValue, monthValue, yearValue) {
+        const day = Math.floor(Number(dayValue || 0));
+        const month = Math.floor(Number(monthValue || 0));
+        const year = Math.floor(Number(yearValue || 0));
+        if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1927 || year > new Date().getFullYear()) return "";
+        const date = new Date(Date.UTC(year, month - 1, day, 12));
+        if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+        const today = new Date();
+        let age = today.getUTCFullYear() - year;
+        const monthDiff = today.getUTCMonth() - (month - 1);
+        if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < day)) age -= 1;
+        if (age < 13 || age > 99) return "";
+        return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+
       function friendlyError(message, fallback = "No se ha podido completar la acción.") {
         const messages = {
           social_plans_table_missing: "Falta activar Quedar en Supabase. Ejecuta supabase-social-plans.sql.",
@@ -243,8 +258,8 @@
           photo_too_large: "La foto es demasiado pesada. Prueba con otra imagen.",
           invalid_group_size: "Indica entre 1 y 20 plazas para el grupo.",
           invalid_age_range: "Indica una franja de edad válida entre 13 y 99 años.",
-          invalid_age: "Indica una edad válida entre 13 y 99 años.",
-          age_required: "Añade tu edad para participar en este plan.",
+          invalid_birth_date: "Indica una fecha de nacimiento válida.",
+          age_required: "Añade tu fecha de nacimiento para participar en este plan.",
           age_too_young: "Eres más joven que los participantes de este grupo. El acceso no está autorizado.",
           age_too_old: "Eres mayor que los participantes de este grupo. El acceso no está autorizado.",
           group_size_below_accepted: "No puedes poner menos plazas que personas ya aceptadas.",
@@ -516,7 +531,9 @@
         const [wantedAgeMax, setWantedAgeMax] = React.useState("");
         const [joinPlan, setJoinPlan] = React.useState(null);
         const [ageGatePlan, setAgeGatePlan] = React.useState(null);
-        const [joinAge, setJoinAge] = React.useState("");
+        const [joinBirthDay, setJoinBirthDay] = React.useState("");
+        const [joinBirthMonth, setJoinBirthMonth] = React.useState("");
+        const [joinBirthYear, setJoinBirthYear] = React.useState("");
         const [purchaseRequiredPlan, setPurchaseRequiredPlan] = React.useState(null);
         const [photoGatePlan, setPhotoGatePlan] = React.useState(null);
         const [planProfilePhotos, setPlanProfilePhotos] = React.useState([]);
@@ -1091,7 +1108,10 @@
             }
             if (error.message === "age_required") {
               setAgeGatePlan(joinPlan);
-              setJoinAge(profile?.age ? String(profile.age) : "");
+              const parts = String(profile?.birth_date || "").slice(0, 10).split("-");
+              setJoinBirthYear(parts[0] || "");
+              setJoinBirthMonth(parts[1] ? String(Number(parts[1])) : "");
+              setJoinBirthDay(parts[2] ? String(Number(parts[2])) : "");
               setJoinPlan(null);
               setStatus("");
               return;
@@ -1109,9 +1129,9 @@
 
         async function saveAgeAndJoin() {
           if (!token || !ageGatePlan) return;
-          const cleanAge = Math.floor(Number(joinAge || 0));
-          if (cleanAge < 13 || cleanAge > 99) {
-            setStatus("Indica una edad válida entre 13 y 99 años.");
+          const birthDate = buildBirthDate(joinBirthDay, joinBirthMonth, joinBirthYear);
+          if (!birthDate) {
+            setStatus("Indica una fecha de nacimiento válida. Debes tener entre 13 y 99 años.");
             return;
           }
           setIsSaving(true);
@@ -1123,11 +1143,11 @@
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${token}`,
               },
-              body: JSON.stringify({ age: cleanAge }),
+              body: JSON.stringify({ birth_date: birthDate }),
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.error || "invalid_age");
-            setProfile((current) => current ? { ...current, ...(data.profile || {}), age: cleanAge } : { ...(data.profile || {}), age: cleanAge });
+            if (!response.ok) throw new Error(data.error || "invalid_birth_date");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), birth_date: birthDate } : { ...(data.profile || {}), birth_date: birthDate });
             setJoinPlan(ageGatePlan);
             setAgeGatePlan(null);
           } catch (error) {
@@ -1808,19 +1828,14 @@
             {ageGatePlan && (
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
                 <section className="mx-auto w-full max-w-md rounded-[34px] border border-mint/20 bg-[#0D111D] p-5 shadow-2xl">
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Edad necesaria</p>
-                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">Indica tu edad para participar</h2>
-                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Donoss la usará para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.</p>
-                  <input
-                    className="mt-4 h-14 w-full rounded-2xl border border-line bg-black/20 px-4 text-2xl font-black text-white outline-none focus:border-mint/70"
-                    type="number"
-                    min="13"
-                    max="99"
-                    inputMode="numeric"
-                    value={joinAge}
-                    onChange={(event) => setJoinAge(event.target.value)}
-                    placeholder="18"
-                  />
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Fecha necesaria</p>
+                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">Indica tu fecha de nacimiento</h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Donoss calculará tu edad real para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.</p>
+                  <div className="mt-4 grid grid-cols-[0.75fr_0.75fr_1fr] gap-2">
+                    <input className="h-14 rounded-2xl border border-line bg-black/20 px-4 text-xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="31" inputMode="numeric" value={joinBirthDay} onChange={(event) => setJoinBirthDay(event.target.value)} placeholder="JJ" />
+                    <input className="h-14 rounded-2xl border border-line bg-black/20 px-4 text-xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="12" inputMode="numeric" value={joinBirthMonth} onChange={(event) => setJoinBirthMonth(event.target.value)} placeholder="MM" />
+                    <input className="h-14 rounded-2xl border border-line bg-black/20 px-4 text-xl font-black text-white outline-none focus:border-mint/70" type="number" min="1927" max={new Date().getFullYear()} inputMode="numeric" value={joinBirthYear} onChange={(event) => setJoinBirthYear(event.target.value)} placeholder="AAAA" />
+                  </div>
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setAgeGatePlan(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={saveAgeAndJoin}>Guardar</button>

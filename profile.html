@@ -223,7 +223,9 @@
         const [isSavingName, setIsSavingName] = React.useState(false);
         const [isEditingBio, setIsEditingBio] = React.useState(false);
         const [bioDraft, setBioDraft] = React.useState("");
-        const [ageDraft, setAgeDraft] = React.useState("");
+        const [birthDayDraft, setBirthDayDraft] = React.useState("");
+        const [birthMonthDraft, setBirthMonthDraft] = React.useState("");
+        const [birthYearDraft, setBirthYearDraft] = React.useState("");
         const [isSavingBio, setIsSavingBio] = React.useState(false);
         const [isEditingNeighborhood, setIsEditingNeighborhood] = React.useState(false);
         const [neighborhoodDraft, setNeighborhoodDraft] = React.useState("");
@@ -263,7 +265,7 @@
               return;
             }
 
-            const columns = "id, display_name, bio, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
+            const columns = "id, display_name, bio, birth_date, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, account_type, business_categories, tax_id, address, transaction_id, points, plan_gender_preference";
             let data = null;
             let error = null;
 
@@ -331,7 +333,10 @@
               window.setTimeout(() => window.donossI18n?.applyAll?.(), 0);
             }
             setBioDraft(data?.bio || "");
-            setAgeDraft(data?.age ? String(data.age) : "");
+            const birthParts = String(data?.birth_date || "").slice(0, 10).split("-");
+            setBirthYearDraft(birthParts[0] || "");
+            setBirthMonthDraft(birthParts[1] ? String(Number(birthParts[1])) : "");
+            setBirthDayDraft(birthParts[2] ? String(Number(birthParts[2])) : "");
             const initialNeighborhood = data?.neighborhood || "";
             const initialNeighborhoods = neighborhoodsByCountry[String(data?.country_code || "ES").toUpperCase()] || neighborhoodsByCountry.ES;
             if (initialNeighborhood && initialNeighborhoods.includes(initialNeighborhood)) {
@@ -617,11 +622,32 @@
           }
         }
 
-        async function saveAge() {
+        function buildBirthDate(dayValue, monthValue, yearValue) {
+          const day = Math.floor(Number(dayValue || 0));
+          const month = Math.floor(Number(monthValue || 0));
+          const year = Math.floor(Number(yearValue || 0));
+          if (day < 1 || day > 31 || month < 1 || month > 12 || year < 1927 || year > new Date().getFullYear()) return "";
+          const date = new Date(Date.UTC(year, month - 1, day, 12));
+          if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return "";
+          const today = new Date();
+          let age = today.getUTCFullYear() - year;
+          const monthDiff = today.getUTCMonth() - (month - 1);
+          if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < day)) age -= 1;
+          if (age < 13 || age > 99) return "";
+          return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+
+        function formatBirthDate(value) {
+          const parts = String(value || "").slice(0, 10).split("-");
+          if (parts.length !== 3) return "";
+          return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+
+        async function saveBirthDate() {
           if (!accessToken) return redirectToLogin();
-          const cleanAge = Math.floor(Number(ageDraft || 0));
-          if (cleanAge < 13 || cleanAge > 99) {
-            setStatus("Indica una edad válida entre 13 y 99 años.");
+          const birthDate = buildBirthDate(birthDayDraft, birthMonthDraft, birthYearDraft);
+          if (!birthDate) {
+            setStatus("Indica una fecha de nacimiento válida. Debes tener entre 13 y 99 años.");
             return;
           }
 
@@ -634,14 +660,14 @@
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ age: cleanAge }),
+              body: JSON.stringify({ birth_date: birthDate }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "profile_update_failed");
-            setProfile((current) => current ? { ...current, ...(data.profile || {}), age: cleanAge } : current);
-            setStatus("Edad actualizada correctamente.");
+            setProfile((current) => current ? { ...current, ...(data.profile || {}), birth_date: birthDate } : current);
+            setStatus("Fecha de nacimiento actualizada correctamente.");
           } catch (error) {
-            setStatus(error.message === "invalid_age" ? "Indica una edad válida entre 13 y 99 años." : "No se ha podido actualizar tu edad.");
+            setStatus(error.message === "invalid_birth_date" ? "Indica una fecha de nacimiento válida." : "No se ha podido actualizar tu fecha de nacimiento.");
           } finally {
             setIsSavingBio(false);
           }
@@ -1084,25 +1110,45 @@
                 <div className="mt-5 rounded-3xl border border-white/10 bg-black/20 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Edad</p>
-                      <p className="mt-2 text-2xl font-black text-white">{profile.age ? `${profile.age} años` : "No indicada"}</p>
+                      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Fecha de nacimiento</p>
+                      <p className="mt-2 text-2xl font-black text-white">{profile.birth_date ? formatBirthDate(profile.birth_date) : "No indicada"}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="grid min-w-[220px] grid-cols-[0.75fr_0.75fr_1fr_auto] gap-2">
                       <input
-                        className="h-11 w-24 rounded-2xl border border-line bg-white/[0.04] px-4 text-sm font-black text-white outline-none focus:border-mint/70"
+                        className="h-11 rounded-2xl border border-line bg-white/[0.04] px-3 text-sm font-black text-white outline-none focus:border-mint/70"
                         type="number"
-                        min="13"
-                        max="99"
+                        min="1"
+                        max="31"
                         inputMode="numeric"
-                        value={ageDraft}
-                        onChange={(event) => setAgeDraft(event.target.value)}
-                        placeholder="18"
+                        value={birthDayDraft}
+                        onChange={(event) => setBirthDayDraft(event.target.value)}
+                        placeholder="JJ"
+                      />
+                      <input
+                        className="h-11 rounded-2xl border border-line bg-white/[0.04] px-3 text-sm font-black text-white outline-none focus:border-mint/70"
+                        type="number"
+                        min="1"
+                        max="12"
+                        inputMode="numeric"
+                        value={birthMonthDraft}
+                        onChange={(event) => setBirthMonthDraft(event.target.value)}
+                        placeholder="MM"
+                      />
+                      <input
+                        className="h-11 rounded-2xl border border-line bg-white/[0.04] px-3 text-sm font-black text-white outline-none focus:border-mint/70"
+                        type="number"
+                        min="1927"
+                        max={new Date().getFullYear()}
+                        inputMode="numeric"
+                        value={birthYearDraft}
+                        onChange={(event) => setBirthYearDraft(event.target.value)}
+                        placeholder="AAAA"
                       />
                       <button
                         className="h-11 rounded-2xl bg-mint px-4 text-xs font-black text-ink shadow-glow disabled:opacity-60"
                         type="button"
                         disabled={isSavingBio}
-                        onClick={saveAge}
+                        onClick={saveBirthDate}
                       >
                         Guardar
                       </button>

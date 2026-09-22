@@ -917,12 +917,33 @@ function normalizeAge(value) {
   return Number.isInteger(age) && age >= 13 && age <= 99 ? age : null;
 }
 
+function normalizeBirthDate(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const date = new Date(`${text}T12:00:00Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== text) return null;
+  const age = ageFromBirthDate(text);
+  return age >= 13 && age <= 99 ? text : null;
+}
+
+function ageFromBirthDate(value) {
+  const text = String(value || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return 0;
+  const birth = new Date(`${text}T12:00:00Z`);
+  if (Number.isNaN(birth.getTime())) return 0;
+  const today = new Date();
+  let age = today.getUTCFullYear() - birth.getUTCFullYear();
+  const monthDiff = today.getUTCMonth() - birth.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getUTCDate() < birth.getUTCDate())) age -= 1;
+  return age;
+}
+
 async function ensureProfileForUser(user) {
   if (!supabaseAdmin || !user?.id) return null;
 
   const legacyBaseProfileColumns = "id, account_type, display_name, email, phone, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified";
   const marketProfileColumns = "country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country";
-  const baseProfileColumns = `${legacyBaseProfileColumns}, age, ${marketProfileColumns}`;
+  const baseProfileColumns = `${legacyBaseProfileColumns}, birth_date, age, ${marketProfileColumns}`;
   const profileIdentityColumns = `${baseProfileColumns}, bio`;
   const bankProfileColumns = `${baseProfileColumns}, bank_account_holder, bank_iban, bank_name, bank_bic`;
   const premiumProfileColumns = `${baseProfileColumns}, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at`;
@@ -986,7 +1007,22 @@ async function ensureProfileForUser(user) {
       }
     }
     const metadataAge = normalizeAge(metadata.age);
-    if (metadataAge && !existing.age) {
+    const metadataBirthDate = normalizeBirthDate(metadata.birth_date);
+    if (metadataBirthDate && !existing.birth_date) {
+      try {
+        const { data: updated, error: updateError } = await supabaseAdmin
+          .from("profiles")
+          .update({ birth_date: metadataBirthDate })
+          .eq("id", user.id)
+          .select(profileColumns)
+          .maybeSingle();
+        if (!updateError && updated) return updated;
+        if (updateError?.code !== "42703") console.error("Profile birth date backfill error:", updateError);
+      } catch (error) {
+        if (error?.code !== "42703") console.error("Profile birth date backfill fatal error:", error);
+      }
+    }
+    if (metadataAge && !existing.age && !existing.birth_date) {
       try {
         const { data: updated, error: updateError } = await supabaseAdmin
           .from("profiles")
@@ -1040,6 +1076,7 @@ async function ensureProfileForUser(user) {
     bio: metadataText(metadata, "bio") || null,
     email: user.email || metadataText(metadata, "email"),
     phone: metadataText(metadata, "phone") || null,
+    birth_date: normalizeBirthDate(metadata.birth_date),
     age: normalizeAge(metadata.age),
     country_code: metadataText(metadata, "country_code") || "ES",
     country_label: metadataText(metadata, "country_label") || "España",
@@ -1081,6 +1118,7 @@ async function ensureProfileForUser(user) {
     if (error?.code === "42703") {
       const {
         bio: _bio,
+        birth_date: _birthDate,
         age: _age,
         country_code: _countryCode,
         country_label: _countryLabel,
@@ -3664,16 +3702,18 @@ app.put("/api/me/profile", async (request, response) => {
 
   const hasDisplayName = Object.prototype.hasOwnProperty.call(request.body || {}, "display_name");
   const hasBio = Object.prototype.hasOwnProperty.call(request.body || {}, "bio");
+  const hasBirthDate = Object.prototype.hasOwnProperty.call(request.body || {}, "birth_date");
   const hasAge = Object.prototype.hasOwnProperty.call(request.body || {}, "age");
   const hasProfilePhoto = Object.prototype.hasOwnProperty.call(request.body || {}, "profile_photo_data_url");
   const hasNeighborhood = Object.prototype.hasOwnProperty.call(request.body || {}, "neighborhood");
   const hasMarket = Object.prototype.hasOwnProperty.call(request.body || {}, "country_code") || Object.prototype.hasOwnProperty.call(request.body || {}, "city_market");
   const displayName = String(request.body?.display_name || "").trim().replace(/\s+/g, " ");
   const bio = String(request.body?.bio || "").trim().replace(/\s+/g, " ");
+  const birthDate = normalizeBirthDate(request.body?.birth_date);
   const age = normalizeAge(request.body?.age);
   const profilePhoto = String(request.body?.profile_photo_data_url || "");
   const neighborhood = String(request.body?.neighborhood || "").trim().replace(/\s+/g, " ");
-  if (!hasDisplayName && !hasBio && !hasAge && !hasProfilePhoto && !hasNeighborhood && !hasMarket) {
+  if (!hasDisplayName && !hasBio && !hasBirthDate && !hasAge && !hasProfilePhoto && !hasNeighborhood && !hasMarket) {
     return response.status(400).json({ error: "nothing_to_update" });
   }
   if (hasDisplayName && (displayName.length < 2 || displayName.length > 60)) {
@@ -3681,6 +3721,9 @@ app.put("/api/me/profile", async (request, response) => {
   }
   if (hasBio && (bio.length < 20 || bio.length > 500)) {
     return response.status(400).json({ error: "invalid_bio" });
+  }
+  if (hasBirthDate && birthDate === null) {
+    return response.status(400).json({ error: "invalid_birth_date" });
   }
   if (hasAge && age === null) {
     return response.status(400).json({ error: "invalid_age" });
@@ -3700,6 +3743,7 @@ app.put("/api/me/profile", async (request, response) => {
     const payload = {};
     if (hasDisplayName) payload.display_name = displayName;
     if (hasBio) payload.bio = bio;
+    if (hasBirthDate) payload.birth_date = birthDate;
     if (hasAge) payload.age = age;
     if (hasProfilePhoto) payload.profile_photo_data_url = profilePhoto || null;
     if (hasNeighborhood) payload.neighborhood = neighborhood;
@@ -3746,7 +3790,7 @@ app.put("/api/me/profile", async (request, response) => {
       .from("profiles")
       .update(payload)
       .eq("id", profile.id)
-      .select("id, account_type, display_name, bio, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
+      .select("id, account_type, display_name, bio, birth_date, age, profile_photo_data_url, email, phone, country_code, country_label, city_market, city_label, city_status, requested_city, requested_city_country, neighborhood, address, business_categories, tax_id, transaction_id, points, is_verified, admin_verified, premium_status, premium_started_at, premium_next_charge_at, premium_failed_at, premium_identity_dni, premium_identity_photo_data_url, premium_identity_verified_at, premium_identity_updated_at")
       .maybeSingle();
 
     if (error?.code === "42703") return response.status(500).json({ error: hasProfilePhoto ? "profile_photo_sql_missing" : "profile_bio_sql_missing" });
@@ -5480,8 +5524,8 @@ function ageGateForPlan(plan, profile) {
   const min = normalizeAge(plan?.wanted_age_min);
   const max = normalizeAge(plan?.wanted_age_max);
   if (min === null && max === null) return null;
-  const age = normalizeAge(profile?.age);
-  if (age === null) return "age_required";
+  const age = profile?.birth_date ? ageFromBirthDate(profile.birth_date) : normalizeAge(profile?.age);
+  if (!age) return "age_required";
   if (min !== null && age < min) return "age_too_young";
   if (max !== null && age > max) return "age_too_old";
   return null;
