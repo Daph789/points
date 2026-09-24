@@ -108,6 +108,20 @@
         return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12);
       }
 
+      function cleanTextInput(value, maxLength = 5000) {
+        return String(value || "")
+          .normalize("NFKC")
+          .replace(/\u0000/g, "")
+          .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+          .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
+          .replace(/<\s*\/?\s*(script|iframe|object|embed|svg|math|style|link|meta|base|form|input|button|textarea|select|option)[^>]*>/gi, " ")
+          .replace(/[<>]/g, " ")
+          .replace(/\bjavascript\s*:/gi, "")
+          .replace(/\s{3,}/g, " ")
+          .trim()
+          .slice(0, maxLength);
+      }
+
       function formatDonosId(value) {
         const clean = cleanDonosId(value);
         return clean.replace(/(.{4})(.{4})(.{0,4})/, (_, a, b, c) => [a, b, c].filter(Boolean).join("-"));
@@ -193,18 +207,18 @@
       function normalizeAdditionalLinks(items) {
         return (Array.isArray(items) ? items : [])
           .map((item) => ({
-            label: String(item?.label || "").trim(),
+            label: cleanTextInput(item?.label || "", 80),
             url: String(item?.url || "").trim(),
           }))
-          .filter((item) => item.label && item.url)
+          .filter((item) => item.label && item.url && /^https?:\/\//i.test(item.url))
           .slice(0, 6);
       }
 
       function normalizeAdditionalDetails(items) {
         return (Array.isArray(items) ? items : [])
           .map((item) => ({
-            label: String(item?.label || "").trim(),
-            value: String(item?.value || "").trim(),
+            label: cleanTextInput(item?.label || "", 80),
+            value: cleanTextInput(item?.value || "", 300),
           }))
           .filter((item) => item.label && item.value)
           .slice(0, 8);
@@ -790,26 +804,26 @@
                 ...existingPresentationImages,
                 ...(await Promise.all(presentationFiles.map(fileToDataUrl))),
               ],
-              title: title.trim() || null,
-              address: address.trim() || null,
+              title: cleanTextInput(title, 120) || null,
+              address: cleanTextInput(address, 180) || null,
               categories: selectedCategories,
               base_price: Number.isFinite(base) ? base : null,
               reduced_price: Number.isFinite(reduced) ? reduced : null,
               required_points: requiredPoints || null,
-              hours: hours.trim() || null,
+              hours: cleanTextInput(hours, 120) || null,
               start_date: startDate || null,
               end_date: endDate || null,
               qr_valid_from: qrValidFrom || todayDateString(),
               qr_valid_until: qrNoExpiry ? null : (qrValidUntil || null),
-              age: age.trim() || null,
-              author: author.trim() || null,
-              description: description.trim() || null,
+              age: cleanTextInput(age, 60) || null,
+              author: cleanTextInput(author, 80) || null,
+              description: cleanTextInput(description, 1400) || null,
               additional_links: normalizeAdditionalLinks(additionalLinks),
               additional_details: normalizeAdditionalDetails(additionalDetails),
-              cart_button_text: cartButtonText.trim() || "Comprar",
+              cart_button_text: cleanTextInput(cartButtonText, 40) || "Comprar",
               receiver_transaction_id: cleanDonosId(receiverId) || null,
-              receiver_display_name: receiverName || null,
-              business_display_name: businessProfile?.display_name || null,
+              receiver_display_name: cleanTextInput(receiverName, 80) || null,
+              business_display_name: cleanTextInput(businessProfile?.display_name || "", 80) || null,
               business_is_verified: Boolean(businessProfile?.is_verified),
               country_code: offerMarket.country_code,
               city_market: offerMarket.city_market,

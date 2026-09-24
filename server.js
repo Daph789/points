@@ -92,6 +92,38 @@ function safeHttpUrl(value) {
   }
 }
 
+function cleanTextInput(value, maxLength = 5000) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+    .replace(/[\u202A-\u202E\u2066-\u2069]/g, "")
+    .replace(/<\s*\/?\s*(script|iframe|object|embed|svg|math|style|link|meta|base|form|input|button|textarea|select|option)[^>]*>/gi, " ")
+    .replace(/[<>]/g, " ")
+    .replace(/\bjavascript\s*:/gi, "")
+    .replace(/\s{3,}/g, " ")
+    .slice(0, maxLength);
+}
+
+function shouldSkipTextSanitizer(key) {
+  return /password|token|secret|signature|hash|photo|image|data_url|dataurl|cover|file|base64|stripe|qr/i.test(String(key || ""));
+}
+
+function sanitizeRequestInput(value, key = "") {
+  if (typeof value === "string") {
+    return shouldSkipTextSanitizer(key) ? value : cleanTextInput(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeRequestInput(item, key));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [entryKey, sanitizeRequestInput(entryValue, entryKey)])
+    );
+  }
+  return value;
+}
+
 function clientIpForRequest(request) {
   const forwarded = String(request.headers["x-forwarded-for"] || "").split(",")[0].trim();
   const realIp = String(request.headers["x-real-ip"] || "").trim();
@@ -1439,6 +1471,8 @@ app.use(express.json({ limit: "9mb" }));
 app.use(async (request, response, next) => {
   if (!request.path.startsWith("/api/")) return next();
   if (request.path === "/api/stripe/webhook") return next();
+  request.body = sanitizeRequestInput(request.body);
+  request.query = sanitizeRequestInput(request.query);
 
   const ipAddress = clientIpForRequest(request);
   const route = requestRouteForSecurity(request);
