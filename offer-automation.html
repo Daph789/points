@@ -133,6 +133,7 @@
         const [token, setToken] = React.useState("");
         const [activeLine, setActiveLine] = React.useState(0);
         const [premiumBlocked, setPremiumBlocked] = React.useState(false);
+        const [accessState, setAccessState] = React.useState("checking");
         const locale = window.donossI18n?.getLocale?.() || "es";
         const premiumCopy = locale === "fr"
           ? {
@@ -196,6 +197,7 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "requests_failed");
             setPremiumBlocked(false);
+            setAccessState("ready");
             const remoteRequests = data.requests || [];
             const pending = remoteRequests.find((item) => normalizeRequestStatus(item.status) === "pending");
             if (pending) {
@@ -211,9 +213,11 @@
           } catch (error) {
             if (error.message === "premium_required") {
               setPremiumBlocked(true);
+              setAccessState("blocked");
               setStatus("");
               return;
             }
+            setAccessState("ready");
             setStatus(error.message === "offer_automation_sql_missing"
               ? "Falta ejecutar el SQL de automatización en Supabase."
               : "No se han podido cargar tus solicitudes.");
@@ -242,6 +246,7 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "create_failed");
             setPremiumBlocked(false);
+            setAccessState("ready");
             savePendingAutomationDraft(data.request);
             setRequests((current) => [data.request, ...current]);
             setSourceUrl(data.request?.source_url || sourceUrl.trim());
@@ -261,6 +266,10 @@
                   ? "Ya tienes una publicación en preparación. Podrás enviar otra cuando esta esté terminada."
                 : "Pega un enlace válido para enviar la solicitud.",
             });
+            if (error.message === "premium_required") {
+              setPremiumBlocked(true);
+              setAccessState("blocked");
+            }
           } finally {
             setIsSending(false);
           }
@@ -268,6 +277,18 @@
 
         return (
           <main className="mx-auto min-h-screen w-full max-w-6xl px-4 py-5 sm:px-6 lg:px-8">
+            {accessState === "checking" && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 py-6 backdrop-blur-2xl">
+                <section className="w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-6 text-center shadow-[0_34px_120px_rgba(0,0,0,0.55)] sm:p-8">
+                  <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-mint text-2xl font-black text-ink shadow-glow">★</div>
+                  <p className="mt-5 text-xs font-black uppercase tracking-[0.18em] text-mint">Premium</p>
+                  <h2 className="mt-3 text-2xl font-black text-white">Verificando acceso...</h2>
+                  <p className="mt-3 text-sm font-bold leading-6 text-slate-400">
+                    Estamos comprobando si la automatización está desbloqueada para tu cuenta.
+                  </p>
+                </section>
+              </div>
+            )}
             {premiumBlocked && (
               <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 py-6 backdrop-blur-2xl">
                 <section className="w-full max-w-lg overflow-hidden rounded-[36px] border border-mint/25 bg-[#0D111D] shadow-[0_34px_120px_rgba(0,0,0,0.55)]">
@@ -291,6 +312,8 @@
                 </section>
               </div>
             )}
+            {accessState !== "checking" && (
+            <>
             <header className="flex items-center justify-between gap-3">
               <a href="create-offer.html" className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">Volver</a>
               <a href="my-offers.html" className="rounded-full bg-mint px-4 py-2 text-sm font-black text-ink shadow-glow">Mis publicaciones</a>
@@ -402,6 +425,8 @@
                 )}
               </div>
             </section>
+            </>
+            )}
           </main>
         );
       }
