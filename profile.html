@@ -212,6 +212,10 @@
         const [planPhotos, setPlanPhotos] = React.useState([]);
         const [isSavingPhotos, setIsSavingPhotos] = React.useState(false);
         const [planPhotoOverlay, setPlanPhotoOverlay] = React.useState(null);
+        const [isReorderingPhotos, setIsReorderingPhotos] = React.useState(false);
+        const [reorderPhotos, setReorderPhotos] = React.useState([]);
+        const [draggingPhotoIndex, setDraggingPhotoIndex] = React.useState(null);
+        const draggingPhotoIndexRef = React.useRef(null);
         const [isSavingPlanGender, setIsSavingPlanGender] = React.useState(false);
         const [premium, setPremium] = React.useState(null);
         const [premiumSqlMissing, setPremiumSqlMissing] = React.useState(false);
@@ -251,6 +255,7 @@
         const selectedDraftCountry = window.donossMarkets?.getCountry?.(countryDraft) || countries.find((country) => country.code === countryDraft) || countries[0];
         const availableMarkets = marketsByCountry[selectedDraftCountry.code] || window.donossMarkets?.getMarkets?.(selectedDraftCountry.code) || [];
         const availableNeighborhoods = neighborhoodsByCountry[String(profile?.country_code || countryDraft || "ES").toUpperCase()] || neighborhoodsByCountry.ES;
+        const profileUsesFrench = ["FR", "BE"].includes(String(profile?.country_code || countryDraft || "ES").toUpperCase());
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -492,8 +497,62 @@
           }
         }
 
-        async function savePlanPhotos() {
+        function openPhotoReorder() {
+          setReorderPhotos(planPhotos);
+          setDraggingPhotoIndex(null);
+          draggingPhotoIndexRef.current = null;
+          setIsReorderingPhotos(true);
+        }
+
+        function reorderPhotoList(list, fromIndex, toIndex) {
+          if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return list;
+          const next = [...list];
+          const [item] = next.splice(fromIndex, 1);
+          next.splice(toIndex, 0, item);
+          return next;
+        }
+
+        function beginPhotoDrag(index) {
+          draggingPhotoIndexRef.current = index;
+          setDraggingPhotoIndex(index);
+        }
+
+        function moveDraggedPhoto(event) {
+          const fromIndex = draggingPhotoIndexRef.current;
+          if (fromIndex === null || fromIndex === undefined) return;
+          const target = document.elementFromPoint(event.clientX, event.clientY)?.closest?.("[data-reorder-photo-index]");
+          if (!target) return;
+          const toIndex = Number(target.dataset.reorderPhotoIndex);
+          if (!Number.isFinite(toIndex) || toIndex === fromIndex) return;
+          setReorderPhotos((current) => reorderPhotoList(current, fromIndex, toIndex));
+          draggingPhotoIndexRef.current = toIndex;
+          setDraggingPhotoIndex(toIndex);
+        }
+
+        function endPhotoDrag() {
+          draggingPhotoIndexRef.current = null;
+          setDraggingPhotoIndex(null);
+        }
+
+        function movePhotoWithButton(index, direction) {
+          const toIndex = index + direction;
+          setReorderPhotos((current) => {
+            if (toIndex < 0 || toIndex >= current.length) return current;
+            return reorderPhotoList(current, index, toIndex);
+          });
+        }
+
+        async function savePhotoOrder() {
+          const saved = await savePlanPhotos(reorderPhotos, { successMessage: profileUsesFrench ? "Ordre des photos enregistré." : "Orden de fotos guardado." });
+          if (saved) {
+            setReorderPhotos(saved);
+            setIsReorderingPhotos(false);
+          }
+        }
+
+        async function savePlanPhotos(nextPhotos = planPhotos, options = {}) {
           if (!accessToken) return redirectToLogin();
+          const photosToSave = [...new Set((nextPhotos || []).filter(Boolean))].slice(0, 5);
           setIsSavingPhotos(true);
           setStatus("");
           try {
@@ -503,29 +562,35 @@
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ photos: planPhotos }),
+              body: JSON.stringify({ photos: photosToSave }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "save_failed");
             setPlanPhotos(data.photos || []);
             setProfile((current) => current ? { ...current, plan_photo_data_urls: data.photos || [] } : current);
-            setStatus("Fotos para planes guardadas correctamente.");
+            setStatus(options.successMessage || "Fotos para planes guardadas correctamente.");
             setPlanPhotoOverlay({
               tone: "success",
-              title: "Fotos guardadas",
-              message: "Tus fotos de Quedar se han actualizado correctamente. Tus planes publicados usarán estas fotos.",
+              title: profileUsesFrench ? "Photos enregistrées" : "Fotos guardadas",
+              message: profileUsesFrench
+                ? "Tes photos de Plans ont été mises à jour. La première photo sera utilisée comme photo principale dans les chats."
+                : "Tus fotos de Quedar se han actualizado. La primera foto será tu foto principal en los chats.",
             });
+            return data.photos || [];
           } catch (error) {
             if (error.message === "active_plans_need_minimum_photos") {
               setPlanPhotoOverlay({
                 tone: "warning",
-                title: "Mínimo 2 fotos",
-                message: "No puedes eliminar todas tus fotos porque tienes planes publicados. Deja mínimo 2 fotos para que tus planes sigan visibles y seguros.",
+                title: profileUsesFrench ? "Minimum 2 photos" : "Mínimo 2 fotos",
+                message: profileUsesFrench
+                  ? "Tu ne peux pas supprimer toutes tes photos parce que tu as des plans publiés. Garde minimum 2 photos pour que tes plans restent visibles."
+                  : "No puedes eliminar todas tus fotos porque tienes planes publicados. Deja mínimo 2 fotos para que tus planes sigan visibles y seguros.",
               });
               setStatus("");
             } else {
               setStatus(error.message === "plan_photos_sql_missing" ? "Falta ejecutar el SQL de fotos para planes." : "No se han podido guardar las fotos.");
             }
+            return null;
           } finally {
             setIsSavingPhotos(false);
           }
@@ -1528,10 +1593,37 @@
                   </div>
                 </div>
 
+                {planPhotos.length > 1 && (
+                  <button
+                    className="mt-4 flex w-full items-center justify-between gap-3 rounded-[24px] border border-mint/30 bg-mint/10 px-4 py-3 text-left transition hover:bg-mint/15"
+                    type="button"
+                    onClick={openPhotoReorder}
+                  >
+                    <span>
+                      <span className="block text-sm font-black text-mint">{profileUsesFrench ? "Organiser les photos" : "Ordenar fotos"}</span>
+                      <span className="mt-1 block text-xs font-bold leading-5 text-slate-300">
+                        {profileUsesFrench
+                          ? "La première photo devient ta photo principale dans les chats."
+                          : "La primera foto será tu foto principal en los chats."}
+                      </span>
+                    </span>
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-mint text-ink shadow-glow">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01" />
+                      </svg>
+                    </span>
+                  </button>
+                )}
+
                 <div className="mt-4 flex gap-3 overflow-x-auto pb-2">
                   {planPhotos.map((photo, index) => (
                     <div key={`${photo.slice(0, 28)}-${index}`} className="relative h-40 w-32 shrink-0 overflow-hidden rounded-[28px] border border-white/10 bg-black/20">
                       <img className="h-full w-full object-cover" src={photo} alt="" />
+                      {index === 0 && (
+                        <span className="absolute left-2 top-2 rounded-full bg-mint px-2 py-1 text-[10px] font-black text-ink shadow-glow">
+                          PP
+                        </span>
+                      )}
                       <button
                         className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-black/65 text-sm font-black text-white backdrop-blur"
                         type="button"
@@ -1555,7 +1647,7 @@
                 <button
                   className="mt-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
                   disabled={isSavingPhotos}
-                  onClick={savePlanPhotos}
+                  onClick={() => savePlanPhotos()}
                 >
                   {isSavingPhotos ? "Guardando..." : "Guardar fotos"}
                 </button>
@@ -1604,6 +1696,116 @@
                 })}
               </div>
             </nav>
+
+            {isReorderingPhotos && (
+              <div className="fixed inset-0 z-[55] overflow-y-auto bg-black/78 px-4 py-5 backdrop-blur-xl">
+                <div className="mx-auto min-h-full w-full max-w-lg py-4">
+                  <div className="relative rounded-[36px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50">
+                    <button
+                      className="absolute right-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/10 text-2xl font-black text-white ring-1 ring-white/10"
+                      type="button"
+                      onClick={() => {
+                        setIsReorderingPhotos(false);
+                        endPhotoDrag();
+                      }}
+                      aria-label="Cerrar"
+                    >
+                      ×
+                    </button>
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">
+                      {profileUsesFrench ? "Photo principale" : "Foto principal"}
+                    </p>
+                    <h2 className="mt-2 pr-12 text-3xl font-black text-white">
+                      {profileUsesFrench ? "Organiser mes photos" : "Ordenar mis fotos"}
+                    </h2>
+                    <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
+                      {profileUsesFrench
+                        ? "Appuie et glisse une photo pour changer l’ordre. La première photo sera utilisée dans les chats et les plans."
+                        : "Mantén pulsada y arrastra una foto para cambiar el orden. La primera foto se usará en chats y planes."}
+                    </p>
+
+                    <div
+                      className="mt-5 grid grid-cols-2 gap-3"
+                      onPointerMove={moveDraggedPhoto}
+                      onPointerUp={endPhotoDrag}
+                      onPointerCancel={endPhotoDrag}
+                    >
+                      {reorderPhotos.map((photo, index) => (
+                        <div
+                          key={`${photo.slice(0, 32)}-${index}`}
+                          data-reorder-photo-index={index}
+                          className={`relative select-none overflow-hidden rounded-[30px] border bg-black/25 shadow-xl transition duration-200 touch-none ${
+                            draggingPhotoIndex === index
+                              ? "scale-[1.03] border-mint/70 shadow-mint/20"
+                              : index === 0
+                                ? "border-mint/45"
+                                : "border-white/10"
+                          }`}
+                          onPointerDown={(event) => {
+                            event.currentTarget.setPointerCapture?.(event.pointerId);
+                            beginPhotoDrag(index);
+                          }}
+                        >
+                          <div className="aspect-[0.82] overflow-hidden">
+                            <img className="h-full w-full object-cover" src={photo} alt="" draggable="false" />
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-black ${index === 0 ? "bg-mint text-ink" : "bg-white/15 text-white"}`}>
+                                {index === 0 ? (profileUsesFrench ? "Principale" : "Principal") : `#${index + 1}`}
+                              </span>
+                              <div className="flex gap-1.5">
+                                <button
+                                  className="grid h-8 w-8 place-items-center rounded-full bg-white/15 text-sm font-black text-white backdrop-blur disabled:opacity-35"
+                                  type="button"
+                                  disabled={index === 0}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={() => movePhotoWithButton(index, -1)}
+                                  aria-label={profileUsesFrench ? "Monter" : "Subir"}
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  className="grid h-8 w-8 place-items-center rounded-full bg-white/15 text-sm font-black text-white backdrop-blur disabled:opacity-35"
+                                  type="button"
+                                  disabled={index === reorderPhotos.length - 1}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={() => movePhotoWithButton(index, 1)}
+                                  aria-label={profileUsesFrench ? "Descendre" : "Bajar"}
+                                >
+                                  ↓
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      <button
+                        className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white"
+                        type="button"
+                        onClick={() => {
+                          setIsReorderingPhotos(false);
+                          endPhotoDrag();
+                        }}
+                      >
+                        {profileUsesFrench ? "Annuler" : "Cancelar"}
+                      </button>
+                      <button
+                        className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60"
+                        type="button"
+                        disabled={isSavingPhotos}
+                        onClick={savePhotoOrder}
+                      >
+                        {isSavingPhotos ? (profileUsesFrench ? "Enregistrement..." : "Guardando...") : (profileUsesFrench ? "Enregistrer l’ordre" : "Guardar orden")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {isPremiumOpen && (
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-5 backdrop-blur-xl">
