@@ -460,9 +460,19 @@
           setStatus("");
 
           try {
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+            if (!accessToken) {
+              redirectToLogin();
+              return;
+            }
+
             const response = await fetch("/api/stripe/create-checkout-session", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+              },
               body: JSON.stringify({ userId, pack: pack.points }),
             });
             const data = await response.json();

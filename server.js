@@ -8607,30 +8607,9 @@ app.get("/api/stripe/recharge-status", async (request, response) => {
       await markReferralRecharge(userId);
     }
 
-    let { data: profile } = userId
+    const { data: profile } = userId
       ? await supabaseAdmin.from("profiles").select("points").eq("id", userId).maybeSingle()
       : { data: null };
-
-    if (isPaid && userId && points > 0 && Number(profile?.points || 0) < points) {
-      const { data: recharge } = await supabaseAdmin
-        .from("stripe_point_recharges")
-        .select("id, created_at")
-        .eq("stripe_session_id", session.id)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (recharge?.id) {
-        const { data: correctedProfile, error: correctionError } = await supabaseAdmin
-          .from("profiles")
-          .update({ points: Number(profile?.points || 0) + points })
-          .eq("id", userId)
-          .select("points")
-          .maybeSingle();
-
-        if (!correctionError && correctedProfile) profile = correctedProfile;
-        if (!correctionError && correctedProfile) await markReferralRecharge(userId);
-      }
-    }
 
     response.json({
       paid: isPaid,
@@ -9008,35 +8987,29 @@ app.post("/api/purchases/offer", async (request, response) => {
 
     let updatedBuyer = { points: buyerPoints };
     let buyerError = null;
-    let receiverUpdateError = null;
 
     if (!usesExternalCheckout) {
-	    const pointsUpdateResult = await Promise.all([
-        supabaseAdmin
-          .from("profiles")
-          .update({ points: buyerPoints - totalPoints })
-          .eq("id", user.id)
-          .select("points")
-          .maybeSingle(),
-        supabaseAdmin
-          .from("profiles")
-          .update({ points: Number(receiverProfile.points || 0) + totalPoints })
-          .eq("id", receiverProfile.id),
-      ]);
-      updatedBuyer = pointsUpdateResult[0].data;
-      buyerError = pointsUpdateResult[0].error;
-      receiverUpdateError = pointsUpdateResult[1].error;
+	    const pointsUpdateResult = await supabaseAdmin.rpc("donoss_secure_move_points", {
+        p_from_profile_id: user.id,
+        p_to_profile_id: receiverProfile.id,
+        p_points: totalPoints,
+      });
+      const pointMove = Array.isArray(pointsUpdateResult.data) ? pointsUpdateResult.data[0] : pointsUpdateResult.data;
+      updatedBuyer = { points: Number(pointMove?.sender_points || 0) };
+      buyerError = pointsUpdateResult.error;
     }
 
-	    if (buyerError || receiverUpdateError) {
-	      console.error("Purchase points update error:", buyerError || receiverUpdateError);
+	    if (buyerError) {
+	      console.error("Purchase points update error:", buyerError);
 	      await supabaseAdmin.from("purchases").delete().eq("id", purchase?.id);
 	      if (hasStockLimit) {
 	        await supabaseAdmin.from("business_offers").update({ sold_count, out_of_stock_since: offer.out_of_stock_since || null }).eq("id", offer.id);
 	      }
+      const moveMessage = String(buyerError.message || "");
+      if (moveMessage.includes("insufficient_points")) return response.status(400).json({ error: "insufficient_points" });
 	      return response.status(500).json({
-        error: "points_update_failed",
-        detail: buyerError?.message || receiverUpdateError?.message || "",
+        error: buyerError.code === "42883" ? "points_security_sql_missing" : "points_update_failed",
+        detail: buyerError?.message || "",
       });
     }
 
@@ -9161,54 +9134,37 @@ app.post("/api/points/send", async (request, response) => {
     if (!receiver) return response.status(404).json({ error: "receiver_not_found" });
     if (receiver.id === sender.id) return response.status(400).json({ error: "self_transfer_not_allowed" });
 
-    const senderPoints = Number(sender.points || 0);
-    if (senderPoints < points) return response.status(400).json({ error: "insufficient_points" });
-
-    const [{ data: updatedSender, error: senderError }, { error: receiverUpdateError }] = await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: senderPoints - points })
-        .eq("id", sender.id)
-        .select("points")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: Number(receiver.points || 0) + points })
-        .eq("id", receiver.id),
-    ]);
-
-    if (senderError || receiverUpdateError) {
-      console.error("Point send update error:", senderError || receiverUpdateError);
-      return response.status(500).json({ error: "points_update_failed" });
-    }
-
-    const { data: movement, error: movementError } = await supabaseAdmin
-      .from("point_transfers")
-      .insert({
-        from_profile_id: sender.id,
-        to_profile_id: receiver.id,
-        points,
-        transfer_type: "send",
-        status: "completed",
-        note: note || null,
-        completed_at: new Date().toISOString(),
-      })
-      .select("id, created_at")
-      .maybeSingle();
+    const { data: movement, error: movementError } = await supabaseAdmin.rpc("donoss_send_points", {
+      p_sender_id: sender.id,
+      p_receiver_transaction_id: receiverDonosId,
+      p_points: points,
+      p_note: note || null,
+    });
 
     if (movementError) {
-      console.error("Point send log error:", movementError);
-      await Promise.all([
-        supabaseAdmin.from("profiles").update({ points: senderPoints }).eq("id", sender.id),
-        supabaseAdmin.from("profiles").update({ points: Number(receiver.points || 0) }).eq("id", receiver.id),
-      ]);
-      return response.status(500).json({ error: movementError.code === "42P01" ? "point_transfers_table_missing" : "movement_log_failed" });
+      const message = String(movementError.message || "");
+      if (message.includes("insufficient_points")) return response.status(400).json({ error: "insufficient_points" });
+      if (message.includes("receiver_not_found")) return response.status(404).json({ error: "receiver_not_found" });
+      if (message.includes("self_transfer_not_allowed")) return response.status(400).json({ error: "self_transfer_not_allowed" });
+      console.error("Point send secure rpc error:", movementError);
+      return response.status(500).json({ error: movementError.code === "42883" ? "points_security_sql_missing" : "send_failed" });
     }
 
+    const secureMovement = Array.isArray(movement) ? movement[0] : movement;
+    const secureReceiver = {
+      id: secureMovement?.receiver_id || receiver.id,
+      display_name: secureMovement?.receiver_display_name || receiver.display_name,
+      email: secureMovement?.receiver_email || receiver.email,
+      phone: secureMovement?.receiver_phone || receiver.phone,
+      account_type: secureMovement?.receiver_account_type || receiver.account_type,
+      transaction_id: secureMovement?.receiver_transaction_id || receiver.transaction_id,
+      is_verified: Boolean(secureMovement?.receiver_is_verified ?? receiver.is_verified),
+    };
+
     response.json({
-      movement_id: movement?.id || null,
-      sender_points: Number(updatedSender?.points || 0),
-      receiver: transferPublicProfile(receiver),
+      movement_id: secureMovement?.movement_id || null,
+      sender_points: Number(secureMovement?.sender_points || 0),
+      receiver: transferPublicProfile(secureReceiver),
       points,
     });
   } catch (error) {
@@ -9296,59 +9252,38 @@ app.post("/api/points/requests/:id/respond", async (request, response) => {
     }
 
     if (action === "decline") {
-      const { error } = await supabaseAdmin
-        .from("point_transfers")
-        .update({ status: "declined" })
-        .eq("id", movement.id);
+      const { data: declined, error: declineError } = await supabaseAdmin.rpc("donoss_respond_point_request", {
+        p_payer_id: payer.id,
+        p_movement_id: movement.id,
+        p_action: "decline",
+      });
 
-      if (error) throw error;
-      return response.json({ status: "declined", points: Number(payer.points || 0) });
+      if (declineError) {
+        console.error("Point request decline secure rpc error:", declineError);
+        return response.status(500).json({ error: declineError.code === "42883" ? "points_security_sql_missing" : "request_response_failed" });
+      }
+
+      const declinedResult = Array.isArray(declined) ? declined[0] : declined;
+      return response.json({ status: "declined", points: Number(declinedResult?.payer_points || payer.points || 0) });
     }
 
-    const points = Number(movement.points || 0);
-    if (Number(payer.points || 0) < points) return response.status(400).json({ error: "insufficient_points" });
+    const { data: paid, error: payError } = await supabaseAdmin.rpc("donoss_respond_point_request", {
+      p_payer_id: payer.id,
+      p_movement_id: movement.id,
+      p_action: "pay",
+    });
 
-    const { data: receiver, error: receiverError } = await supabaseAdmin
-      .from("profiles")
-      .select("id, points")
-      .eq("id", movement.to_profile_id)
-      .maybeSingle();
-
-    if (receiverError || !receiver) return response.status(400).json({ error: "receiver_not_found" });
-
-    const [{ data: updatedPayer, error: payerError }, { error: receiverUpdateError }] = await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: Number(payer.points || 0) - points })
-        .eq("id", payer.id)
-        .select("points")
-        .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .update({ points: Number(receiver.points || 0) + points })
-        .eq("id", receiver.id),
-    ]);
-
-    if (payerError || receiverUpdateError) {
-      console.error("Point request pay update error:", payerError || receiverUpdateError);
-      return response.status(500).json({ error: "points_update_failed" });
+    if (payError) {
+      const message = String(payError.message || "");
+      if (message.includes("insufficient_points")) return response.status(400).json({ error: "insufficient_points" });
+      if (message.includes("request_not_pending")) return response.status(400).json({ error: "request_not_pending" });
+      if (message.includes("request_not_for_you")) return response.status(403).json({ error: "request_not_for_you" });
+      console.error("Point request pay secure rpc error:", payError);
+      return response.status(500).json({ error: payError.code === "42883" ? "points_security_sql_missing" : "request_response_failed" });
     }
 
-    const { error: completeError } = await supabaseAdmin
-      .from("point_transfers")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", movement.id);
-
-    if (completeError) {
-      console.error("Point request complete error:", completeError);
-      await Promise.all([
-        supabaseAdmin.from("profiles").update({ points: payerPoints }).eq("id", payer.id),
-        supabaseAdmin.from("profiles").update({ points: Number(receiver.points || 0) }).eq("id", receiver.id),
-      ]);
-      return response.status(500).json({ error: "request_complete_failed" });
-    }
-
-    response.json({ status: "completed", points: Number(updatedPayer?.points || 0) });
+    const paidResult = Array.isArray(paid) ? paid[0] : paid;
+    response.json({ status: "completed", points: Number(paidResult?.payer_points || 0) });
   } catch (error) {
     console.error("Point request respond fatal error:", error);
     response.status(500).json({ error: error.code === "42P01" ? "point_transfers_table_missing" : "request_response_failed" });
@@ -9360,10 +9295,18 @@ app.post("/api/stripe/create-checkout-session", async (request, response) => {
     return response.status(500).json({ error: "Stripe is not configured" });
   }
 
-  const { userId, pack } = request.body || {};
+  const auth = await getAuthenticatedUser(request);
+  if (auth.error) return response.status(auth.status).json({ error: auth.error });
+
+  const { userId: requestedUserId, pack } = request.body || {};
+  const userId = auth.user.id;
   const selectedPack = pointPacks[String(pack)];
 
-  if (!userId || !selectedPack) {
+  if (requestedUserId && requestedUserId !== userId) {
+    return response.status(403).json({ error: "user_mismatch" });
+  }
+
+  if (!selectedPack) {
     return response.status(400).json({ error: "Missing user or invalid points pack" });
   }
 
