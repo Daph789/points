@@ -184,6 +184,7 @@
         const [messageToDelete, setMessageToDelete] = React.useState(null);
         const [replyingTo, setReplyingTo] = React.useState(null);
         const [activeReactionMessageId, setActiveReactionMessageId] = React.useState("");
+        const [reactionPickerClosing, setReactionPickerClosing] = React.useState(false);
         const [reactionList, setReactionList] = React.useState(null);
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
         const [unreadDividerId, setUnreadDividerId] = React.useState("");
@@ -198,6 +199,8 @@
         const loadingChatRef = React.useRef(false);
         const swipeRef = React.useRef(null);
         const longPressTimerRef = React.useRef(null);
+        const reactionPickerCloseTimerRef = React.useRef(null);
+        const pendingReactionRef = React.useRef({});
         const swipeBlockClickRef = React.useRef(false);
         const positionedInitialChatRef = React.useRef(false);
         const messageRefs = React.useRef({});
@@ -292,7 +295,7 @@
             if (!response.ok) throw new Error(data.error || "plan_chat_failed");
             setProfile(data.profile || null);
             setPlan(data.plan || null);
-            setMessages((current) => options.prepend ? prependOlderMessages(data.messages || [], current) : mergeMessagesWithPending(data.messages || [], current));
+            setMessages((current) => applyPendingReactions(options.prepend ? prependOlderMessages(data.messages || [], current) : mergeMessagesWithPending(data.messages || [], current)));
             setHasMoreMessages(Boolean(data.has_more));
             setStatus("");
             if (!positionedInitialChatRef.current) {
@@ -397,9 +400,21 @@
           }
         }
 
+        function closeReactionPicker() {
+          if (!activeReactionMessageId) return;
+          setReactionPickerClosing(true);
+          if (reactionPickerCloseTimerRef.current) window.clearTimeout(reactionPickerCloseTimerRef.current);
+          reactionPickerCloseTimerRef.current = window.setTimeout(() => {
+            setActiveReactionMessageId("");
+            setReactionPickerClosing(false);
+          }, 170);
+        }
+
         function openReactionPicker(message) {
           if (!message || message.pending || message.deleted_at) return;
-          setActiveReactionMessageId((current) => current === message.id ? "" : message.id);
+          if (reactionPickerCloseTimerRef.current) window.clearTimeout(reactionPickerCloseTimerRef.current);
+          setReactionPickerClosing(false);
+          setActiveReactionMessageId(message.id);
           swipeBlockClickRef.current = true;
           window.navigator?.vibrate?.(12);
           window.setTimeout(() => {
@@ -409,7 +424,7 @@
 
         function openReactionList(message, reaction) {
           if (!reaction?.emoji) return;
-          setActiveReactionMessageId("");
+          closeReactionPicker();
           setReactionList({ message, reaction });
         }
 
@@ -560,6 +575,19 @@
           setMessages((current) => current.map((item) => item.id === messageId ? { ...item, reactions: reactions || [] } : item));
         }
 
+        function applyPendingReactions(list) {
+          const now = Date.now();
+          return (list || []).map((message) => {
+            const pending = pendingReactionRef.current[message.id];
+            if (!pending) return message;
+            if (pending.expires <= now) {
+              delete pendingReactionRef.current[message.id];
+              return message;
+            }
+            return { ...message, reactions: pending.reactions };
+          });
+        }
+
         function optimisticReactionToggle(message, emoji) {
           const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
           const currentMine = currentReactions.find((reaction) => reaction.mine);
@@ -583,12 +611,14 @@
             }
           }
           setMessageReactions(message.id, nextReactions);
+          return nextReactions;
         }
 
         async function reactToMessage(message, emoji) {
           if (!message?.id || message.pending || message.deleted_at || !reactionEmojis.includes(emoji)) return;
-          setActiveReactionMessageId("");
-          optimisticReactionToggle(message, emoji);
+          closeReactionPicker();
+          const optimisticReactions = optimisticReactionToggle(message, emoji);
+          pendingReactionRef.current[message.id] = { reactions: optimisticReactions, expires: Date.now() + 2200 };
           try {
             const response = await fetch(`/api/social-plans/${planId}/chat/${message.id}/reaction`, {
               method: "POST",
@@ -597,9 +627,14 @@
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "reaction_failed");
+            delete pendingReactionRef.current[message.id];
             setMessageReactions(message.id, data.reactions || []);
           } catch (error) {
             setStatus(friendlyChatError(error.message));
+            window.setTimeout(() => {
+              delete pendingReactionRef.current[message.id];
+              loadChat(token, true);
+            }, 900);
           }
         }
 
@@ -723,18 +758,29 @@
                           </div>
                         )}
                         {activeReactionMessageId === message.id && !message.pending && !message.deleted_at && (
-                          <div className={`absolute bottom-full z-40 mb-2 flex items-center gap-1.5 rounded-full border border-white/10 bg-[#0D111D]/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl ${mine ? "right-0" : "left-0"}`}>
+                          <React.Fragment>
+                          <button
+                            type="button"
+                            aria-label="Cerrar reacciones"
+                            className={`fixed inset-0 z-30 cursor-default bg-transparent transition-opacity duration-150 ${reactionPickerClosing ? "opacity-0" : "opacity-100"}`}
+                            onClick={closeReactionPicker}
+                          />
+                          <div
+                            className={`absolute bottom-full z-40 mb-2 flex origin-bottom items-center gap-1.5 rounded-full border border-white/10 bg-[#0D111D]/95 p-2 shadow-2xl shadow-black/40 backdrop-blur-xl transition-all duration-200 ease-out ${mine ? "right-0" : "left-0"} ${reactionPickerClosing ? "translate-y-2 scale-90 opacity-0" : "translate-y-0 scale-100 opacity-100"}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             {reactionEmojis.map((emoji) => (
                               <button
                                 key={emoji}
                                 type="button"
-                                className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.08] text-lg transition hover:scale-110 hover:bg-white/[0.14]"
+                                className="grid h-9 w-9 place-items-center rounded-full bg-white/[0.08] text-lg transition duration-150 hover:scale-110 hover:bg-white/[0.14] active:scale-95"
                                 onClick={() => reactToMessage(message, emoji)}
                               >
                                 {emoji}
                               </button>
                             ))}
                           </div>
+                          </React.Fragment>
                         )}
                       </div>
                       {mine && <Avatar user={profile} mine />}
