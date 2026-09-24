@@ -417,6 +417,13 @@ function premiumPublicStatus(subscription, profile) {
   };
 }
 
+async function hasPremiumAutomationAccess(premium, fallbackProfile) {
+  const profile = premium?.profile || fallbackProfile;
+  const premiumStatus = premiumPublicStatus(premium?.subscription, profile);
+  if (premiumStatus.is_active) return true;
+  return loadAdminVerifiedForProfile(profile);
+}
+
 function premiumIdentityPublic(profile) {
   return {
     dni: profile?.premium_identity_dni || "",
@@ -4072,8 +4079,7 @@ app.get("/api/me/offer-automation-requests", async (request, response) => {
       return response.status(403).json({ error: "business_account_required" });
     }
     const premium = await syncPremiumForProfile(profile);
-    const premiumStatus = premiumPublicStatus(premium.subscription, premium.profile || profile);
-    if (!premiumStatus.is_active && !premium.profile?.admin_verified && !profile?.admin_verified) {
+    if (!(await hasPremiumAutomationAccess(premium, profile))) {
       return response.status(403).json({ error: "premium_required" });
     }
 
@@ -4119,8 +4125,7 @@ app.post("/api/me/offer-automation-requests", async (request, response) => {
       return response.status(403).json({ error: "business_account_required" });
     }
     const premium = await syncPremiumForProfile(profile);
-    const premiumStatus = premiumPublicStatus(premium.subscription, premium.profile || profile);
-    if (!premiumStatus.is_active && !premium.profile?.admin_verified && !profile?.admin_verified) {
+    if (!(await hasPremiumAutomationAccess(premium, profile))) {
       return response.status(403).json({ error: "premium_required" });
     }
 
