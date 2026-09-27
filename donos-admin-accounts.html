@@ -165,6 +165,7 @@
         const [profileAccount, setProfileAccount] = React.useState(null);
         const [profileDraft, setProfileDraft] = React.useState({ display_name: "", premium_identity_dni: "", premium_identity_photo_data_url: "" });
         const [isSavingProfile, setIsSavingProfile] = React.useState(false);
+        const [pendingCityAction, setPendingCityAction] = React.useState(null);
         const filteredAccounts = accounts.filter((account) => matchesMarket(account, marketFilter) && matchesAccount(account, search));
         const premiumAccounts = accounts.filter((account) => account.premium?.status === "active");
         const pendingCityRequests = cityRequests.filter((request) => String(request.status || "pending").toLowerCase() === "pending");
@@ -351,9 +352,26 @@
           }
         }
 
+        function countryName(code) {
+          const clean = String(code || "").toUpperCase();
+          if (clean === "FR") return "France";
+          if (clean === "BE") return "Belgique";
+          if (clean === "ES") return "España";
+          return clean || "País no indicado";
+        }
+
+        function cityActionLabel(action) {
+          if (action === "open") return "Abrir ciudad";
+          if (action === "reject") return "Rechazar solicitud";
+          return "Marcar como revisada";
+        }
+
+        function requestCityAction(requestItem, action) {
+          setPendingCityAction({ requestItem, action });
+        }
+
         async function updateCityRequest(requestItem, action) {
-          const actionLabel = action === "open" ? "abrir esta ciudad" : action === "reject" ? "rechazar esta solicitud" : "marcarla como revisada";
-          if (!window.confirm(`¿Confirmas que quieres ${actionLabel}?`)) return;
+          if (!requestItem?.id) return;
 
           setStatus("");
           setSavingCityRequestId(`${requestItem.id}:${action}`);
@@ -380,6 +398,7 @@
             setStatus(error.message || "No se ha podido actualizar la solicitud.");
           } finally {
             setSavingCityRequestId("");
+            setPendingCityAction(null);
           }
         }
 
@@ -517,18 +536,31 @@
                 {cityRequests.slice(0, 8).map((request) => {
                   const account = request.profile || {};
                   const isPending = String(request.status || "pending").toLowerCase() === "pending";
+                  const cleanCountry = String(request.country_code || "").toUpperCase();
+                  const cleanCity = String(request.city_name || "").trim();
                   return (
                     <article key={request.id} className={`rounded-3xl border p-4 ${isPending ? "border-sun/25 bg-black/25" : "border-white/10 bg-black/15"}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-lg font-black text-white">{request.city_name || "Ciudad solicitada"}</p>
-                          <p className="mt-1 text-sm font-bold text-slate-400">{String(request.country_code || "").toUpperCase() || "País"} · {account.display_name || account.email || "Cuenta Donoss"}</p>
+                          <p className="text-xs font-black uppercase tracking-[0.16em] text-sun">Ciudad solicitada</p>
+                          <p className="mt-1 break-words text-3xl font-black text-white">{cleanCity || "Ciudad no indicada"}</p>
+                          <p className="mt-1 text-sm font-bold text-slate-300">{cleanCountry || "País"} · {countryName(cleanCountry)}</p>
                         </div>
                         <span className={`rounded-full px-3 py-1 text-xs font-black ${isPending ? "bg-sun text-ink" : "bg-white/10 text-slate-300"}`}>
                           {isPending ? "Pendiente" : request.status}
                         </span>
                       </div>
+                      <div className="mt-3 rounded-[24px] border border-sun/20 bg-sun/10 p-3">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-sun">Al abrir</p>
+                        <p className="mt-1 text-sm font-black leading-5 text-white">
+                          Se abrirá el mercado <span className="text-sun">{cleanCity || "esta ciudad"}</span> en <span className="text-sun">{countryName(cleanCountry)}</span>.
+                        </p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-400">
+                          Las cuentas que pidieron exactamente esta ciudad podrán publicar ahí cuando quede activa.
+                        </p>
+                      </div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Solicitante: {account.display_name || "Cuenta Donoss"}</p>
                         <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Email: {account.email || "sin email"}</p>
                         <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">ID: {formatDonosId(account.transaction_id)}</p>
                         <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Tipo: {account.account_type === "business" ? "Empresa" : "Usuario"}</p>
@@ -539,15 +571,15 @@
                           className="h-10 rounded-2xl bg-mint px-4 text-sm font-black text-ink shadow-glow disabled:opacity-50"
                           disabled={!isPending || savingCityRequestId.startsWith(request.id)}
                           type="button"
-                          onClick={() => updateCityRequest(request, "open")}
+                          onClick={() => requestCityAction(request, "open")}
                         >
-                          {savingCityRequestId === `${request.id}:open` ? "Abriendo..." : "Abrir ciudad"}
+                          {savingCityRequestId === `${request.id}:open` ? "Abriendo..." : `Abrir ${cleanCity || "ciudad"}`}
                         </button>
                         <button
                           className="h-10 rounded-2xl border border-white/10 bg-white/[0.06] px-4 text-sm font-black text-white disabled:opacity-50"
                           disabled={!isPending || savingCityRequestId.startsWith(request.id)}
                           type="button"
-                          onClick={() => updateCityRequest(request, "review")}
+                          onClick={() => requestCityAction(request, "review")}
                         >
                           Revisada
                         </button>
@@ -555,7 +587,7 @@
                           className="h-10 rounded-2xl border border-coral/25 bg-coral/10 px-4 text-sm font-black text-coral disabled:opacity-50"
                           disabled={!isPending || savingCityRequestId.startsWith(request.id)}
                           type="button"
-                          onClick={() => updateCityRequest(request, "reject")}
+                          onClick={() => requestCityAction(request, "reject")}
                         >
                           Rechazar
                         </button>
@@ -870,6 +902,65 @@
                     Entendido
                   </button>
                 </div>
+              </div>
+            )}
+
+            {pendingCityAction && (
+              <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-xl">
+                {(() => {
+                  const requestItem = pendingCityAction.requestItem || {};
+                  const account = requestItem.profile || {};
+                  const action = pendingCityAction.action;
+                  const city = String(requestItem.city_name || "").trim() || "Ciudad no indicada";
+                  const country = String(requestItem.country_code || "").toUpperCase();
+                  const isOpen = action === "open";
+                  const isReject = action === "reject";
+                  return (
+                    <div className="w-full max-w-lg rounded-[34px] border border-white/10 bg-[#101522] p-5 shadow-2xl shadow-black/50">
+                      <p className={`text-xs font-black uppercase tracking-[0.18em] ${isOpen ? "text-mint" : isReject ? "text-coral" : "text-sun"}`}>
+                        Confirmación necesaria
+                      </p>
+                      <h2 className="mt-2 text-3xl font-black text-white">{cityActionLabel(action)}</h2>
+                      <div className={`mt-4 rounded-[28px] border p-4 ${isOpen ? "border-mint/25 bg-mint/10" : isReject ? "border-coral/25 bg-coral/10" : "border-sun/25 bg-sun/10"}`}>
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{isOpen ? "Ciudad que se abrirá" : "Solicitud seleccionada"}</p>
+                        <p className="mt-2 break-words text-4xl font-black text-white">{city}</p>
+                        <p className="mt-1 text-base font-black text-slate-200">{country || "País"} · {countryName(country)}</p>
+                      </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Solicitante: {account.display_name || "Cuenta Donoss"}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Email: {account.email || "sin email"}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">ID: {formatDonosId(account.transaction_id)}</p>
+                        <p className="rounded-2xl bg-white/[0.055] px-3 py-2 text-xs font-bold text-slate-300">Tipo: {account.account_type === "business" ? "Empresa" : "Usuario"}</p>
+                      </div>
+                      <p className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm font-bold leading-6 text-slate-300">
+                        {isOpen
+                          ? `Si confirmas, Donoss creará el mercado ${city} en ${countryName(country)}. Las empresas de esa ciudad podrán publicar ahí.`
+                          : isReject
+                            ? "Si confirmas, esta solicitud quedará rechazada y no abrirá ningún mercado."
+                            : "Si confirmas, esta solicitud quedará marcada como revisada sin abrir mercado."}
+                      </p>
+                      <div className="mt-5 grid grid-cols-2 gap-3">
+                        <button
+                          className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white"
+                          type="button"
+                          onClick={() => setPendingCityAction(null)}
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          className={`h-12 rounded-2xl text-sm font-black shadow-glow disabled:opacity-60 ${
+                            isOpen ? "bg-mint text-ink" : isReject ? "bg-coral text-white" : "bg-sun text-ink"
+                          }`}
+                          type="button"
+                          disabled={Boolean(savingCityRequestId)}
+                          onClick={() => updateCityRequest(requestItem, action)}
+                        >
+                          {savingCityRequestId ? "Guardando..." : "Confirmar"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </main>
