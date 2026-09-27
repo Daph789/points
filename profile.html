@@ -203,6 +203,14 @@
         return canvas.toDataURL("image/jpeg", quality);
       }
 
+      function normalizeText(value) {
+        return String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase();
+      }
+
       function App() {
         const [profile, setProfile] = React.useState(null);
         const [status, setStatus] = React.useState("Cargando perfil...");
@@ -238,6 +246,7 @@
         const [isEditingMarket, setIsEditingMarket] = React.useState(false);
         const [countryDraft, setCountryDraft] = React.useState(window.donossMarkets?.defaultCountryCode || "ES");
         const [cityDraft, setCityDraft] = React.useState(window.donossMarkets?.getCountry?.("ES")?.defaultCity || "donostia");
+        const [citySearchDraft, setCitySearchDraft] = React.useState("");
         const [customCityDraft, setCustomCityDraft] = React.useState("");
         const [marketsByCountry, setMarketsByCountry] = React.useState(window.donossMarkets?.marketsByCountry || {});
         const [isSavingMarket, setIsSavingMarket] = React.useState(false);
@@ -256,6 +265,12 @@
         const availableMarkets = marketsByCountry[selectedDraftCountry.code] || window.donossMarkets?.getMarkets?.(selectedDraftCountry.code) || [];
         const availableNeighborhoods = neighborhoodsByCountry[String(profile?.country_code || countryDraft || "ES").toUpperCase()] || neighborhoodsByCountry.ES;
         const profileUsesFrench = ["FR", "BE"].includes(String(profile?.country_code || countryDraft || "ES").toUpperCase());
+        const marketEditorUsesFrench = ["FR", "BE"].includes(String(countryDraft || profile?.country_code || "ES").toUpperCase());
+        const citySearchDraftText = String(citySearchDraft || "").trim();
+        const normalizedCitySearchDraft = normalizeText(citySearchDraftText);
+        const cityDraftSuggestions = availableMarkets
+          .filter((market) => !normalizedCitySearchDraft || normalizeText(market.label).includes(normalizedCitySearchDraft))
+          .slice(0, 6);
 
         React.useEffect(() => {
           async function loadProfile() {
@@ -450,11 +465,14 @@
           setCountryDraft(code);
           if (profile?.city_status === "pending_city") {
             setCityDraft(customCityValue);
+            setCitySearchDraft(profile?.requested_city || "");
             setCustomCityDraft(profile?.requested_city || "");
           } else {
             const markets = marketsByCountry[code] || window.donossMarkets?.getMarkets?.(code) || [];
             const currentMarket = String(profile?.city_market || "").toLowerCase();
-            setCityDraft(markets.some((market) => market.id === currentMarket) ? currentMarket : (markets[0]?.id || customCityValue));
+            const current = markets.find((market) => market.id === currentMarket);
+            setCityDraft(current ? currentMarket : (markets[0]?.id || customCityValue));
+            setCitySearchDraft(current?.label || "");
             setCustomCityDraft("");
           }
           setIsEditingMarket(true);
@@ -465,9 +483,22 @@
           const nextMarkets = marketsByCountry[nextCountry.code] || window.donossMarkets?.getMarkets?.(nextCountry.code) || [];
           setCountryDraft(nextCountry.code);
           setCityDraft(nextMarkets[0]?.id || customCityValue);
+          setCitySearchDraft("");
           setCustomCityDraft("");
           setNeighborhoodDraft("");
           setCustomNeighborhood("");
+        }
+
+        function selectCityDraftSuggestion(market) {
+          setCityDraft(market.id);
+          setCitySearchDraft(market.label);
+          setCustomCityDraft("");
+        }
+
+        function requestCustomCityDraftFromSearch() {
+          const city = citySearchDraftText || customCityDraft.trim();
+          setCityDraft(customCityValue);
+          setCustomCityDraft(city);
         }
 
         async function copyId() {
@@ -1352,16 +1383,59 @@
                       </option>
                     ))}
                   </select>
-                  <select
-                    className="h-12 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 text-sm font-black text-white outline-none ring-4 ring-mint/10"
-                    value={cityDraft}
-                    onChange={(event) => setCityDraft(event.target.value)}
-                  >
-                    {availableMarkets.map((market) => (
-                      <option key={market.id} value={market.id}>{market.label}</option>
-                    ))}
-                    <option value={customCityValue}>Mi ciudad no aparece</option>
-                  </select>
+                  <div className="rounded-2xl border border-mint/30 bg-black/20 p-3">
+                    <label className="block">
+                      <span className="text-xs font-black uppercase tracking-[0.14em] text-mint">
+                        {marketEditorUsesFrench ? "Cherche ta ville" : "Busca tu ciudad"}
+                      </span>
+                      <input
+                        className="mt-2 h-12 w-full rounded-2xl border border-mint/40 bg-black/25 px-4 text-sm font-black text-white outline-none placeholder:text-slate-600"
+                        value={citySearchDraft}
+                        onChange={(event) => {
+                          setCitySearchDraft(event.target.value);
+                          setCityDraft("");
+                          setCustomCityDraft("");
+                        }}
+                        placeholder={marketEditorUsesFrench ? "Ex. Lille, Ronchin, Tournai..." : "Ej. Lille, Ronchin, Tournai..."}
+                        autoComplete="address-level2"
+                      />
+                    </label>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {cityDraftSuggestions.map((market) => (
+                        <button
+                          key={market.id}
+                          type="button"
+                          className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
+                            cityDraft === market.id
+                              ? "border-mint/60 bg-mint/15 text-mint"
+                              : "border-white/10 bg-white/[0.045] text-slate-200 hover:border-mint/30"
+                          }`}
+                          onClick={() => selectCityDraftSuggestion(market)}
+                        >
+                          {market.label}
+                        </button>
+                      ))}
+                    </div>
+                    {cityDraftSuggestions.length === 0 && citySearchDraftText && (
+                      <p className="mt-3 rounded-2xl bg-black/20 p-3 text-xs font-bold text-slate-300">
+                        {marketEditorUsesFrench ? "Aucune ville ouverte avec ce nom." : "No hay ciudad abierta con ese nombre."}
+                      </p>
+                    )}
+                    {citySearchDraftText && !cityDraftSuggestions.some((market) => normalizeText(market.label) === normalizedCitySearchDraft) && (
+                      <button
+                        className="mt-3 w-full rounded-2xl border border-sun/30 bg-sun/10 px-4 py-3 text-sm font-black text-sun transition hover:bg-sun/15"
+                        type="button"
+                        onClick={requestCustomCityDraftFromSearch}
+                      >
+                        {marketEditorUsesFrench ? "Demander l’ouverture de cette ville" : "Solicitar apertura de esta ciudad"}: {citySearchDraftText}
+                      </button>
+                    )}
+                    {availableMarkets.find((market) => market.id === cityDraft) && (
+                      <p className="mt-3 text-xs font-bold leading-5 text-mint">
+                        {marketEditorUsesFrench ? "Ville sélectionnée" : "Ciudad seleccionada"}: {availableMarkets.find((market) => market.id === cityDraft)?.label}
+                      </p>
+                    )}
+                  </div>
                   {cityDraft === customCityValue && (
                     <div className="rounded-2xl border border-sun/20 bg-sun/10 p-3">
                       <input
@@ -1369,10 +1443,12 @@
                         value={customCityDraft}
                         maxLength="80"
                         onChange={(event) => setCustomCityDraft(event.target.value)}
-                        placeholder="Escribe tu ciudad"
+                        placeholder={marketEditorUsesFrench ? "Écris ta ville" : "Escribe tu ciudad"}
                       />
                       <p className="mt-2 text-xs font-bold leading-5 text-slate-300">
-                        Tu ciudad quedará en revisión. Hasta que se abra, verás la ciudad principal del país seleccionado.
+                        {marketEditorUsesFrench
+                          ? "Ta ville restera en révision. Jusqu’à son ouverture, tu verras la ville principale du pays sélectionné."
+                          : "Tu ciudad quedará en revisión. Hasta que se abra, verás la ciudad principal del país seleccionado."}
                       </p>
                     </div>
                   )}

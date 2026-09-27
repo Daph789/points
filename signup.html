@@ -162,6 +162,12 @@
           emailMismatch: "Los correos no coinciden.",
           country: "País",
           city: "Ciudad Donoss",
+          citySearch: "Busca tu ciudad",
+          citySearchPlaceholder: "Ej. Lille, Ronchin, Tournai...",
+          citySelected: "Ciudad seleccionada",
+          citySuggestions: "Ciudades abiertas",
+          requestThisCity: "Solicitar apertura de esta ciudad",
+          noCitySuggestion: "No hay ciudad abierta con ese nombre.",
           missingCity: "Mi ciudad no aparece",
           customCity: "Escribe tu ciudad",
           cityBusinessNote: "Tu cuenta se puede crear, pero Donoss revisará la apertura de esta ciudad antes de activar publicaciones allí.",
@@ -260,6 +266,12 @@
           emailMismatch: "Les e-mails ne correspondent pas.",
           country: "Pays",
           city: "Ville Donoss",
+          citySearch: "Cherche ta ville",
+          citySearchPlaceholder: "Ex. Lille, Ronchin, Tournai...",
+          citySelected: "Ville sélectionnée",
+          citySuggestions: "Villes ouvertes",
+          requestThisCity: "Demander l’ouverture de cette ville",
+          noCitySuggestion: "Aucune ville ouverte avec ce nom.",
           missingCity: "Ma ville n’apparaît pas",
           customCity: "Écris ta ville",
           cityBusinessNote: "Ton compte peut être créé, mais Donoss vérifiera l’ouverture de cette ville avant d’y activer des publications.",
@@ -448,6 +460,14 @@
         return message;
       }
 
+      function normalizeText(value) {
+        return String(value || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .trim()
+          .toLowerCase();
+      }
+
       const termsSections = [
         {
           title: "1. Qué es Donoss",
@@ -515,6 +535,7 @@
         const [isTermsOpen, setIsTermsOpen] = React.useState(false);
         const [countryCode, setCountryCode] = React.useState(initialSignupDraft.countryCode || window.donossMarkets?.defaultCountryCode || "ES");
         const [cityMarket, setCityMarket] = React.useState(initialSignupDraft.cityMarket || window.donossMarkets?.getCountry?.(initialSignupDraft.countryCode || "ES")?.defaultCity || "donostia");
+        const [citySearch, setCitySearch] = React.useState(initialSignupDraft.citySearch || "");
         const [marketsByCountry, setMarketsByCountry] = React.useState(window.donossMarkets?.marketsByCountry || {});
         const [customCity, setCustomCity] = React.useState(initialSignupDraft.customCity || "");
         const [neighborhood, setNeighborhood] = React.useState(initialSignupDraft.neighborhood || "");
@@ -540,8 +561,13 @@
         const availableMarkets = marketsByCountry[selectedCountry.code] || window.donossMarkets?.getMarkets?.(selectedCountry.code) || [{ id: "donostia", label: "Donostia / San Sebastián" }];
         const customCityValue = window.donossMarkets?.customCityValue || "__custom_city__";
         const isCustomCity = cityMarket === customCityValue;
-        const selectedMarket = isCustomCity ? null : availableMarkets.find((market) => market.id === cityMarket) || window.donossMarkets?.getMarket?.(selectedCountry.code, cityMarket);
+        const selectedMarket = !isCustomCity && cityMarket ? availableMarkets.find((market) => market.id === cityMarket) : null;
         const fallbackMarket = window.donossMarkets?.getMarket?.(selectedCountry.code, selectedCountry.defaultCity) || availableMarkets[0] || { id: "donostia", label: "Donostia / San Sebastián" };
+        const citySearchText = String(citySearch || "").trim();
+        const normalizedCitySearch = normalizeText(citySearchText);
+        const citySuggestions = availableMarkets
+          .filter((market) => !normalizedCitySearch || normalizeText(market.label).includes(normalizedCitySearch))
+          .slice(0, 6);
         const availableNeighborhoods = neighborhoodsByCountry[selectedCountry.code] || neighborhoodsByCountry.ES;
         const requestedCityLabel = customCity.trim();
         const finalCityLabel = isCustomCity ? fallbackMarket.label : selectedMarket?.label || "";
@@ -629,6 +655,7 @@
             acceptedTerms,
             countryCode,
             cityMarket,
+            citySearch,
             customCity,
             neighborhood,
             customNeighborhood,
@@ -650,6 +677,7 @@
           acceptedTerms,
           countryCode,
           cityMarket,
+          citySearch,
           customCity,
           neighborhood,
           customNeighborhood,
@@ -743,9 +771,22 @@
           setCountryCode(nextCountry.code);
           window.donossI18n?.setCountry?.(nextCountry.code);
           setCityMarket(nextMarkets[0]?.id || customCityValue);
+          setCitySearch("");
           setCustomCity("");
           setNeighborhood("");
           setCustomNeighborhood("");
+        }
+
+        function selectCitySuggestion(market) {
+          setCityMarket(market.id);
+          setCitySearch(market.label);
+          setCustomCity("");
+        }
+
+        function requestCustomCityFromSearch() {
+          const city = citySearchText || customCity.trim();
+          setCityMarket(customCityValue);
+          setCustomCity(city);
         }
 
         function profilePayload(transactionId) {
@@ -1192,22 +1233,62 @@
                         </Field>
 
                         <Field label={t.city}>
-                          <select
-                            className={`${inputClass} appearance-none bg-[linear-gradient(45deg,transparent_50%,#94a3b8_50%),linear-gradient(135deg,#94a3b8_50%,transparent_50%)] bg-[length:6px_6px,6px_6px] bg-[position:calc(100%-20px)_21px,calc(100%-14px)_21px] bg-no-repeat pr-10`}
-                            value={cityMarket}
-                            onChange={(event) => setCityMarket(event.target.value)}
-                          >
-                            {availableMarkets.map((market) => (
-                              <option key={market.id} className="bg-panel" value={market.id}>
-                                {market.label}
-                              </option>
-                            ))}
-                            <option className="bg-panel" value={customCityValue}>
-                              {t.missingCity}
-                            </option>
-                          </select>
+                          <input
+                            className={inputClass}
+                            type="text"
+                            value={citySearch}
+                            onChange={(event) => {
+                              setCitySearch(event.target.value);
+                              setCityMarket("");
+                              setCustomCity("");
+                            }}
+                            placeholder={t.citySearchPlaceholder}
+                            autoComplete="address-level2"
+                          />
                         </Field>
                       </div>
+
+                      <section className="rounded-[24px] border border-white/10 bg-white/[0.035] p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-500">{t.citySuggestions}</p>
+                          {(selectedMarket || isCustomCity) && (
+                            <span className={`rounded-full px-3 py-1 text-xs font-black ${isCustomCity ? "bg-sun text-ink" : "bg-mint text-ink"}`}>
+                              {isCustomCity ? t.pending : t.citySelected}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {citySuggestions.map((market) => (
+                            <button
+                              key={market.id}
+                              type="button"
+                              className={`rounded-2xl border px-4 py-3 text-left text-sm font-black transition ${
+                                cityMarket === market.id
+                                  ? "border-mint/60 bg-mint/15 text-mint"
+                                  : "border-white/10 bg-black/20 text-slate-200 hover:border-mint/30"
+                              }`}
+                              onClick={() => selectCitySuggestion(market)}
+                            >
+                              {market.label}
+                            </button>
+                          ))}
+                        </div>
+                        {citySuggestions.length === 0 && citySearchText && (
+                          <p className="mt-3 rounded-2xl bg-black/20 p-3 text-xs font-bold text-slate-300">{t.noCitySuggestion}</p>
+                        )}
+                        {citySearchText && !citySuggestions.some((market) => normalizeText(market.label) === normalizedCitySearch) && (
+                          <button
+                            className="mt-3 w-full rounded-2xl border border-sun/30 bg-sun/10 px-4 py-3 text-sm font-black text-sun transition hover:bg-sun/15"
+                            type="button"
+                            onClick={requestCustomCityFromSearch}
+                          >
+                            {t.requestThisCity}: {citySearchText}
+                          </button>
+                        )}
+                        {selectedMarket && (
+                          <p className="mt-3 text-xs font-bold leading-5 text-mint">{t.citySelected}: {selectedMarket.label}</p>
+                        )}
+                      </section>
 
                       {isCustomCity && (
                         <section className="rounded-[24px] border border-sun/25 bg-sun/10 p-4">
