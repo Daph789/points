@@ -715,6 +715,16 @@
           await Promise.all([loadPlans(), loadMine(), loadTickets(), loadPlanProfilePhotos(), loadNotifications()]);
         }
 
+        async function refreshAfterPlanSave() {
+          const tasks = [loadPlans(), loadMine(), loadNotifications()];
+          if (!isBusinessAccount) {
+            tasks.push(loadTickets(), loadPlanProfilePhotos());
+          }
+          const results = await Promise.allSettled(tasks);
+          const failed = results.find((result) => result.status === "rejected");
+          if (failed) console.warn("Plan saved, but refresh failed:", failed.reason);
+        }
+
         function unreadEventsFor(subsection) {
           return notificationEvents.filter((event) => event.section === "quedar" && event.subsection === subsection && !readKeys.has(event.key));
         }
@@ -1036,7 +1046,7 @@
               setIsSaving(false);
               return;
             }
-            await api(editingPlanId ? `/api/social-plans/${editingPlanId}` : "/api/social-plans", {
+            const savedPlanData = await api(editingPlanId ? `/api/social-plans/${editingPlanId}` : "/api/social-plans", {
               method: editingPlanId ? "PATCH" : "POST",
               body: JSON.stringify({
                 planType,
@@ -1056,7 +1066,10 @@
                 wantedAgeMax: ageMax,
               }),
             });
-            setStatus(editingPlanId ? "Plan actualizado correctamente." : "Plan publicado correctamente.");
+            if (savedPlanData.plan) {
+              setOwnedPlans((current) => [savedPlanData.plan, ...current.filter((plan) => plan.id !== savedPlanData.plan.id)]);
+              setPlans((current) => [savedPlanData.plan, ...current.filter((plan) => plan.id !== savedPlanData.plan.id)]);
+            }
             setMode("mine");
             setEditingPlanId("");
             setSelectedTicketId("");
@@ -1075,7 +1088,8 @@
             setWantedMen(0);
             setWantedAgeMin("");
             setWantedAgeMax("");
-            await reloadAll();
+            await refreshAfterPlanSave();
+            setStatus(editingPlanId ? "Plan actualizado correctamente." : "Plan publicado correctamente.");
           } catch (error) {
             setStatus(friendlyError(error.message, "No se ha podido publicar el plan."));
           } finally {
