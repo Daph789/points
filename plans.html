@@ -271,6 +271,11 @@
           plan_photos_required: "Para apuntarte necesitas mínimo 2 fotos tuyas.",
           plan_photos_sql_missing: "Falta ejecutar el SQL de fotos para planes.",
           plan_photos_failed: "No se han podido cargar tus fotos para planes.",
+          create_plan_failed: "No se ha podido publicar el plan. Revisa que todos los campos obligatorios estén completos e inténtalo otra vez.",
+          social_plan_invalid_data: "No se ha podido publicar porque falta un dato obligatorio del plan.",
+          social_plan_text_too_long: "Hay un texto demasiado largo. Acorta el título, la dirección o el mensaje.",
+          social_plan_reference_missing: "No se ha podido publicar porque falta una referencia del plan. Recarga la página e inténtalo otra vez.",
+          social_plan_permission_denied: "No se ha podido publicar por un bloqueo de permisos en Supabase.",
           users_only: "Solo los usuarios pueden crear planes para quedar.",
           business_free_plans_only: "Las empresas solo pueden crear planes libres en Quedar.",
           already_joined: "Ya pediste entrar en este plan.",
@@ -278,7 +283,8 @@
           mine_failed: "No se han podido cargar tus planes.",
           tickets_failed: "No se han podido cargar tus billetes.",
         };
-        if (String(message || "").toLowerCase().includes("failed")) return `${fallback} Revisa tu conexión o prueba con una foto más ligera.`;
+        if (String(message || "").toLowerCase().includes("network")) return `${fallback} Revisa tu conexión e inténtalo otra vez.`;
+        if (String(message || "").toLowerCase().includes("failed")) return `${fallback} Inténtalo otra vez.`;
         return messages[message] || `${fallback} Motivo: ${message || "error desconocido"}`;
       }
 

@@ -5624,6 +5624,19 @@ function normalizedSocialPlanCover(value) {
   return photo;
 }
 
+function socialPlanInsertErrorCode(error) {
+  const message = String(error?.message || "");
+  const details = String(error?.details || "");
+  if (error?.code === "23505") return "purchase_already_has_plan";
+  if (error?.code === "42P01") return "social_plans_table_missing";
+  if (error?.code === "42703") return "free_social_plans_sql_missing";
+  if (error?.code === "23514") return "social_plan_invalid_data";
+  if (error?.code === "22001") return "social_plan_text_too_long";
+  if (error?.code === "23503") return "social_plan_reference_missing";
+  if (error?.code === "42501" || /row-level security|permission denied/i.test(`${message} ${details}`)) return "social_plan_permission_denied";
+  return "create_plan_failed";
+}
+
 async function enrichSocialPlans(plans, viewerId = "", viewerProfile = null) {
   const planRows = plans || [];
   const creatorIds = [...new Set(planRows.map((plan) => plan.creator_id).filter(Boolean))];
@@ -7159,7 +7172,7 @@ app.post("/api/social-plans", async (request, response) => {
     if (error) {
       console.error("Create social plan error:", error);
       return response.status(500).json({
-        error: error.code === "23505" ? "purchase_already_has_plan" : error.code === "42P01" ? "social_plans_table_missing" : error.code === "42703" ? "free_social_plans_sql_missing" : "create_plan_failed",
+        error: socialPlanInsertErrorCode(error),
       });
     }
 
@@ -7293,7 +7306,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
     if (error) {
       console.error("Update social plan error:", error);
       return response.status(500).json({
-        error: error.code === "23505" ? "purchase_already_has_plan" : error.code === "42P01" ? "social_plans_table_missing" : error.code === "42703" ? "free_social_plans_sql_missing" : "update_plan_failed",
+        error: socialPlanInsertErrorCode(error) === "create_plan_failed" ? "update_plan_failed" : socialPlanInsertErrorCode(error),
       });
     }
 
