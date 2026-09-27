@@ -5542,6 +5542,7 @@ function isSocialPlanExpired(plan) {
 
 const socialPlanSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, wanted_age_min, wanted_age_max, country_code, city_market, city_label, status, confirmed_at, created_at, updated_at";
 const legacySocialPlanSelect = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, free_cover_data_url, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at";
+const legacySocialPlanSelectNoCover = "id, creator_id, purchase_id, plan_type, free_category, location, event_date, title, message, photo_data_url, wanted_women, wanted_men, wanted_open, status, confirmed_at, created_at, updated_at";
 
 function normalizeWantedAgeRange(body = {}) {
   const rawMin = body.wantedAgeMin === "" || body.wantedAgeMin === undefined ? null : normalizeAge(body.wantedAgeMin);
@@ -6931,6 +6932,17 @@ app.get("/api/social-plans", async (request, response) => {
       error = fallback.error;
     }
 
+    if (error?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .select(legacySocialPlanSelectNoCover)
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .limit(120);
+      plans = fallback.data;
+      error = fallback.error;
+    }
+
     if (error) {
       console.error("Social plans list error:", error);
       return response.status(500).json({ error: error.code === "42P01" ? "social_plans_table_missing" : error.code === "42703" ? "free_social_plans_sql_missing" : "social_plans_failed" });
@@ -6973,6 +6985,17 @@ app.get("/api/social-plans/me", async (request, response) => {
       ownedError = fallback.error;
     }
 
+    if (ownedError?.code === "42703") {
+      const fallback = await supabaseAdmin
+        .from("social_plans")
+        .select(legacySocialPlanSelectNoCover)
+        .eq("creator_id", viewer.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      owned = fallback.data;
+      ownedError = fallback.error;
+    }
+
     if (ownedError) {
       console.error("My social plans owned error:", ownedError);
       return response.status(500).json({ error: ownedError.code === "42P01" ? "social_plans_table_missing" : ownedError.code === "42703" ? "free_social_plans_sql_missing" : "social_plans_failed" });
@@ -6998,6 +7021,15 @@ app.get("/api/social-plans/me", async (request, response) => {
         const fallback = await supabaseAdmin
           .from("social_plans")
           .select(legacySocialPlanSelect)
+          .in("id", memberPlanIds)
+          .order("created_at", { ascending: false });
+        joinedPlans = fallback.data;
+        joinedError = fallback.error;
+      }
+      if (joinedError?.code === "42703") {
+        const fallback = await supabaseAdmin
+          .from("social_plans")
+          .select(legacySocialPlanSelectNoCover)
           .in("id", memberPlanIds)
           .order("created_at", { ascending: false });
         joinedPlans = fallback.data;
@@ -7159,11 +7191,11 @@ app.post("/api/social-plans", async (request, response) => {
       .maybeSingle();
 
     if (error?.code === "42703") {
-      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, ...legacyPlanPayload } = planPayload;
+      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, free_cover_data_url, ...legacyPlanPayload } = planPayload;
       const fallback = await supabaseAdmin
         .from("social_plans")
         .insert(legacyPlanPayload)
-        .select(legacySocialPlanSelect)
+        .select(legacySocialPlanSelectNoCover)
         .maybeSingle();
       plan = fallback.data;
       error = fallback.error;
@@ -7291,13 +7323,13 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       .maybeSingle();
 
     if (error?.code === "42703") {
-      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, ...legacyPlanPayload } = planPayload;
+      const { country_code, city_market, city_label, wanted_age_min, wanted_age_max, free_cover_data_url, ...legacyPlanPayload } = planPayload;
       const fallback = await supabaseAdmin
         .from("social_plans")
         .update(legacyPlanPayload)
         .eq("id", existing.id)
         .eq("creator_id", owner.id)
-        .select(legacySocialPlanSelect)
+        .select(legacySocialPlanSelectNoCover)
         .maybeSingle();
       plan = fallback.data;
       error = fallback.error;
