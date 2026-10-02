@@ -7136,8 +7136,7 @@ app.post("/api/social-plans", async (request, response) => {
       if (purchaseError) throw purchaseError;
       if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
     } else {
-      if (!location) return response.status(400).json({ error: "free_plan_location_required" });
-      if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate < todayDateString()) {
+      if (eventDate && (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate < todayDateString())) {
         return response.status(400).json({ error: "free_plan_date_required" });
       }
     }
@@ -7273,8 +7272,7 @@ app.patch("/api/social-plans/:id", async (request, response) => {
       if (purchaseError) throw purchaseError;
       if (!purchase) return response.status(404).json({ error: "purchase_not_found" });
     } else {
-      if (!location) return response.status(400).json({ error: "free_plan_location_required" });
-      if (!eventDate || !/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate < todayDateString()) {
+      if (eventDate && (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || eventDate < todayDateString())) {
         return response.status(400).json({ error: "free_plan_date_required" });
       }
     }

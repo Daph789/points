@@ -24,7 +24,7 @@ create table if not exists public.social_plans (
   constraint social_plans_ticket_or_free_check check (
     (plan_type = 'ticket' and purchase_id is not null)
     or
-    (plan_type = 'free' and purchase_id is null and nullif(trim(coalesce(location, '')), '') is not null and event_date is not null)
+    (plan_type = 'free' and purchase_id is null)
   )
 );
 
@@ -48,7 +48,7 @@ alter table public.social_plans drop constraint if exists social_plans_ticket_or
 alter table public.social_plans add constraint social_plans_ticket_or_free_check check (
   (plan_type = 'ticket' and purchase_id is not null)
   or
-  (plan_type = 'free' and purchase_id is null and nullif(trim(coalesce(location, '')), '') is not null and event_date is not null)
+  (plan_type = 'free' and purchase_id is null)
 );
 
 drop index if exists social_plans_one_active_purchase_idx;

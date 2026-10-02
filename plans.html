@@ -141,6 +141,48 @@
 
       const USER_FREE_PLAN_CATEGORIES = ["Estudiar", "Pasear", "Tomar algo", "Deporte", "Idiomas", "Fotos", "Meditar", "Otro"];
       const BUSINESS_FREE_PLAN_CATEGORIES = ["Evento", "Moda", "Trabajo", "Ayuda puntual", "Promoción", "Fotos", "Otro"];
+      const planDraftKey = "donossQuedarPlanDraftV2";
+      const defaultPlanHashtags = ["#estudiar", "#deporte", "#fotos", "#idiomas", "#moda", "#trabajo", "#evento", "#biblioteca", "#parque", "#tournai", "#donostia", "#lille"];
+
+      function readPlanDraft() {
+        try {
+          return JSON.parse(localStorage.getItem(planDraftKey) || "{}") || {};
+        } catch (_error) {
+          return {};
+        }
+      }
+
+      function clearPlanDraft() {
+        try {
+          localStorage.removeItem(planDraftKey);
+        } catch (_error) {}
+      }
+
+      function extractHashtags(...values) {
+        const tags = new Set();
+        values.flat().forEach((value) => {
+          const text = String(value || "");
+          const matches = text.match(/#[\p{L}\p{N}_-]{2,32}/gu) || [];
+          matches.forEach((tag) => tags.add(tag.toLowerCase()));
+        });
+        return [...tags];
+      }
+
+      function currentHashtagQuery(text) {
+        const beforeCursor = String(text || "");
+        const match = beforeCursor.match(/(^|\s)(#[\p{L}\p{N}_-]{0,32})$/u);
+        return match ? match[2].toLowerCase() : "";
+      }
+
+      function replaceCurrentHashtag(text, tag) {
+        const cleanTag = String(tag || "").trim();
+        if (!cleanTag) return text;
+        const source = String(text || "");
+        if (/(^|\s)#[\p{L}\p{N}_-]{0,32}$/u.test(source)) {
+          return source.replace(/(^|\s)(#[\p{L}\p{N}_-]{0,32})$/u, (_, prefix) => `${prefix}${cleanTag} `);
+        }
+        return `${source}${source.endsWith(" ") || source.length === 0 ? "" : " "}${cleanTag} `;
+      }
 
       function ticketImage(ticket) {
         return ticket?.offer?.cover_photo_data_url || ticket?.offer?.presentation_image_data_urls?.[0] || "";
@@ -506,6 +548,35 @@
       }
 
       function App() {
+        const initialDraft = React.useMemo(() => readPlanDraft(), []);
+        const planLocale = i18n.getLocale?.() || "es";
+        const planCopy = planLocale === "fr"
+          ? {
+              optionalPlace: "Lieu",
+              optionalPlaceHint: "Optionnel. Tu peux le décider plus tard avec le groupe.",
+              placePlaceholderBusiness: "Ex. boutique, local, backstage, point de rendez-vous...",
+              placePlaceholderUser: "Ex. bibliothèque, parc, café...",
+              addMeetDate: "Ajouter le jour de la rencontre",
+              addMeetDateHint: "Une fois cette date passée, le plan ne sera plus visible publiquement. Si tu n'es pas sûr, laisse la date ouverte.",
+              meetDateLabel: "Jour de la rencontre",
+              coverOptional: "Image de couverture optionnelle",
+              descriptionHint: "Description (tu peux ajouter des hashtags à la fin, ex. #sport #bibliotheque)",
+              hashtagTitle: "Hashtags déjà utilisés",
+              draftRestored: "Brouillon récupéré automatiquement.",
+            }
+          : {
+              optionalPlace: "Lugar",
+              optionalPlaceHint: "Opcional. Puedes decidirlo más tarde con el grupo.",
+              placePlaceholderBusiness: "Ej. tienda, local, backstage, punto de encuentro...",
+              placePlaceholderUser: "Ej. biblioteca, parque, cafetería...",
+              addMeetDate: "Añadir el día de la quedada",
+              addMeetDateHint: "Cuando pase esta fecha, el plan dejará de verse públicamente. Si aún no lo sabes, deja la fecha abierta.",
+              meetDateLabel: "Día de la quedada",
+              coverOptional: "Imagen de portada opcional",
+              descriptionHint: "Descripción (puedes añadir hashtags al final, ej. #deporte #biblioteca)",
+              hashtagTitle: "Hashtags ya usados",
+              draftRestored: "Borrador recuperado automáticamente.",
+            };
         const [profile, setProfile] = React.useState(null);
         const [token, setToken] = React.useState("");
         const [isGuest, setIsGuest] = React.useState(false);
@@ -517,24 +588,25 @@
         const [joinedPlans, setJoinedPlans] = React.useState([]);
         const [editingPlanId, setEditingPlanId] = React.useState("");
         const [tickets, setTickets] = React.useState([]);
-        const [selectedTicketId, setSelectedTicketId] = React.useState("");
-        const [planType, setPlanType] = React.useState("ticket");
-        const [freeCategory, setFreeCategory] = React.useState("Estudiar");
-        const [customFreeCategory, setCustomFreeCategory] = React.useState("");
-        const [freeLocation, setFreeLocation] = React.useState("");
-        const [freeEventDate, setFreeEventDate] = React.useState(new Date().toISOString().slice(0, 10));
+        const [selectedTicketId, setSelectedTicketId] = React.useState(initialDraft.selectedTicketId || "");
+        const [planType, setPlanType] = React.useState(initialDraft.planType || "ticket");
+        const [freeCategory, setFreeCategory] = React.useState(initialDraft.freeCategory || "Estudiar");
+        const [customFreeCategory, setCustomFreeCategory] = React.useState(initialDraft.customFreeCategory || "");
+        const [freeLocation, setFreeLocation] = React.useState(initialDraft.freeLocation || "");
+        const [addFreeEventDate, setAddFreeEventDate] = React.useState(Boolean(initialDraft.addFreeEventDate));
+        const [freeEventDate, setFreeEventDate] = React.useState(initialDraft.freeEventDate || "");
         const [freeCoverDataUrl, setFreeCoverDataUrl] = React.useState("");
         const [ticketPickerOpen, setTicketPickerOpen] = React.useState(false);
         const [ticketQuery, setTicketQuery] = React.useState("");
-        const [title, setTitle] = React.useState("");
-        const [message, setMessage] = React.useState("");
+        const [title, setTitle] = React.useState(initialDraft.title || "");
+        const [message, setMessage] = React.useState(initialDraft.message || "");
         const [photoDataUrls, setPhotoDataUrls] = React.useState([]);
-        const [maxPeople, setMaxPeople] = React.useState("");
-        const [freePreference, setFreePreference] = React.useState(true);
-        const [wantedWomen, setWantedWomen] = React.useState(0);
-        const [wantedMen, setWantedMen] = React.useState(0);
-        const [wantedAgeMin, setWantedAgeMin] = React.useState("");
-        const [wantedAgeMax, setWantedAgeMax] = React.useState("");
+        const [maxPeople, setMaxPeople] = React.useState(initialDraft.maxPeople || "");
+        const [freePreference, setFreePreference] = React.useState(initialDraft.freePreference !== undefined ? Boolean(initialDraft.freePreference) : true);
+        const [wantedWomen, setWantedWomen] = React.useState(initialDraft.wantedWomen || 0);
+        const [wantedMen, setWantedMen] = React.useState(initialDraft.wantedMen || 0);
+        const [wantedAgeMin, setWantedAgeMin] = React.useState(initialDraft.wantedAgeMin || "");
+        const [wantedAgeMax, setWantedAgeMax] = React.useState(initialDraft.wantedAgeMax || "");
         const [joinPlan, setJoinPlan] = React.useState(null);
         const [ageGatePlan, setAgeGatePlan] = React.useState(null);
         const [joinBirthDay, setJoinBirthDay] = React.useState("");
@@ -563,6 +635,43 @@
         React.useEffect(() => {
           bootstrap();
         }, []);
+
+        React.useEffect(() => {
+          if (!Object.keys(initialDraft || {}).length) return;
+          if (mode === "create" && !editingPlanId) {
+            setActionToast({ type: "success", title: planCopy.draftRestored, message: "" });
+            window.setTimeout(() => setActionToast(null), 1800);
+          }
+        }, []);
+
+        React.useEffect(() => {
+          if (editingPlanId) return;
+          const draft = {
+            planType,
+            selectedTicketId,
+            freeCategory,
+            customFreeCategory,
+            freeLocation,
+            addFreeEventDate,
+            freeEventDate: addFreeEventDate ? freeEventDate : "",
+            title,
+            message,
+            maxPeople,
+            freePreference,
+            wantedWomen,
+            wantedMen,
+            wantedAgeMin,
+            wantedAgeMax,
+          };
+          const hasContent = Object.entries(draft).some(([key, value]) => {
+            if (key === "planType" || key === "freeCategory" || key === "freePreference" || key === "addFreeEventDate") return false;
+            return String(value || "").trim().length > 0;
+          });
+          try {
+            if (hasContent) localStorage.setItem(planDraftKey, JSON.stringify(draft));
+            else clearPlanDraft();
+          } catch (_error) {}
+        }, [editingPlanId, planType, selectedTicketId, freeCategory, customFreeCategory, freeLocation, addFreeEventDate, freeEventDate, title, message, maxPeople, freePreference, wantedWomen, wantedMen, wantedAgeMin, wantedAgeMax]);
 
         React.useEffect(() => {
           function handleMessage(event) {
@@ -1009,11 +1118,7 @@
               setStatus("Escribe la categoría del plan libre.");
               return;
             }
-            if (!freeLocation.trim()) {
-              setStatus("Indica dónde será el plan libre.");
-              return;
-            }
-            if (!freeEventDate || freeEventDate < today) {
+            if (addFreeEventDate && (!freeEventDate || freeEventDate < today)) {
               setStatus("Elige una fecha de hoy o posterior para el plan libre.");
               return;
             }
@@ -1053,8 +1158,8 @@
                 purchaseId: planType === "ticket" && !selectedTicket?.local_external ? selectedTicketId : "",
                 externalOfferId: planType === "ticket" && selectedTicket?.local_external ? (selectedTicket.external_offer_id || selectedTicket.offer_id || selectedTicket.offer?.id || "") : "",
                 freeCategory: planType === "free" && freeCategory === "Otro" ? customFreeCategory : freeCategory,
-                location: freeLocation,
-                eventDate: freeEventDate,
+                location: freeLocation.trim(),
+                eventDate: planType === "free" && addFreeEventDate ? freeEventDate : "",
                 freeCoverDataUrl,
                 title,
                 message,
@@ -1077,7 +1182,8 @@
             setFreeCategory("Estudiar");
             setCustomFreeCategory("");
             setFreeLocation("");
-            setFreeEventDate(new Date().toISOString().slice(0, 10));
+            setAddFreeEventDate(false);
+            setFreeEventDate("");
             setFreeCoverDataUrl("");
             setTitle("");
             setMessage("");
@@ -1088,6 +1194,7 @@
             setWantedMen(0);
             setWantedAgeMin("");
             setWantedAgeMax("");
+            clearPlanDraft();
             await refreshAfterPlanSave();
             setStatus(editingPlanId ? "Plan actualizado correctamente." : "Plan publicado correctamente.");
           } catch (error) {
@@ -1223,7 +1330,8 @@
           setFreeCategory(availableCategories.includes(plan.free_category) ? plan.free_category : "Otro");
           setCustomFreeCategory(availableCategories.includes(plan.free_category) ? "" : (plan.free_category || ""));
           setFreeLocation(plan.location || "");
-          setFreeEventDate((plan.event_date || new Date().toISOString()).slice(0, 10));
+          setAddFreeEventDate(Boolean(plan.event_date));
+          setFreeEventDate(plan.event_date ? String(plan.event_date).slice(0, 10) : "");
           setFreeCoverDataUrl(plan.free_cover_data_url || "");
           setTitle(plan.title || "");
           setMessage(plan.message || "");
@@ -1247,7 +1355,8 @@
           setFreeCategory("Estudiar");
           setCustomFreeCategory("");
           setFreeLocation("");
-          setFreeEventDate(new Date().toISOString().slice(0, 10));
+          setAddFreeEventDate(false);
+          setFreeEventDate("");
           setFreeCoverDataUrl("");
           setTitle("");
           setMessage("");
@@ -1427,6 +1536,15 @@
           ? plans.filter((plan) => !plan.is_owner && !planMatchesQuery(plan, planQuery)).slice(0, 6)
           : [];
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
+        const hashtagQuery = currentHashtagQuery(message);
+        const hashtagSuggestions = hashtagQuery
+          ? [...new Set([
+              ...extractHashtags(defaultPlanHashtags),
+              ...extractHashtags([...plans, ...ownedPlans, ...joinedPlans].flatMap((plan) => [plan.title, plan.message, plan.free_category, plan.location])),
+            ])]
+              .filter((tag) => tag.startsWith(hashtagQuery) && tag !== hashtagQuery)
+              .slice(0, 8)
+          : [];
         const selectedTicket = tickets.find((ticket) => ticket.id === selectedTicketId) || editingPlan?.purchase;
         const isBusinessAccount = profile?.account_type === "business";
         const isDonossAdminAccount = String(profile?.email || "").toLowerCase() === "donoss.red@gmail.com";
@@ -1638,16 +1756,33 @@
                           </label>
                         )}
                         <label className="mt-4 block">
-                          <span className="text-sm font-black text-white">Lugar</span>
-                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={freeLocation} onChange={(event) => setFreeLocation(event.target.value)} placeholder={isBusinessAccount ? "Ej. Tienda, local, backstage, punto de encuentro..." : "Ej. Biblioteca, Parque Cristina Enea..."} />
+                          <span className="text-sm font-black text-white">{planCopy.optionalPlace}</span>
+                          <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">{planCopy.optionalPlaceHint}</span>
+                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={freeLocation} onChange={(event) => setFreeLocation(event.target.value)} placeholder={isBusinessAccount ? planCopy.placePlaceholderBusiness : planCopy.placePlaceholderUser} />
                         </label>
-                        <label className="mt-3 block">
-                          <span className="text-sm font-black text-white">Es para el día</span>
-                          <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" min={new Date().toISOString().slice(0, 10)} value={freeEventDate} onChange={(event) => setFreeEventDate(event.target.value)} />
-                        </label>
+                        <div className="mt-3 rounded-[24px] border border-white/10 bg-black/20 p-4">
+                          <label className="flex cursor-pointer items-start gap-3">
+                            <input className="mt-1 h-5 w-5 accent-[#42F2B3]" type="checkbox" checked={addFreeEventDate} onChange={(event) => {
+                              const checked = event.target.checked;
+                              setAddFreeEventDate(checked);
+                              if (checked && !freeEventDate) setFreeEventDate(new Date().toISOString().slice(0, 10));
+                              if (!checked) setFreeEventDate("");
+                            }} />
+                            <span>
+                              <span className="block text-sm font-black text-white">{planCopy.addMeetDate}</span>
+                              <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">{planCopy.addMeetDateHint}</span>
+                            </span>
+                          </label>
+                          {addFreeEventDate && (
+                            <label className="mt-3 block">
+                              <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{planCopy.meetDateLabel}</span>
+                              <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" min={new Date().toISOString().slice(0, 10)} value={freeEventDate} onChange={(event) => setFreeEventDate(event.target.value)} />
+                            </label>
+                          )}
+                        </div>
                         <div className="mt-4 overflow-hidden rounded-[26px] border border-white/10 bg-black/20">
                           <div className="relative min-h-[150px] bg-gradient-to-br from-mint/50 via-[#17213C] to-violet/70">
-                            {freeCoverDataUrl ? <img className="absolute inset-0 h-full w-full object-cover" src={freeCoverDataUrl} alt="" /> : <div className="absolute inset-0 grid place-items-center text-center"><span className="px-6 text-sm font-black text-white">Imagen de portada opcional</span></div>}
+                            {freeCoverDataUrl ? <img className="absolute inset-0 h-full w-full object-cover" src={freeCoverDataUrl} alt="" /> : <div className="absolute inset-0 grid place-items-center text-center"><span className="px-6 text-sm font-black text-white">{planCopy.coverOptional}</span></div>}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                             {freeCoverDataUrl && <button className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1 text-xs font-black text-white backdrop-blur" type="button" onClick={() => setFreeCoverDataUrl("")}>Quitar</button>}
                           </div>
@@ -1671,6 +1806,19 @@
                   </div>
                   <input className="mt-4 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={isBusinessAccount ? "Título: Buscamos ayuda para un evento..." : planType === "free" ? "Título: Estudiar en la biblio..." : "Título: Vamos al concierto..."} />
                   <textarea className="mt-3 min-h-28 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={isBusinessAccount ? "Texto: explica qué necesitas, horario, ambiente, requisitos y cómo será el contacto por chat..." : planType === "free" ? "Texto: qué quieres hacer, hora aproximada, ambiente del plan..." : "Texto: quién eres, qué plan quieres, punto de encuentro..."} />
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-500">{planCopy.descriptionHint}</p>
+                  {hashtagSuggestions.length > 0 && (
+                    <div className="mt-2 rounded-[22px] border border-mint/15 bg-mint/5 p-3">
+                      <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">{planCopy.hashtagTitle}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {hashtagSuggestions.map((tag) => (
+                          <button key={tag} type="button" className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-xs font-black text-slate-200" onClick={() => setMessage((current) => replaceCurrentHashtag(current, tag))}>
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {!isBusinessAccount ? (
                     <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
                       <div className="flex items-start justify-between gap-3">
@@ -2003,7 +2151,7 @@
                         </div>
                         <h3 className="mt-3 text-2xl font-black text-white">{free ? (detailPlan.title || "Plan libre") : (offer.title || "Billete Donoss")}</h3>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-200">
-                          <span>{free ? (detailPlan.location || "Lugar por confirmar") : merchant}</span>
+                          <span>{free ? (detailPlan.location || detailPlan.free_category || "Plan libre") : merchant}</span>
                           {!free && offer.business_is_verified && <VerifiedBadge />}
                         </div>
                       </div>
