@@ -61,6 +61,11 @@ supabase-open-business-offers-no-rls.sql
    - admins secondaires, acces limite staff et journal des actions admin.
    - a executer une fois pour activer `donos-admin-staff.html` et `donos-admin-secondary.html`.
 
+14. `supabase-admin-official-links.sql`
+   - repertoire prive des liens officiels des commercants pour l’admin principal.
+   - a executer une fois avant d’utiliser `donos-admin-official-links.html`.
+   - conserve RLS et retire les droits publics : acces uniquement par les routes admin du serveur.
+
 ## Fichier a ne plus utiliser comme base
 
 `supabase-disable-offers-rls-dev.sql` est garde uniquement pour compatibilite. Il ne duplique plus le schema. Pour un lancement propre, prefere `supabase-open-business-offers-no-rls.sql`.

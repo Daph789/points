@@ -41,6 +41,17 @@
       }
       #root, main { max-width: 100%; overflow-x: hidden; }
       * { min-width: 0; }
+      .photo-reorder-overlay {
+        z-index: 90; /* Above the app navigation (80). */
+        height: 100vh;
+        height: 100dvh;
+        padding-top: max(16px, env(safe-area-inset-top, 0px));
+        padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+      }
+      .photo-reorder-scroll {
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
+      }
       @view-transition { navigation: auto; }
       ::view-transition-old(root), ::view-transition-new(root) {
         animation-duration: 180ms;
@@ -1783,7 +1794,7 @@
             </nav>
 
             {isReorderingPhotos && (
-              <div className="fixed inset-0 z-[55] bg-black/78 px-4 py-4 backdrop-blur-xl">
+              <div className="photo-reorder-overlay fixed inset-0 bg-black/78 px-4 py-4 backdrop-blur-xl">
                 <div className="mx-auto flex h-full w-full max-w-lg items-center">
                   <div className="relative flex max-h-full w-full flex-col overflow-hidden rounded-[36px] border border-white/10 bg-[#101522] shadow-2xl shadow-black/50">
                     <button
@@ -1794,7 +1805,8 @@
                     >
                       ×
                     </button>
-                    <div className="shrink-0 p-5 pb-3">
+                    <div className="photo-reorder-scroll min-h-0 flex-auto overflow-y-auto">
+                    <div className="p-5 pb-3">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-mint">
                         {profileUsesFrench ? "Photo principale" : "Foto principal"}
                       </p>
@@ -1803,14 +1815,15 @@
                       </h2>
                       <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
                         {profileUsesFrench
-                          ? "Appuie et glisse une photo pour changer l’ordre. La première photo sera utilisée dans les chats et les plans."
-                          : "Mantén pulsada y arrastra una foto para cambiar el orden. La primera foto se usará en chats y planes."}
+                          ? "Fais glisser la poignée ↕ pour changer l’ordre des photos. La première photo sera utilisée dans les chats et les plans."
+                          : "Arrastra el asa ↕ para cambiar el orden de las fotos. La primera foto se usará en chats y planes."}
                       </p>
                     </div>
 
-                    <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4">
+                    <div className="px-5 pb-4">
                       <div
                         className="grid grid-cols-2 gap-3"
+                        data-photo-reorder-grid
                         onPointerMove={moveDraggedPhoto}
                         onPointerUp={endPhotoDrag}
                         onPointerCancel={endPhotoDrag}
@@ -1819,18 +1832,26 @@
                           <div
                             key={`${photo.slice(0, 32)}-${index}`}
                             data-reorder-photo-index={index}
-                            className={`relative select-none overflow-hidden rounded-[30px] border bg-black/25 shadow-xl transition duration-200 touch-none ${
+                            className={`relative select-none overflow-hidden rounded-[30px] border bg-black/25 shadow-xl transition duration-200 touch-pan-y ${
                               draggingPhotoIndex === index
                                 ? "scale-[1.03] border-mint/70 shadow-mint/20"
                                 : index === 0
                                   ? "border-mint/45"
                                   : "border-white/10"
                             }`}
-                            onPointerDown={(event) => {
-                              event.currentTarget.setPointerCapture?.(event.pointerId);
-                              beginPhotoDrag(index);
-                            }}
                           >
+                            <button
+                              className="absolute right-2 top-2 z-10 grid h-10 w-10 touch-none place-items-center rounded-full bg-black/60 text-xl font-black text-white"
+                              type="button"
+                              aria-label={profileUsesFrench ? "Déplacer la photo" : "Mover la foto"}
+                              onPointerDown={(event) => {
+                                if (event.button !== 0) return;
+                                event.currentTarget.closest("[data-photo-reorder-grid]").setPointerCapture?.(event.pointerId);
+                                beginPhotoDrag(index);
+                              }}
+                            >
+                              ↕
+                            </button>
                             <div className="aspect-[0.82] overflow-hidden">
                               <img className="h-full w-full object-cover" src={photo} alt="" draggable="false" />
                             </div>
@@ -1868,6 +1889,7 @@
                       </div>
                     </div>
 
+                    </div>
                     <div className="shrink-0 grid grid-cols-2 gap-3 border-t border-white/10 bg-[#101522]/95 p-4 backdrop-blur">
                       <button
                         className="h-12 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white"

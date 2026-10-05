@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { registerOfficialLinkRoutes } from "./admin-official-links.js";
 import dotenv from "dotenv";
 import express from "express";
 import Stripe from "stripe";
@@ -2427,6 +2428,8 @@ app.post("/api/admin/city-opening-requests/:id/action", async (request, response
     });
   }
 });
+
+registerOfficialLinkRoutes(app, { supabaseAdmin, authenticateAdminAccess });
 
 app.post("/api/admin/secondary-admins/list", async (request, response) => {
   const adminAuth = await authenticateAdminAccess(request);
