@@ -1396,7 +1396,7 @@
                             onClick={() => setReservationDateMode("range")}
                           >
                             <span className="block text-sm font-black">Varias fechas</span>
-                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">Restaurante, mesa, actividad con varios días.</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">El evento se celebra en varias fechas diferentes. El cliente puede elegir entre las fechas disponibles para reservar.</span>
                           </button>
                           <button
                             type="button"
@@ -1404,7 +1404,7 @@
                             onClick={() => setReservationDateMode("single")}
                           >
                             <span className="block text-sm font-black">Fecha única</span>
-                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">Concierto, evento o plan con un solo día.</span>
+                            <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">El evento se celebra en una única fecha. El cliente solo puede reservar para esa fecha; no hay otras fechas disponibles.</span>
                           </button>
                         </div>
                         {reservationDateMode === "single" ? (
@@ -1486,34 +1486,35 @@
                             { value: "custom_extra", title: "Puntos por persona extra", text: "Ejemplo: primera persona paga el billete, cada persona extra suma la cantidad que indiques." },
                             { value: "no_extra", title: "No aumenta", text: "La reserva guarda personas, fecha y hora, pero el precio no cambia." },
                           ].map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className={`rounded-2xl border p-3 text-left transition ${
-                                reservationPriceMode === option.value
-                                  ? "border-mint/40 bg-mint/10 text-mint"
-                                  : "border-white/10 bg-white/[0.045] text-slate-300"
-                              }`}
-                              onClick={() => setReservationPriceMode(option.value)}
-                            >
-                              <span className="block text-sm font-black">{option.title}</span>
-                              <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">{option.text}</span>
-                            </button>
+                            <React.Fragment key={option.value}>
+                              <button
+                                type="button"
+                                className={`rounded-2xl border p-3 text-left transition ${
+                                  reservationPriceMode === option.value
+                                    ? "border-mint/40 bg-mint/10 text-mint"
+                                    : "border-white/10 bg-white/[0.045] text-slate-300"
+                                }`}
+                                onClick={() => setReservationPriceMode(option.value)}
+                              >
+                                <span className="block text-sm font-black">{option.title}</span>
+                                <span className="mt-1 block text-xs font-semibold leading-5 text-slate-400">{option.text}</span>
+                              </button>
+                              {option.value === "custom_extra" && reservationPriceMode === "custom_extra" && (
+                                <Field label="Puntos por cada persona extra">
+                                  <input
+                                    className={inputClass}
+                                    inputMode="numeric"
+                                    type="number"
+                                    min="1"
+                                    value={reservationExtraPointsPerPerson}
+                                    onChange={(event) => setReservationExtraPointsPerPerson(event.target.value.replace(/[^0-9]/g, ""))}
+                                    placeholder="Ej. 50"
+                                  />
+                                </Field>
+                              )}
+                            </React.Fragment>
                           ))}
                         </div>
-                        {reservationPriceMode === "custom_extra" && (
-                          <Field label="Puntos por cada persona extra">
-                            <input
-                              className={inputClass}
-                              inputMode="numeric"
-                              type="number"
-                              min="1"
-                              value={reservationExtraPointsPerPerson}
-                              onChange={(event) => setReservationExtraPointsPerPerson(event.target.value.replace(/[^0-9]/g, ""))}
-                              placeholder="Ej. 50"
-                            />
-                          </Field>
-                        )}
                       </div>
                     </div>
                   )}

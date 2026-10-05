@@ -244,6 +244,11 @@
 
   const phraseCopy = {
     fr: {
+      "Fechas disponibles": "Dates disponibles",
+      "Varias fechas": "Plusieurs dates",
+      "Fecha única": "Date unique",
+      "El evento se celebra en varias fechas diferentes. El cliente puede elegir entre las fechas disponibles para reservar.": "L’événement se déroule à plusieurs dates différentes. Le client peut choisir parmi les dates disponibles pour réserver.",
+      "El evento se celebra en una única fecha. El cliente solo puede reservar para esa fecha; no hay otras fechas disponibles.": "L’événement se déroule à une seule date. Le client ne peut réserver que pour cette date ; aucune autre date n’est disponible.",
       "Inicio": "Accueil",
       "Historial": "Historique",
       "Quedar": "Plans",
@@ -541,6 +546,9 @@
       "Recargar puntos": "Recharger des points",
       "Añade puntos a tu saldo Donoss con Stripe.": "Ajoute des points à ton solde Donoss avec Stripe.",
       "Elige una recarga": "Choisis une recharge",
+      "Desbloquea planes que suelen valer entre 5€ y 10€.": "Débloque des activités qui valent généralement entre 5 € et 10 €.",
+      "Accede a ofertas que suelen valer entre 10€ y 15€.": "Accède à des offres qui valent généralement entre 10 € et 15 €.",
+      "Ideal para planes que normalmente valen entre 25€ y 35€.": "Idéal pour des activités qui valent généralement entre 25 € et 35 €.",
       "1 punto = 0,10 €": "1 point = 0,10 €",
       "Convierte tu recarga en puntos para desbloquear mejores precios en Donoss.": "Transforme ta recharge en points pour débloquer de meilleurs prix sur Donoss.",
       "convertidos en puntos": "convertis en points",
