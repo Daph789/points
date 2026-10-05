@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
     <script src="donoss-i18n.js"></script>
+    <script src="offer-pricing.js"></script>
     <script defer src="region-launch-lock.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -251,9 +252,7 @@
         const offer = like.offer || {};
         const image = offer.cover_photo_data_url || offer.presentation_image_data_urls?.[0];
         const businessName = offer.business_display_name || offer.author || "Donoss";
-        const discount = offer.base_price && offer.reduced_price && Number(offer.reduced_price) < Number(offer.base_price)
-          ? Math.round(((Number(offer.base_price) - Number(offer.reduced_price)) / Number(offer.base_price)) * 100)
-          : null;
+        const discount = window.donossPricing.formatDiscount(offer.base_price, offer.reduced_price);
         return (
           <a
             href={offer.id ? `offer-detail.html?id=${offer.id}` : "home.html"}
@@ -274,7 +273,7 @@
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
               <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{offer.required_points || 0} ptos.</p>
-              {discount !== null && <p className="mt-2 text-xs font-black text-coral">-{discount}%</p>}
+              {discount !== null && <p className="mt-2 text-xs font-black text-coral">{discount}</p>}
               <p className="mt-1 text-xs font-black text-slate-500">Ver detalle</p>
             </div>
           </a>

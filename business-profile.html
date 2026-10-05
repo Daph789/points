@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="theme.css" />
     <script src="theme.js"></script>
     <script src="donoss-i18n.js"></script>
+    <script src="offer-pricing.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -66,12 +67,7 @@
         return `${Number(value).toLocaleString("es-ES", { maximumFractionDigits: 2 })}€`;
       }
 
-      function getDiscountPercent(basePrice, reducedPrice) {
-        const base = Number(basePrice);
-        const reduced = Number(reducedPrice);
-        if (!base || !Number.isFinite(base) || !Number.isFinite(reduced) || reduced >= base) return null;
-        return Math.round(((base - reduced) / base) * 100);
-      }
+      const getDiscountLabel = window.donossPricing.formatDiscount;
 
       function VerifiedBadge() {
         return (
@@ -95,7 +91,7 @@
 
       function OfferCard({ offer, isLiked, onLike, onOpen }) {
         const image = offer.cover_photo_data_url || "";
-        const discount = getDiscountPercent(offer.base_price, offer.reduced_price);
+        const discount = getDiscountLabel(offer.base_price, offer.reduced_price);
         const isExternalCheckout = Boolean(offer.external_checkout_enabled);
         return (
           <article
@@ -126,7 +122,7 @@
               </div>
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
                 <h3 className="line-clamp-2 text-xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h3>
-                {discount !== null && <span className="shrink-0 rounded-full bg-coral px-3 py-1 text-xs font-black text-white">-{discount}%</span>}
+                {discount !== null && <span className="shrink-0 rounded-full bg-coral px-3 py-1 text-xs font-black text-white">{discount}</span>}
               </div>
             </div>
             <div className="p-4">
