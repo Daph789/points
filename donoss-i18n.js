@@ -14,6 +14,7 @@
         Restaurantes: "Restaurantes",
       },
       common: {
+        invalidTicketPrice: "Este billete no tiene un precio válido y no está marcado como gratis.",
         back: "Volver",
         refresh: "Actualizar",
         close: "Cerrar",
@@ -80,6 +81,8 @@
         delivery: "Entrega",
       },
       publish: {
+        freeTicket: "Gratis",
+        freeTicketHint: "El billete cuesta 0 puntos y se obtiene con su QR. Los suplementos de entrega o de reserva, si los configuras, se cobran aparte.",
         cover: "Foto de portada",
         title: "Título",
         presentationImages: "Imágenes de presentación",
@@ -119,6 +122,7 @@
         Restaurantes: "Restaurants",
       },
       common: {
+        invalidTicketPrice: "Ce billet n’a pas de prix valide et n’est pas marqué comme gratuit.",
         back: "Retour",
         refresh: "Actualiser",
         close: "Fermer",
@@ -185,6 +189,8 @@
         delivery: "Remise",
       },
       publish: {
+        freeTicket: "Gratuit",
+        freeTicketHint: "Le billet coûte 0 point et est délivré avec son QR code. Les suppléments de livraison ou de réservation, si tu en configures, restent payants.",
         cover: "Photo de couverture",
         title: "Titre",
         presentationImages: "Images de présentation",

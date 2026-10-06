@@ -50,8 +50,8 @@
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
       const i18n = window.donossI18n || { t: (key) => key, category: (value) => value, getLocale: () => "es" };
       const isEmbeddedDetail = new URLSearchParams(window.location.search).get("embedded") === "1";
-      const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
-      const legacyOfferPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+      const offerPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+      const legacyOfferPreviewSelect = "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
       function goBackFromDetail() {
         if (isEmbeddedDetail && window.parent !== window) {
@@ -350,6 +350,7 @@
         const eventDate = offer.start_date || "";
         const purchaseLimitDate = offer.end_date || "";
         const isExternalCheckout = Boolean(offer.external_checkout_enabled && safeExternalUrl(offer.external_checkout_url));
+        const isFreeTicket = offer.is_free === true && offer.required_points !== null && Number(offer.required_points) === 0 && offer.reduced_price !== null && Number(offer.reduced_price) === 0;
         const basePoints = isExternalCheckout ? 0 : Number(offer.required_points || 0);
         const hasDeliveryOptions = Boolean(offer.delivery_pickup_enabled || offer.delivery_home_enabled);
         const deliveryExtraPoints = isExternalCheckout ? 0 : (deliveryChoice === "home" ? Number(offer.delivery_home_points || 0) : 0);
@@ -357,7 +358,7 @@
         const businessName = offer.business_display_name || offer.receiver_display_name || offer.author || "";
         const remainingStock = getRemainingStock(offer);
         const outOfStock = isOutOfStock(offer);
-        const canBuy = Boolean(deliveryChoice && !outOfStock && (isExternalCheckout || totalPoints > 0));
+        const canBuy = Boolean(deliveryChoice && !outOfStock && (isExternalCheckout || (Number.isFinite(totalPoints) && (totalPoints > 0 || (isFreeTicket && totalPoints === 0)))));
         const actionButtonText = (offer.cart_button_text || i18n.t("common.buy")).trim() || i18n.t("common.buy");
         const additionalLinks = normalizeAdditionalLinks(offer.additional_links);
         const additionalDetails = normalizeAdditionalDetails(offer.additional_details);

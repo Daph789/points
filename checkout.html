@@ -316,6 +316,7 @@
         }
 
         const isExternalCheckout = Boolean(offer.external_checkout_enabled && safeExternalUrl(offer.external_checkout_url));
+        const isFreeTicket = offer.is_free === true && offer.required_points !== null && Number(offer.required_points) === 0 && offer.reduced_price !== null && Number(offer.reduced_price) === 0;
         const offerPoints = isExternalCheckout ? 0 : Number(offer.required_points || 0);
         const deliveryPoints = isExternalCheckout ? 0 : (delivery === "home" ? Number(offer.delivery_home_points || 0) : 0);
         const deliveryLabel = delivery === "home"
@@ -372,7 +373,8 @@
           reservationPeopleNumber >= 2 &&
           (!reservationMaxPeople || reservationPeopleNumber <= reservationMaxPeople)
         );
-        const canConfirmPurchase = hasEnoughPoints && hasDeliveryAddress && hasValidReservation && !isOwnOffer && !isOutOfStock;
+        const hasValidPrice = isExternalCheckout || (Number.isFinite(totalPoints) && (totalPoints > 0 || (isFreeTicket && totalPoints === 0)));
+        const canConfirmPurchase = hasValidPrice && hasEnoughPoints && hasDeliveryAddress && hasValidReservation && !isOwnOffer && !isOutOfStock;
 
         async function saveDeliveryAddress() {
           if (!deliveryAddress.trim() || !userId) return;
@@ -400,6 +402,11 @@
         async function handleBuy() {
           setPurchaseStatus({ type: "", message: "" });
           setAddressStatus({ type: "", message: "" });
+
+          if (!hasValidPrice) {
+            setPurchaseStatus({ type: "error", message: i18n.t("common.invalidTicketPrice") });
+            return;
+          }
 
           if (!hasDeliveryAddress) {
             setPurchaseStatus({ type: "error", message: "Añade una dirección para la entrega a domicilio." });

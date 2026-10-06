@@ -69,3 +69,7 @@ supabase-open-business-offers-no-rls.sql
 ## Fichier a ne plus utiliser comme base
 
 `supabase-disable-offers-rls-dev.sql` est garde uniquement pour compatibilite. Il ne duplique plus le schema. Pour un lancement propre, prefere `supabase-open-business-offers-no-rls.sql`.
+
+## Billets gratuits
+
+Exécuter `supabase-free-offer-tickets.sql` avant de publier les changements pour activer la case Gratis / Gratuit. Les billets existants ne deviennent pas gratuits automatiquement. Le serveur conserve le parcours achat, stock et QR, sans transfert de points lorsque le total est nul et le billet explicitement gratuit.

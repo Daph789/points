@@ -5325,7 +5325,7 @@ async function enrichPurchases(purchases) {
   if (offerIds.length > 0) {
     const { data: offers, error: offersError } = await supabaseAdmin
       .from("business_offers")
-      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, business_display_name, business_is_verified, author")
+      .select("id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, business_display_name, business_is_verified, author")
       .in("id", offerIds);
 
     if (offersError) console.error("Purchase history offers error:", offersError);
@@ -5370,13 +5370,13 @@ async function enrichPurchases(purchases) {
 }
 
 const publicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const publicOfferPreviewSelect =
-  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, reservation_date_mode, reservation_single_date, reservation_price_mode, reservation_extra_points_per_person, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, country_code, city_market, city_label, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const legacyPublicOfferSelect =
-  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, presentation_image_data_urls, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, description, additional_links, additional_details, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 const legacyPublicOfferPreviewSelect =
-  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
+  "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, created_at";
 
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
@@ -8865,6 +8865,11 @@ app.post("/api/purchases/offer", async (request, response) => {
       : 0;
     const totalPoints = offerPoints + deliveryPoints + reservationExtraPoints;
     const buyerPoints = Number(buyerProfile?.points || 0);
+    const isFreeTicket = offer.is_free === true && offer.required_points !== null && Number(offer.required_points) === 0 && offer.reduced_price !== null && Number(offer.reduced_price) === 0;
+    if (!usesExternalCheckout && (!Number.isFinite(totalPoints) || totalPoints < 0 || (totalPoints === 0 && !isFreeTicket))) {
+      return response.status(400).json({ error: "invalid_ticket_price" });
+    }
+
 
     if (!usesExternalCheckout && buyerPoints < totalPoints) {
       return response.status(400).json({ error: "insufficient_points" });
@@ -9068,7 +9073,7 @@ app.post("/api/purchases/offer", async (request, response) => {
     let updatedBuyer = { points: buyerPoints };
     let buyerError = null;
 
-    if (!usesExternalCheckout) {
+    if (!usesExternalCheckout && totalPoints > 0) {
 	    const pointsUpdateResult = await supabaseAdmin.rpc("donoss_secure_move_points", {
         p_from_profile_id: user.id,
         p_to_profile_id: receiverProfile.id,

@@ -236,6 +236,7 @@
         const [selectedCategories, setSelectedCategories] = React.useState([]);
         const [basePrice, setBasePrice] = React.useState("");
         const [reducedPrice, setReducedPrice] = React.useState("");
+        const [isFree, setIsFree] = React.useState(false);
         const [hours, setHours] = React.useState("");
         const [startDate, setStartDate] = React.useState("");
         const [endDate, setEndDate] = React.useState("");
@@ -280,7 +281,7 @@
         const [lastDraftSavedAt, setLastDraftSavedAt] = React.useState("");
 
         const base = Number.parseFloat(basePrice.replace(",", "."));
-        const reduced = Number.parseFloat(reducedPrice.replace(",", "."));
+        const reduced = isFree ? 0 : Number.parseFloat(reducedPrice.replace(",", "."));
         const requiredPoints = Number.isFinite(reduced) ? Math.max(Math.round(reduced * 10), 0) : 0;
         const deliveryPrice = Number.parseFloat(homeDeliveryPrice.replace(",", "."));
         const deliveryPoints = Number.isFinite(deliveryPrice) ? Math.round(deliveryPrice * 10) : 0;
@@ -336,6 +337,7 @@
             setSelectedCategories(Array.isArray(draft.selectedCategories) ? draft.selectedCategories : []);
             setBasePrice(draft.basePrice || "");
             setReducedPrice(draft.reducedPrice || "");
+            setIsFree(draft.isFree === true);
             setHours(draft.hours || "");
             setStartDate(draft.startDate || "");
             setEndDate(draft.endDate || "");
@@ -402,6 +404,7 @@
             setSelectedCategories(Array.isArray(data.categories) ? data.categories : []);
             setBasePrice(data.base_price === null || data.base_price === undefined ? "" : String(data.base_price));
             setReducedPrice(data.reduced_price === null || data.reduced_price === undefined ? "" : String(data.reduced_price));
+            setIsFree(data.is_free === true);
             setHours(data.hours || "");
             setStartDate(data.start_date || "");
             setEndDate(data.end_date || "");
@@ -523,6 +526,7 @@
             selectedCategories,
             basePrice,
             reducedPrice,
+            isFree,
             hours,
             startDate,
             endDate,
@@ -568,6 +572,7 @@
           selectedCategories,
           basePrice,
           reducedPrice,
+          isFree,
           hours,
           startDate,
           endDate,
@@ -688,6 +693,7 @@
           setSelectedCategories([]);
           setBasePrice("");
           setReducedPrice("");
+          setIsFree(false);
           setHours("");
           setStartDate("");
           setEndDate("");
@@ -785,7 +791,7 @@
               setStatus({ type: "error", message: "Elige al menos un día de la semana para aceptar reservas." });
               return;
             }
-            if (canUseExternalCheckout && externalCheckoutEnabled) {
+            if (!isFree && canUseExternalCheckout && externalCheckoutEnabled) {
               try {
                 new URL(externalCheckoutUrl.trim());
               } catch (_error) {
@@ -809,7 +815,8 @@
               categories: selectedCategories,
               base_price: Number.isFinite(base) ? base : null,
               reduced_price: Number.isFinite(reduced) ? reduced : null,
-              required_points: requiredPoints || null,
+              required_points: isFree ? 0 : requiredPoints || null,
+              is_free: isFree,
               hours: cleanTextInput(hours, 120) || null,
               start_date: startDate || null,
               end_date: endDate || null,
@@ -846,9 +853,11 @@
               updated_at: new Date().toISOString(),
             };
             if (canUseExternalCheckout) {
-              payload.external_checkout_enabled = externalCheckoutEnabled;
-              payload.external_checkout_url = externalCheckoutEnabled ? externalCheckoutUrl.trim() : null;
+              payload.external_checkout_enabled = !isFree && externalCheckoutEnabled;
+              payload.external_checkout_url = !isFree && externalCheckoutEnabled ? externalCheckoutUrl.trim() : null;
             }
+
+            if (isFree) { payload.external_checkout_enabled = false; payload.external_checkout_url = null; }
 
             let request = editId
               ? supabaseClient.from("business_offers").update(payload).eq("id", editId).eq("business_id", userId).select("id").maybeSingle()
@@ -1097,12 +1106,19 @@
                   </div>
                 </div>
 
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-mint/30 bg-mint/10 p-4">
+                  <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[#42F2B3]" checked={isFree} onChange={(event) => { setIsFree(event.target.checked); if (event.target.checked) setExternalCheckoutEnabled(false); }} />
+                  <span>
+                    <span className="block text-base font-black text-mint">{i18n.t("publish.freeTicket")}</span>
+                    <span className="mt-1 block text-sm text-slate-300">{i18n.t("publish.freeTicketHint")}</span>
+                  </span>
+                </label>
                 <div className="grid gap-4 min-[430px]:grid-cols-2">
                   <Field label={i18n.t("publish.basePrice")}>
                     <input className={inputClass} inputMode="decimal" value={basePrice} onChange={(event) => setBasePrice(event.target.value)} placeholder="Ej. 12,00" />
                   </Field>
                   <Field label={i18n.t("publish.reducedPrice")}>
-                    <input className={inputClass} inputMode="decimal" value={reducedPrice} onChange={(event) => setReducedPrice(event.target.value)} placeholder="Ej. 8,00" />
+                    <input className={inputClass} inputMode="decimal" disabled={isFree} value={isFree ? "0" : reducedPrice} onChange={(event) => setReducedPrice(event.target.value)} placeholder="Ej. 8,00" />
                   </Field>
                 </div>
 
@@ -1306,7 +1322,7 @@
                   <input className={inputClass} value={cartButtonText} onChange={(event) => setCartButtonText(event.target.value)} placeholder="Comprar, reservar, apuntarme..." />
                 </Field>
 
-                {canUseExternalCheckout && (
+                {canUseExternalCheckout && !isFree && (
                   <div className="rounded-[24px] border border-sun/20 bg-sun/10 p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div>
