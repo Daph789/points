@@ -956,7 +956,7 @@
           if (!editId || isDeleting) return;
           setStatus({ type: "", message: "" });
 
-          const confirmed = window.confirm(`¿Ocultar "${title || "esta publicación"}"? Dejará de aparecer para los jóvenes y no podrán comprarla.`);
+          const confirmed = window.confirm(i18n.text(`¿Ocultar "${title || "esta publicación"}"? Dejará de aparecer para los jóvenes y no podrán comprarla.`));
           if (!confirmed) return;
 
           setIsDeleting(true);
@@ -1001,7 +1001,7 @@
           if (!editId || isDeleting) return;
           setStatus({ type: "", message: "" });
 
-          const confirmed = window.confirm(`¿Eliminar definitivamente "${title || "esta publicación"}"? Esta acción no se puede deshacer.`);
+          const confirmed = window.confirm(i18n.text(`¿Eliminar definitivamente "${title || "esta publicación"}"? Esta acción no se puede deshacer.`));
           if (!confirmed) return;
 
           setIsDeleting(true);
@@ -1102,7 +1102,7 @@
                       <p className="text-sm font-black text-white">Borrador automático</p>
                       <p className="mt-1 text-xs font-semibold text-slate-400">
                         {lastDraftSavedAt
-                          ? `Guardado localmente a las ${new Date(lastDraftSavedAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}`
+                          ? `Guardado localmente a las ${new Date(lastDraftSavedAt).toLocaleTimeString(i18n.getLocale?.() === "fr" ? "fr-FR" : "es-ES", { hour: "2-digit", minute: "2-digit" })}`
                           : "Se guardará mientras escribes."}
                       </p>
                     </div>

@@ -44,6 +44,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+      const i18n = window.donossI18n || { t: (key) => key, getLocale: () => "es" };
       const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,author,description,is_hidden,is_unlisted,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       function formatEuro(value) {
@@ -290,13 +291,19 @@
             setAccessToken(session?.access_token || "");
             setCanTransferOffers(String(userData.user?.email || "").trim().toLowerCase() === "donoss.red@gmail.com");
 
-            const [{ data: profile }, { data, error }, promotionsResponse] = await Promise.all([
+            let [{ data: profile }, { data, error }, promotionsResponse] = await Promise.all([
               supabaseClient.from("profiles").select("display_name, account_type, points, email").eq("id", userId).maybeSingle(),
               supabaseClient.from("business_offers").select(myOfferListSelect).eq("business_id", userId).order("created_at", { ascending: false }),
               session?.access_token
                 ? fetch("/api/me/offer-promotions", { headers: { Authorization: `Bearer ${session.access_token}` } }).catch(() => null)
                 : null,
             ]);
+
+            if (error && ["42703", "PGRST204"].includes(error.code)) {
+              const fallback = await supabaseClient.from("business_offers").select("*").eq("business_id", userId).order("created_at", { ascending: false });
+              data = fallback.data;
+              error = fallback.error;
+            }
 
             if (profile?.display_name) setBusinessName(profile.display_name);
             if (typeof profile?.points !== "undefined") {
@@ -323,7 +330,10 @@
             setStatus(data?.length ? "" : "Todavía no has publicado ninguna oferta.");
           }
 
-          loadOffers();
+          loadOffers().catch((error) => {
+            console.error("My offers load failed", error);
+            setStatus("No se han podido cargar tus publicaciones.");
+          });
         }, []);
 
         function openPromotionPanel() {
