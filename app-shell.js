@@ -153,6 +153,8 @@
     window.addEventListener("load", markShellReady, { once: true });
   }
 
+  window.addEventListener("donos:notifications-read", hydrateNotificationBadge);
+
   async function hydrateNotificationBadge() {
     const badges = Array.from(nav.querySelectorAll("[data-nav-badge]"));
     if (badges.length === 0 || !window.supabase || !window.supabase.createClient) return;

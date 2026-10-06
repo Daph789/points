@@ -34,6 +34,7 @@
       };
     </script>
     <style>
+      .publication-feedback::backdrop { background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px); }
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap");
 
       html {
@@ -222,6 +223,50 @@
           }))
           .filter((item) => item.label && item.value)
           .slice(0, 8);
+      }
+
+      function PublicationFeedback({ status, onDismiss }) {
+        const dialogRef = React.useRef(null);
+        const closeRef = React.useRef(null);
+        const french = i18n.getLocale?.() === "fr";
+        const success = status.type === "success";
+        const error = status.type === "error";
+        React.useEffect(() => {
+          const previousFocus = document.activeElement;
+          const previousOverflow = document.body.style.overflow;
+          const dialog = dialogRef.current;
+          dialog.showModal();
+          document.body.style.overflow = "hidden";
+          closeRef.current?.focus();
+          return () => {
+            dialog.close();
+            document.body.style.overflow = previousOverflow;
+            if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+          };
+        }, []);
+        return ReactDOM.createPortal(
+          <dialog
+            ref={dialogRef}
+            aria-labelledby="publication-feedback-title"
+            aria-describedby="publication-feedback-message"
+            onCancel={(event) => { event.preventDefault(); onDismiss(); }}
+            className="publication-feedback fixed inset-0 m-auto max-h-[calc(100dvh-32px)] w-[calc(100%-32px)] max-w-md overflow-y-auto rounded-[28px] border border-white/15 bg-[#101522] p-6 text-center text-white shadow-2xl sm:p-8"
+          >
+            <div aria-hidden="true" className={`mx-auto grid h-16 w-16 place-items-center rounded-full text-3xl font-black ring-1 ${error ? "bg-coral/15 text-coral ring-coral/30" : "bg-mint/15 text-mint ring-mint/30"}`}>
+              {success ? "✓" : error ? "!" : "i"}
+            </div>
+            <h2 id="publication-feedback-title" className="mt-5 text-2xl font-black">
+              {success ? (french ? "C’est confirmé !" : "¡Confirmado!") : error ? (french ? "Une erreur est survenue" : "Se ha producido un error") : (french ? "Information" : "Información")}
+            </h2>
+            <p id="publication-feedback-message" className="mt-3 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-300">{i18n.text?.(status.message) || status.message}</p>
+            {error && status.message.includes("Inicia sesión") && (
+              <a className="mt-5 inline-flex rounded-xl border border-coral/30 px-4 py-3 text-sm font-bold text-coral" href="login.html">{french ? "Se connecter" : "Iniciar sesión"}</a>
+            )}
+            <button ref={closeRef} type="button" onClick={onDismiss} className={`mt-6 min-h-12 w-full rounded-2xl px-5 py-3 text-sm font-black text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 ${error ? "bg-coral focus-visible:outline-coral" : "bg-mint focus-visible:outline-mint"}`}>
+              {french ? "Fermer" : "Cerrar"}
+            </button>
+          </dialog>, document.body
+        );
       }
 
       function App() {
@@ -1673,21 +1718,7 @@
                   </div>
                 )}
 
-                {status.message && (
-                  <div className={`rounded-2xl border p-4 text-sm font-semibold ${
-                    status.type === "success" ? "border-mint/25 bg-mint/10 text-mint" : "border-coral/30 bg-coral/10 text-coral"
-                  }`}>
-                    <p>{status.message}</p>
-                    {status.type === "error" && status.message.includes("Inicia sesión") && (
-                      <a
-                        className="mt-3 inline-flex rounded-full bg-coral px-4 py-2 text-xs font-black text-white"
-                        href="login.html"
-                      >
-                        Iniciar sesión
-                      </a>
-                    )}
-                  </div>
-                )}
+
 
                 <div className="grid gap-3 min-[430px]:grid-cols-[1fr_auto]">
                   <button
@@ -1719,6 +1750,7 @@
                 </div>
               </form>
             </section>
+            {status.message && <PublicationFeedback status={status} onDismiss={() => setStatus({ type: "", message: "" })} />}
           </main>
         );
       }

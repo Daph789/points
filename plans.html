@@ -626,6 +626,8 @@
         const [notificationEvents, setNotificationEvents] = React.useState([]);
         const [notificationCounts, setNotificationCounts] = React.useState({ sections: {}, subsections: {} });
         const [readKeys, setReadKeys] = React.useState(new Set());
+        const confirmedReadKeysRef = React.useRef(new Set());
+        const pendingReadKeysRef = React.useRef(new Set());
         const warmedChatIdsRef = React.useRef(new Set());
         const warmedSideKeysRef = React.useRef(new Set());
         const createFormRef = React.useRef(null);
@@ -770,7 +772,7 @@
           if (!response.ok) return;
           setNotificationEvents(data.events || []);
           setNotificationCounts(data.counts || { sections: {}, subsections: {} });
-          setReadKeys(new Set((data.events || []).filter((event) => event.read).map((event) => event.key)));
+          setReadKeys(new Set([...(data.events || []).filter((event) => event.read).map((event) => event.key), ...confirmedReadKeysRef.current, ...pendingReadKeysRef.current]));
         }
 
         async function loadPlans(accessToken = token) {
@@ -839,7 +841,7 @@
         }
 
         function unreadCount(subsection) {
-          return unreadEventsFor(subsection).length || notificationCounts.subsections?.[`quedar:${subsection}`] || 0;
+          return unreadEventsFor(subsection).length;
         }
 
         function chatUnreadEventsForPlan(planId) {
@@ -935,16 +937,28 @@
 
         async function markNotificationsRead(keys) {
           if (!token) return;
-          const cleanKeys = [...new Set((keys || []).filter(Boolean))];
+          const cleanKeys = [...new Set((keys || []).filter(Boolean))].filter((key) => !pendingReadKeysRef.current.has(key) && !confirmedReadKeysRef.current.has(key));
           if (cleanKeys.length === 0) return;
+          cleanKeys.forEach((key) => pendingReadKeysRef.current.add(key));
           setReadKeys((current) => new Set([...current, ...cleanKeys]));
-          await fetch("/api/me/notifications/read", {
-            method: "POST",
-            keepalive: true,
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ keys: cleanKeys }),
-          });
-          loadNotifications();
+          try {
+            const response = await fetch("/api/me/notifications/read", {
+              method: "POST",
+              keepalive: true,
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ keys: cleanKeys }),
+            });
+            if (!response.ok) throw new Error("notification_read_failed");
+            cleanKeys.forEach((key) => confirmedReadKeysRef.current.add(key));
+            window.dispatchEvent(new CustomEvent("donos:notifications-read"));
+            if (window.parent !== window) window.parent.postMessage({ type: "donos:notifications-read" }, window.location.origin);
+          } catch (error) {
+            setReadKeys((current) => new Set([...current].filter((key) => !cleanKeys.includes(key) || confirmedReadKeysRef.current.has(key))));
+            setActionToast({ type: "error", title: i18n.getLocale?.() === "fr" ? "Lecture non enregistrée" : "Lectura no guardada", message: i18n.getLocale?.() === "fr" ? "Rouvre le groupe pour réessayer." : "Vuelve a abrir el grupo para reintentarlo." });
+          } finally {
+            cleanKeys.forEach((key) => pendingReadKeysRef.current.delete(key));
+          }
+          loadNotifications().catch((error) => console.warn("Notification refresh failed", error));
         }
 
         async function markQuedarSubsectionRead(subsection) {
@@ -954,7 +968,7 @@
         }
 
         async function markPlanChatRead(planId) {
-          const keys = chatUnreadEventsForPlan(planId).map((event) => event.key).filter(Boolean);
+          const keys = [...chatUnreadEventsForPlan(planId), ...updateUnreadEventsForPlan(planId)].map((event) => event.key).filter(Boolean);
           if (keys.length === 0) return;
           markNotificationsRead(keys);
         }

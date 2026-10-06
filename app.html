@@ -771,6 +771,10 @@
         window.addEventListener("hashchange", openRouteFromHash);
         window.addEventListener("message", (event) => {
           if (event.origin !== window.location.origin) return;
+          if (event.data?.type === "donos:notifications-read") {
+            hydrateNotificationBadges();
+            return;
+          }
           if (event.data?.type === "donos:theme") {
             broadcastTheme(event.data.theme);
             return;

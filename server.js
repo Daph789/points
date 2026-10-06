@@ -5244,6 +5244,8 @@ app.get("/api/me/notifications", async (request, response) => {
     if (cached && Date.now() - cached.createdAt < notificationCacheTtlMs) {
       return response.json(cached.payload);
     }
+    const loadingCacheEntry = {};
+    notificationCache.set(profile.id, loadingCacheEntry);
     const events = await buildNotificationsForProfile(profile);
     const keys = events.map((event) => event.key);
     let readKeys = new Set();
@@ -5268,7 +5270,9 @@ app.get("/api/me/notifications", async (request, response) => {
       events: events.map((event) => ({ ...event, read: readKeys.has(event.key) })),
       unread_keys: events.filter((event) => !readKeys.has(event.key)).map((event) => event.key),
     };
-    notificationCache.set(profile.id, { createdAt: Date.now(), payload });
+    if (notificationCache.get(profile.id) === loadingCacheEntry) {
+      notificationCache.set(profile.id, { createdAt: Date.now(), payload });
+    }
     response.json(payload);
   } catch (error) {
     console.error("Notifications fatal error:", error);
@@ -5309,6 +5313,7 @@ app.post("/api/me/notifications/read", async (request, response) => {
       });
     }
 
+    notificationCache.delete(profile.id);
     response.json({ read: rows.length });
   } catch (error) {
     console.error("Notification read fatal error:", error);
