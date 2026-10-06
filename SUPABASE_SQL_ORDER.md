@@ -73,3 +73,7 @@ supabase-open-business-offers-no-rls.sql
 ## Billets gratuits
 
 Exécuter `supabase-free-offer-tickets.sql` avant de publier les changements pour activer la case Gratis / Gratuit. Les billets existants ne deviennent pas gratuits automatiquement. Le serveur conserve le parcours achat, stock et QR, sans transfert de points lorsque le total est nul et le billet explicitement gratuit.
+
+## Publications accessibles par lien
+
+Exécuter `supabase-unlisted-offers.sql` avant le déploiement. Le champ `is_unlisted` exclut les billets des listes publiques sans bloquer le lien direct ni les achats. Les publications existantes restent publiques par défaut ; `is_hidden` conserve son comportement de retrait.

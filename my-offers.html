@@ -44,7 +44,7 @@
       const supabaseAnonKey =
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
-      const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,author,description,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
+      const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,author,description,is_hidden,is_unlisted,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "";
@@ -137,6 +137,7 @@
                     <span className={`rounded-full px-3 py-1 text-xs font-black text-ink ${window.donossPricing.isFreeTicket(offer) ? "bg-orange-400" : "bg-mint"}`}>{window.donossPricing.ticketPriceLabel(offer, "ptos.")}</span>
                     {outOfStock && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Agotado</span>}
                     {expiredReason && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Caducada</span>}
+                    {offer.is_unlisted && <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{i18n.t("publish.linkOnly")}</span>}
                     {hidden && <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">Oculta</span>}
                     {promotion && <span className="rounded-full bg-sky-400 px-3 py-1 text-xs font-black text-ink">Promocionada</span>}
                   </div>
@@ -244,7 +245,7 @@
           const hours = (index + 1) * 24;
           return { hours, days: index + 1, cents: (index + 1) * 1599 };
         });
-        const promotionOffers = offers.filter((offer) => !isOfferExpired(offer) && !offer.is_hidden);
+        const promotionOffers = offers.filter((offer) => !isOfferExpired(offer) && !offer.is_hidden && !offer.is_unlisted);
         const filteredPromotionOffers = promotionOffers.filter((offer) => matchesSearch(offer, promotionSearch));
         const activePromotionByOfferId = Object.fromEntries(activePromotions.map((promotion) => [promotion.offer_id, promotion]));
         const selectedPromotionCount = selectedPromotionOfferIds.length;

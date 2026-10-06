@@ -52,7 +52,7 @@
 
       const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
       if (isEmbeddedCategory) document.body.classList.add("embedded-category");
-      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
+      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,is_unlisted,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       const categories = [
         { label: "Libros", icon: "📚", color: "from-mint/95 to-emerald-300" },
@@ -96,7 +96,7 @@
       }
 
       function isVisibleForUsers(offer) {
-        if (offer.is_hidden) return false;
+        if (offer.is_hidden || offer.is_unlisted) return false;
         const today = new Date().toISOString().slice(0, 10);
         const endDate = offer.end_date ? String(offer.end_date).slice(0, 10) : "";
         if (endDate && endDate < today) return false;

@@ -88,3 +88,12 @@ test('optional paid delivery on a free ticket keeps its existing charge', async 
   assert.equal(r.response.data.total_points, 20);
   assert.equal(r.transfers[0].p_points, 20);
 });
+
+test('link-only visibility does not block free or paid purchases', async () => {
+  const free = await buy({ is_unlisted: true });
+  assert.equal(free.response.code, 200);
+  assert.equal(free.inserted[0].qr_token, 'qr-token');
+  const paid = await buy({ is_unlisted: true, is_free: false, required_points: 50, reduced_price: 5 }, { points: 100 });
+  assert.equal(paid.response.code, 200);
+  assert.equal(paid.transfers[0].p_points, 50);
+});

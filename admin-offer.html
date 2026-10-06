@@ -282,6 +282,8 @@
         const [basePrice, setBasePrice] = React.useState("");
         const [reducedPrice, setReducedPrice] = React.useState("");
         const [isFree, setIsFree] = React.useState(false);
+        const [isUnlisted, setIsUnlisted] = React.useState(false);
+        const [savedOfferId, setSavedOfferId] = React.useState(editId || "");
         const [hours, setHours] = React.useState("");
         const [startDate, setStartDate] = React.useState("");
         const [endDate, setEndDate] = React.useState("");
@@ -383,6 +385,7 @@
             setBasePrice(draft.basePrice || "");
             setReducedPrice(draft.reducedPrice || "");
             setIsFree(draft.isFree === true);
+            setIsUnlisted(draft.isUnlisted === true);
             setHours(draft.hours || "");
             setStartDate(draft.startDate || "");
             setEndDate(draft.endDate || "");
@@ -450,6 +453,7 @@
             setBasePrice(data.base_price === null || data.base_price === undefined ? "" : String(data.base_price));
             setReducedPrice(data.reduced_price === null || data.reduced_price === undefined ? "" : String(data.reduced_price));
             setIsFree(data.is_free === true);
+            setIsUnlisted(data.is_unlisted === true);
             setHours(data.hours || "");
             setStartDate(data.start_date || "");
             setEndDate(data.end_date || "");
@@ -572,6 +576,7 @@
             basePrice,
             reducedPrice,
             isFree,
+            isUnlisted,
             hours,
             startDate,
             endDate,
@@ -618,6 +623,7 @@
           basePrice,
           reducedPrice,
           isFree,
+          isUnlisted,
           hours,
           startDate,
           endDate,
@@ -739,6 +745,8 @@
           setBasePrice("");
           setReducedPrice("");
           setIsFree(false);
+          setIsUnlisted(false);
+          setSavedOfferId(editId || "");
           setHours("");
           setStartDate("");
           setEndDate("");
@@ -862,6 +870,7 @@
               reduced_price: Number.isFinite(reduced) ? reduced : null,
               required_points: isFree ? 0 : requiredPoints || null,
               is_free: isFree,
+              is_unlisted: isUnlisted,
               hours: cleanTextInput(hours, 120) || null,
               start_date: startDate || null,
               end_date: endDate || null,
@@ -927,6 +936,7 @@
               return;
             }
 
+            setSavedOfferId(data?.id || editId || "");
             if (!editId) localStorage.removeItem(draftKey);
             setStatus({ type: "success", message: editId ? "Oferta actualizada correctamente." : "Oferta guardada correctamente." });
           } catch (error) {
@@ -1149,6 +1159,27 @@
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="rounded-2xl border border-sun/30 bg-sun/10 p-4">
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-[#FFD166]" checked={isUnlisted} onChange={(event) => setIsUnlisted(event.target.checked)} />
+                    <span>
+                      <span className="block text-base font-black text-sun">{i18n.t("publish.linkOnly")}</span>
+                      <span className="mt-1 block text-sm leading-6 text-slate-300">{i18n.t("publish.linkOnlyHint")}</span>
+                    </span>
+                  </label>
+                  {isUnlisted && savedOfferId && <div className="mt-4">
+                    <label className="block text-sm font-bold">{i18n.t("publish.shareLink")}
+                      <input className={`${inputClass} mt-2`} readOnly value={new URL(`offer-detail.html?id=${encodeURIComponent(savedOfferId)}`, window.location.href).href} onFocus={(event) => event.target.select()} />
+                    </label>
+                    <button type="button" className="mt-3 rounded-xl bg-sun px-4 py-3 text-sm font-black text-ink" onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(new URL(`offer-detail.html?id=${encodeURIComponent(savedOfferId)}`, window.location.href).href);
+                        setStatus({ type: "success", message: i18n.t("publish.linkCopied") });
+                      } catch (_) { setStatus({ type: "error", message: i18n.t("publish.copyLinkManually") }); }
+                    }}>{i18n.t("publish.copyLink")}</button>
+                  </div>}
                 </div>
 
                 <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-mint/30 bg-mint/10 p-4">
