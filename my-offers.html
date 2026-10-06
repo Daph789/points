@@ -45,7 +45,7 @@
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3cHZkcGFqa2FsamlieXRib2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNDMwNzcsImV4cCI6MjEwMDkxOTA3N30.nfuO7qVK90WtmrTuTG8aAfUCOxnZdWysAl1cOyVxcA0";
       const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
       const i18n = window.donossI18n || { t: (key) => key, getLocale: () => "es" };
-      const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,author,description,is_hidden,is_unlisted,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
+      const myOfferListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,author,description,country_code,city_market,city_label,is_hidden,is_unlisted,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       function formatEuro(value) {
         if (value === null || value === undefined || value === "") return "";
@@ -118,6 +118,13 @@
         const outOfStock = isOutOfStock(offer);
         const hidden = Boolean(offer.is_hidden);
         const expiredReason = getOfferExpiredReason(offer);
+        const french = i18n.getLocale?.() === "fr";
+        const countryCode = String(offer.country_code || "").trim().toUpperCase();
+        const countryNames = french
+          ? { ES: "Espagne", FR: "France", BE: "Belgique" }
+          : { ES: "España", FR: "Francia", BE: "Bélgica" };
+        const countryLabel = countryNames[countryCode] || countryCode || (french ? "Pays non renseigné" : "País no indicado");
+        const cityLabel = offer.city_label || offer.city_market || (french ? "Ville non renseignée" : "Ciudad no indicada");
         return (
           <article className={`overflow-hidden rounded-[28px] border shadow-2xl shadow-black/20 ${
             expiredReason
@@ -150,6 +157,13 @@
 	                    <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{offer.categories?.join(", ") || "Sin categoría"}</p>
 	                    <h2 className="mt-1 text-2xl font-black leading-tight text-white">{offer.title || "Oferta sin título"}</h2>
 	                    <p className="mt-2 text-sm font-semibold text-slate-400">{offer.address || "Dirección no indicada"}</p>
+                      <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2.5">
+                        <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{french ? "Pays et ville de la publication" : "País y ciudad de la publicación"}</p>
+                        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-bold text-slate-200">
+                          <span><span aria-hidden="true">🌍 </span>{countryLabel}</span>
+                          <span><span aria-hidden="true">📍 </span>{cityLabel}</span>
+                        </p>
+                      </div>
                       {remainingStock !== null && (
                         <p className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-black ${
                           outOfStock ? "bg-coral/10 text-coral ring-1 ring-coral/20" : "bg-white/10 text-slate-300 ring-1 ring-white/10"
