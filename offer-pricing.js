@@ -21,5 +21,15 @@
     return `−${format.format(rounded)} %`;
   }
 
-  window.donossPricing = { formatDiscount };
+  function isFreeTicket(offer) {
+    return offer?.is_free === true && !offer.external_checkout_enabled
+      && priceInCents(offer.reduced_price) === 0 && priceInCents(offer.required_points) === 0;
+  }
+
+  function ticketPriceLabel(offer, suffix = "ptos.") {
+    if (isFreeTicket(offer)) return window.donossI18n?.getLocale?.() === "fr" ? "Gratuit" : "Gratis";
+    return `${offer.required_points || 0} ${suffix}`;
+  }
+
+  window.donossPricing = { formatDiscount, isFreeTicket, ticketPriceLabel };
 })();

@@ -136,7 +136,7 @@
                 {isExternalCheckout ? (
                   <span className="rounded-full bg-sun px-3 py-1.5 text-xs font-black text-ink">No disponible en puntos</span>
                 ) : (
-                  <span className="rounded-full bg-mint px-3 py-1.5 text-xs font-black text-ink">{offer.required_points || 0} puntos</span>
+                  <span className={`rounded-full px-3 py-1.5 text-xs font-black text-ink ${window.donossPricing.isFreeTicket(offer) ? "bg-orange-400" : "bg-mint"}`}>{window.donossPricing.ticketPriceLabel(offer, "puntos")}</span>
                 )}
                 <span className="text-xs font-black text-white">Ver detalle</span>
               </div>

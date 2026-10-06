@@ -52,7 +52,7 @@
 
       const isEmbeddedCategory = new URLSearchParams(window.location.search).get("embedded") === "1";
       if (isEmbeddedCategory) document.body.classList.add("embedded-category");
-      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
+      const offerListSelect = "id,business_id,title,cover_photo_data_url,address,categories,base_price,reduced_price,required_points,is_free,external_checkout_enabled,external_checkout_url,business_display_name,business_is_verified,receiver_display_name,author,is_hidden,stock_quantity,sold_count,out_of_stock_since,qr_valid_until,end_date,created_at";
 
       const categories = [
         { label: "Libros", icon: "📚", color: "from-mint/95 to-emerald-300" },
@@ -269,7 +269,7 @@
                     {isExternalCheckout ? (
                       <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{i18n.getLocale?.() === "fr" ? "Non disponible en points" : "No disponible en puntos"}</span>
                     ) : (
-                      <span className="rounded-full bg-mint px-3 py-1 text-xs font-black text-ink">{offer.required_points || 0} ptos.</span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-black text-ink ${window.donossPricing.isFreeTicket(offer) ? "bg-orange-400" : "bg-mint"}`}>{window.donossPricing.ticketPriceLabel(offer, "ptos.")}</span>
                     )}
                   </div>
                 </div>

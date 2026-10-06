@@ -272,7 +272,7 @@
               <p className="mt-1 text-xs font-bold text-slate-500">Guardado el {formatDate(like.created_at)} · {formatTime(like.created_at)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 min-[430px]:block min-[430px]:text-right">
-              <p className="rounded-full bg-mint px-3 py-1 text-sm font-black text-ink">{offer.required_points || 0} ptos.</p>
+              <p className={`rounded-full px-3 py-1 text-sm font-black text-ink ${window.donossPricing.isFreeTicket(offer) ? "bg-orange-400" : "bg-mint"}`}>{window.donossPricing.ticketPriceLabel(offer, "ptos.")}</p>
               {discount !== null && <p className="mt-2 text-xs font-black text-coral">{discount}</p>}
               <p className="mt-1 text-xs font-black text-slate-500">Ver detalle</p>
             </div>

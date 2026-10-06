@@ -6431,6 +6431,7 @@ app.get("/api/offers/categories/summary", async (request, response) => {
               title: preview.title,
               cover_photo_data_url: preview.cover_photo_data_url || "",
               required_points: preview.required_points,
+              is_free: preview.is_free === true,
               base_price: preview.base_price,
               reduced_price: preview.reduced_price,
               external_checkout_enabled: Boolean(preview.external_checkout_enabled),
