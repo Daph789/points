@@ -5385,6 +5385,24 @@ const legacyPublicOfferSelect =
 const legacyPublicOfferPreviewSelect =
   "id, business_id, title, cover_photo_data_url, address, categories, base_price, reduced_price, required_points, is_free, hours, start_date, end_date, qr_valid_from, qr_valid_until, age, cart_button_text, external_checkout_enabled, external_checkout_url, delivery_pickup_enabled, delivery_home_enabled, delivery_home_points, reservation_enabled, reservation_time_slots, reservation_max_people, reservation_days_ahead, reservation_available_weekdays, receiver_transaction_id, receiver_display_name, business_display_name, business_is_verified, author, stock_quantity, sold_count, out_of_stock_since, is_hidden, is_unlisted, created_at";
 
+// Select lightweight candidates first; inline cover images are fetched only for displayed cards.
+const feedCandidateSelect = publicOfferPreviewSelect.split(", ").filter((column) => column !== "cover_photo_data_url").join(", ");
+const legacyFeedCandidateSelect = legacyPublicOfferPreviewSelect.split(", ").filter((column) => column !== "cover_photo_data_url").join(", ");
+
+async function hydrateFeedCards(offers) {
+  if (!offers.length) return [];
+  const ids = [...new Set(offers.map((offer) => offer.id))];
+  const [enriched, covers] = await Promise.all([
+    enrichOffersWithBusiness(offers),
+    supabaseAdmin.from("business_offers").select("id, cover_photo_data_url, is_hidden, is_unlisted").in("id", ids),
+  ]);
+  if (covers.error) throw covers.error;
+  const byId = new Map((covers.data || []).map((offer) => [offer.id, offer]));
+  // Recheck visibility in case a publication was withdrawn between the two queries.
+  return enriched.filter((offer) => byId.has(offer.id) && !byId.get(offer.id).is_hidden && !byId.get(offer.id).is_unlisted)
+    .map((offer) => ({ ...offer, cover_photo_data_url: byId.get(offer.id).cover_photo_data_url || "" }));
+}
+
 function remainingOfferStock(offer) {
   if (offer?.stock_quantity === null || offer?.stock_quantity === undefined || offer?.stock_quantity === "") return null;
   return Math.max(Number(offer.stock_quantity || 0) - Number(offer.sold_count || 0), 0);
@@ -6341,16 +6359,17 @@ app.get("/api/offers/featured", async (request, response) => {
   const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
+    const viewerMarketPromise = getViewerMarket(request);
     let { data, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferPreviewSelect)
+      .select(feedCandidateSelect)
       .order("created_at", { ascending: false })
       .limit(250);
 
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("business_offers")
-        .select(legacyPublicOfferPreviewSelect)
+        .select(legacyFeedCandidateSelect)
         .order("created_at", { ascending: false })
         .limit(250);
       data = fallback.data;
@@ -6362,9 +6381,9 @@ app.get("/api/offers/featured", async (request, response) => {
       return response.status(500).json({ error: "featured_offers_failed" });
     }
 
-    const viewerMarket = await getViewerMarket(request);
+    const viewerMarket = await viewerMarketPromise;
     const visibleOffers = await enrichOffersWithPromotions(
-      await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket))
+      filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket)
     );
     const usedIds = new Set();
     const featured = [];
@@ -6386,7 +6405,7 @@ app.get("/api/offers/featured", async (request, response) => {
       }
     }
 
-    response.json({ offers: featured, market: viewerMarket });
+    response.json({ offers: await hydrateFeedCards(featured), market: viewerMarket });
   } catch (error) {
     console.error("Featured offers fatal error:", error);
     response.status(500).json({ error: "featured_offers_failed" });
@@ -6401,16 +6420,17 @@ app.get("/api/offers/categories/summary", async (request, response) => {
   const wantedCategories = ["Libros", "Cine", "Festivales", "Conciertos", "Museos", "Gaming", "Música", "Viajes", "Restaurantes"];
 
   try {
+    const viewerMarketPromise = getViewerMarket(request);
     let { data, error } = await supabaseAdmin
       .from("business_offers")
-      .select(publicOfferPreviewSelect)
+      .select(feedCandidateSelect)
       .order("created_at", { ascending: false })
       .limit(300);
 
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("business_offers")
-        .select(legacyPublicOfferPreviewSelect)
+        .select(legacyFeedCandidateSelect)
         .order("created_at", { ascending: false })
         .limit(300);
       data = fallback.data;
@@ -6422,13 +6442,16 @@ app.get("/api/offers/categories/summary", async (request, response) => {
       return response.status(500).json({ error: "offer_category_summary_failed" });
     }
 
-    const viewerMarket = await getViewerMarket(request);
+    const viewerMarket = await viewerMarketPromise;
     const visibleOffers = await enrichOffersWithPromotions(
-      await enrichOffersWithBusiness(filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket))
+      filterItemsByMarket((data || []).filter(isOfferVisibleForPublic), viewerMarket)
     );
+    const previewCandidates = wantedCategories.map((category) => visibleOffers.find((offer) => (offer.categories || []).includes(category))).filter(Boolean);
+    const previews = await hydrateFeedCards([...new Map(previewCandidates.map((offer) => [offer.id, offer])).values()]);
+    const previewsById = new Map(previews.map((offer) => [offer.id, offer]));
     const summary = wantedCategories.map((category) => {
       const offers = visibleOffers.filter((offer) => (offer.categories || []).includes(category));
-      const preview = offers[0] || null;
+      const preview = previewsById.get(offers[0]?.id) || null;
       return {
         category,
         count: offers.length,

@@ -646,6 +646,7 @@
         const [selectedCategory, setSelectedCategory] = React.useState("");
         const [categoryOffers, setCategoryOffers] = React.useState([]);
         const [featuredOffers, setFeaturedOffers] = React.useState([]);
+        const [featuredReady, setFeaturedReady] = React.useState(false);
         const [categorySummary, setCategorySummary] = React.useState([]);
         const [homeDataReady, setHomeDataReady] = React.useState(false);
         const [likedOfferIds, setLikedOfferIds] = React.useState(new Set());
@@ -692,9 +693,12 @@
             const data = await response.json().catch(() => ({}));
             if (response.ok) {
               setFeaturedOffers(data.offers || []);
+              setFeaturedReady(true);
+              window.requestAnimationFrame(() => notifyInicioReady());
               return;
             }
           } catch (_serverError) {}
+          setFeaturedReady(true);
           setFeaturedOffers([]);
         }
 
@@ -1095,7 +1099,7 @@
                   </div>
 
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {!homeDataReady ? (
+                    {!featuredReady ? (
                       [1, 2].map((item) => (
                         <div key={item} className="overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/20">
                           <div className="h-[150px] animate-pulse bg-gradient-to-br from-mint/20 via-white/[0.06] to-coral/20"></div>
