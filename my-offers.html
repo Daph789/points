@@ -34,6 +34,16 @@
       }
       #root, main { max-width: 100%; overflow-x: hidden; }
       * { min-width: 0; }
+      .promotion-overlay {
+        padding: 16px 16px calc(104px + env(safe-area-inset-bottom, 0px));
+      }
+      .promotion-panel {
+        max-height: calc(100vh - 120px - env(safe-area-inset-bottom, 0px));
+        max-height: calc(100dvh - 120px - env(safe-area-inset-bottom, 0px));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+      }
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
@@ -755,8 +765,8 @@
               )}
             </section>
             {promotionOpen && (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-black/72 px-4 py-6 backdrop-blur-xl">
-                <section className="max-h-[90vh] w-full max-w-5xl overflow-hidden rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl shadow-black/50">
+              <div className="promotion-overlay fixed inset-0 z-50 grid place-items-center bg-black/72 backdrop-blur-xl">
+                <section className="promotion-panel w-full max-w-5xl rounded-[34px] border border-white/10 bg-[#0D111D] shadow-2xl shadow-black/50">
                   <div className="border-b border-white/10 p-5 sm:p-6">
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -803,7 +813,7 @@
                     </label>
                   </div>
 
-                  <div className="grid max-h-[58vh] overflow-y-auto lg:grid-cols-[1.25fr_.75fr]">
+                  <div className="grid lg:grid-cols-[1.25fr_.75fr]">
                     <div className="border-white/10 p-4 sm:p-5 lg:border-r">
                       <div className="mb-3 flex items-center justify-between gap-3">
                         <p className="text-sm font-black text-white">Biblioteca de publicaciones</p>
