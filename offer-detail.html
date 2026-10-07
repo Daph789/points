@@ -367,8 +367,9 @@
         }`;
         const goToCheckout = () => {
           if (!canBuy) return;
-          const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}${isEmbeddedDetail ? "&from=app" : ""}`;
-          if (isEmbeddedDetail && window.parent !== window) window.parent.location.href = checkoutUrl;
+          const insideAppFrame = window.parent !== window;
+          const checkoutUrl = `checkout.html?id=${offer.id}&delivery=${deliveryChoice}${insideAppFrame || isEmbeddedDetail ? "&from=app" : ""}`;
+          if (insideAppFrame) window.parent.location.href = checkoutUrl;
           else window.location.href = checkoutUrl;
         };
         const resetDrag = () => {

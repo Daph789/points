@@ -1,5 +1,5 @@
 (function () {
-  const lockedCountries = new Set(["FR", "BE"]);
+  const lockedCountries = new Set(["BE"]);
   const unlockKey = "donossRegionLaunchUnlocked";
   const passwordHash = "f262a01d304ee4608705305f2d0ca0b980be47518909a93449a7b8f8b4f7df42";
   const skippedPages = new Set([
@@ -207,7 +207,7 @@
         <div class="donoss-region-lock__body">
           <p class="donoss-region-lock__eyebrow">Lancement progressif</p>
           <h1 class="donoss-region-lock__title" id="donoss-region-lock-title">Cette app n’est pas encore disponible dans votre région.</h1>
-          <p class="donoss-region-lock__text">Donoss arrive très bientôt en France et en Belgique. Revenez le <strong>10 octobre 2026</strong> pour découvrir les offres, les plans et les avantages disponibles près de chez vous.</p>
+          <p class="donoss-region-lock__text">Donoss arrive très bientôt en Belgique. Revenez le <strong>10 octobre 2026</strong> pour découvrir les offres, les plans et les avantages disponibles près de chez vous.</p>
           <span class="donoss-region-lock__date">Ouverture prévue : 10 octobre 2026</span>
         </div>
         <form class="donoss-region-lock__admin" id="donoss-region-lock-form">

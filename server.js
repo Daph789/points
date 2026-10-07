@@ -7794,14 +7794,14 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(socialPlanMessageSelect)
       .maybeSingle();
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_messages")
-        .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
+        .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
         .eq("id", current.id)
         .select(socialPlanMessageSelectLegacy)
         .maybeSingle();
@@ -8140,14 +8140,14 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(sideGroupMessageSelect)
       .maybeSingle();
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_side_group_messages")
-        .update({ body: "", deleted_at: new Date().toISOString(), edited_at: null })
+        .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
         .eq("id", current.id)
         .select(sideGroupMessageSelectLegacy)
         .maybeSingle();

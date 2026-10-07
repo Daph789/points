@@ -880,6 +880,7 @@
                     )}
                     {(selectedMessage.sender_id === profile?.id || profile?.is_donoss_admin) && (
                       <button className="h-12 rounded-2xl bg-coral/10 text-sm font-black text-coral ring-1 ring-coral/20" onClick={() => {
+                        setStatus("");
                         setMessageToDelete(selectedMessage);
                         setSelectedMessage(null);
                       }}>
@@ -946,6 +947,7 @@
                 <section className="w-full max-w-md rounded-[34px] border border-coral/20 bg-[#0D111D] p-5 text-center shadow-2xl">
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-coral/10 text-2xl font-black text-coral ring-1 ring-coral/25">!</div>
                   <h2 className="mt-4 text-2xl font-black text-white">¿Eliminar mensaje?</h2>
+                  {status && <p role="alert" className="mt-3 rounded-2xl bg-coral/10 p-3 text-sm font-bold text-coral">{status}</p>}
                   <p className="mt-2 text-sm font-bold leading-6 text-slate-400">El mensaje desaparecerá del chat para mantener la conversación limpia.</p>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setMessageToDelete(null)}>Cancelar</button>

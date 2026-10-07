@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Donoss | Pago</title>
+    <script>
+      // Checkout is a full page, even when reached through a cached app frame.
+      if (window.parent !== window) {
+        const checkoutPageUrl = new URL(window.location.href);
+        checkoutPageUrl.searchParams.delete("embedded");
+        checkoutPageUrl.searchParams.set("from", "app");
+        window.parent.location.replace(checkoutPageUrl.href);
+      }
+    </script>
     <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -33,6 +42,9 @@
           linear-gradient(180deg, #0a0e19 0%, #060914 44%, #050711 100%);
       }
       #root, main { max-width: 100%; overflow-x: hidden; }
+      #root > main {
+        padding-bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+      }
       * { min-width: 0; }
 
       @keyframes success-pop {
