@@ -462,9 +462,15 @@
             } catch (_error) {}
           });
 
+          syncOverlayNavigation();
           if (!options.skipHash && window.location.hash !== `#${route}`) {
             history.pushState({ route }, "", `#${route}`);
           }
+        }
+
+        function syncOverlayNavigation() {
+          const activeFrame = allFrames().find((frame) => frame.classList.contains("is-active"));
+          document.body.classList.toggle("is-overlay-route", activeFrame?.dataset.overlayOpen === "1");
         }
 
         function allFrames() {
@@ -822,12 +828,11 @@
             history.back();
             return;
           }
-          if (event.data?.type === "donos:hide-nav") {
-            document.body.classList.add("is-overlay-route");
-            return;
-          }
-          if (event.data?.type === "donos:show-nav") {
-            document.body.classList.remove("is-overlay-route");
+          if (event.data?.type === "donos:hide-nav" || event.data?.type === "donos:show-nav") {
+            const sourceFrame = allFrames().find((frame) => frame.contentWindow === event.source);
+            if (!sourceFrame) return;
+            sourceFrame.dataset.overlayOpen = event.data.type === "donos:hide-nav" ? "1" : "0";
+            syncOverlayNavigation();
             return;
           }
           if (event.data?.type === "donos:navigate") {
