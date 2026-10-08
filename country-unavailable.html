@@ -31,6 +31,7 @@
           linear-gradient(180deg, #0a0e19 0%, #060914 55%, #050711 100%);
       }
     </style>
+      <script src="country-guard.js?v=20261008"></script>
   </head>
   <body>
     <main class="grid min-h-screen place-items-center px-4 py-8">
@@ -66,6 +67,7 @@
         </div>
 
         <div class="mt-7 grid gap-3 sm:grid-cols-2">
+          <button id="retry-access" class="rounded-2xl bg-mint px-5 py-4 text-sm font-black text-ink">Revérifier mon accès / Volver a comprobar</button>
           <a class="grid h-13 min-h-13 place-items-center rounded-2xl bg-mint px-5 py-4 text-center text-sm font-black text-ink shadow-glow" href="mailto:pixmell.contact@gmail.com?subject=Donoss%20-%20Country%20access">
             Contact Donoss
           </a>
@@ -75,5 +77,13 @@
         </div>
       </section>
     </main>
+    <script>
+      document.getElementById("retry-access").addEventListener("click", async () => {
+        try { sessionStorage.removeItem("donossCountryCheck"); } catch (_) {}
+        if (!await window.donossCountryGuard.requireSpainAccess()) return;
+        const next = new URL(new URLSearchParams(location.search).get("next") || "login.html", location.href);
+        location.replace(next.origin === location.origin && !next.pathname.endsWith("country-unavailable.html") ? next.href : "login.html");
+      });
+    </script>
   </body>
 </html>

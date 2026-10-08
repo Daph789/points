@@ -1,6 +1,7 @@
 (function () {
   const allowedCountries = new Set(["ES", "FR", "BE"]);
   const cacheKey = "donossCountryCheck";
+  const cacheVersion = 2;
   const cacheMaxAge = 6 * 60 * 60 * 1000;
   const blockedPage = "country-unavailable.html";
   const allowedTimezones = new Set(["Europe/Madrid", "Atlantic/Canary", "Africa/Ceuta", "Europe/Paris", "Europe/Brussels"]);
@@ -18,7 +19,7 @@
   function readCache() {
     try {
       const parsed = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
-      if (!parsed || Date.now() - Number(parsed.checked_at || 0) > cacheMaxAge) return null;
+      if (!parsed || parsed.version !== cacheVersion || Date.now() - Number(parsed.checked_at || 0) > cacheMaxAge) return null;
       return parsed;
     } catch (_error) {
       return null;
@@ -27,7 +28,7 @@
 
   function writeCache(country, source) {
     try {
-      sessionStorage.setItem(cacheKey, JSON.stringify({ country, source, checked_at: Date.now() }));
+      sessionStorage.setItem(cacheKey, JSON.stringify({ country, source, version: cacheVersion, checked_at: Date.now() }));
     } catch (_error) {
       // Storage can be unavailable in some private browsers.
     }
@@ -45,6 +46,11 @@
   }
 
   async function detectCountry() {
+    // Access follows the supported market chosen in the app, not a roaming/VPN IP.
+    try {
+      const selected = String(localStorage.getItem("donossCountryCode") || "").toUpperCase();
+      if (allowedCountries.has(selected)) return { country: selected, source: "selected" };
+    } catch (_error) {}
     const cached = readCache();
     if (cached?.country) return cached;
 
