@@ -45,11 +45,11 @@
     }
   }
 
-  async function detectCountry() {
+  async function detectCountry({ ignoreSelected = false } = {}) {
     // Access follows the supported market chosen in the app, not a roaming/VPN IP.
     try {
       const selected = String(localStorage.getItem("donossCountryCode") || "").toUpperCase();
-      if (allowedCountries.has(selected)) return { country: selected, source: "selected" };
+      if (!ignoreSelected && allowedCountries.has(selected)) return { country: selected, source: "selected" };
     } catch (_error) {}
     const cached = readCache();
     if (cached?.country) return cached;
