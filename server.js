@@ -5659,6 +5659,7 @@ function socialPlanInsertErrorCode(error) {
   if (error?.code === "23505") return "purchase_already_has_plan";
   if (error?.code === "42P01") return "social_plans_table_missing";
   if (error?.code === "42703") return "free_social_plans_sql_missing";
+  if ((error?.code === "23514" && /social_plans_ticket_or_free_check/.test(`${message} ${details}`)) || (error?.code === "23502" && /event_date|location/.test(`${message} ${details}`))) return "social_plan_optional_date_sql_missing";
   if (error?.code === "23514") return "social_plan_invalid_data";
   if (error?.code === "22001") return "social_plan_text_too_long";
   if (error?.code === "23503") return "social_plan_reference_missing";

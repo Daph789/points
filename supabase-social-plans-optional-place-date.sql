@@ -10,6 +10,8 @@ alter table public.social_plans add column if not exists plan_type text not null
 alter table public.social_plans add column if not exists free_category text;
 alter table public.social_plans add column if not exists location text;
 alter table public.social_plans add column if not exists event_date date;
+alter table public.social_plans alter column event_date drop not null;
+alter table public.social_plans alter column location drop not null;
 
 alter table public.social_plans drop constraint if exists social_plans_ticket_or_free_check;
 alter table public.social_plans add constraint social_plans_ticket_or_free_check check (

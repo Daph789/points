@@ -50,6 +50,7 @@
         transform: translateY(4px);
         transition: opacity 120ms ease, transform 120ms ease;
       }
+      [aria-invalid="true"] { border-color: #ff6b6b !important; outline: 2px solid #ff6b6b !important; outline-offset: 3px; }
     </style>
     <link rel="stylesheet" href="app-shell.css" />
     <script defer src="app-shell.js"></script>
@@ -314,6 +315,7 @@
           plan_photos_sql_missing: "Falta ejecutar el SQL de fotos para planes.",
           plan_photos_failed: "No se han podido cargar tus fotos para planes.",
           create_plan_failed: "No se ha podido publicar el plan. Revisa que todos los campos obligatorios estén completos e inténtalo otra vez.",
+          social_plan_optional_date_sql_missing: "La base de datos necesita la actualización para publicar sin fecha. Contacta con Donoss.",
           social_plan_invalid_data: "No se ha podido publicar porque falta un dato obligatorio del plan.",
           social_plan_text_too_long: "Hay un texto demasiado largo. Acorta el título, la dirección o el mensaje.",
           social_plan_reference_missing: "No se ha podido publicar porque falta una referencia del plan. Recarga la página e inténtalo otra vez.",
@@ -325,9 +327,9 @@
           mine_failed: "No se han podido cargar tus planes.",
           tickets_failed: "No se han podido cargar tus billetes.",
         };
-        if (String(message || "").toLowerCase().includes("network")) return `${fallback} Revisa tu conexión e inténtalo otra vez.`;
-        if (String(message || "").toLowerCase().includes("failed")) return `${fallback} Inténtalo otra vez.`;
-        return messages[message] || `${fallback} Motivo: ${message || "error desconocido"}`;
+        if (String(message || "").toLowerCase().includes("network")) return `${i18n.text(fallback)} ${i18n.getLocale?.() === "fr" ? "Vérifie ta connexion et réessaie." : "Revisa tu conexión e inténtalo otra vez."}`;
+        if (String(message || "").toLowerCase().includes("failed")) return `${i18n.text(fallback)} ${i18n.getLocale?.() === "fr" ? "Réessaie." : "Inténtalo otra vez."}`;
+        return i18n.text(messages[message] || fallback);
       }
 
       function VerifiedBadge() {
@@ -907,7 +909,7 @@
         function warmSideGroup(plan, status = sideStatusForPlan(plan)) {
           return;
           if (!isEmbeddedPlans || window.parent === window || !canUseSideGroup(plan)) return;
-          const key = `${plan.id}:${status}`;
+          const key = `${plan.id}:${i18n.text(status)}`;
           if (warmedSideKeysRef.current.has(key)) return;
           warmedSideKeysRef.current.add(key);
           window.parent.postMessage({ type: "donos:prefetch-side-group", id: plan.id, status }, window.location.origin);
@@ -1119,41 +1121,52 @@
           }
         }
 
+        function invalidPlanField(field, message) {
+          setStatus(message);
+          const element = document.getElementById(`plan-field-${field}`);
+          if (element) {
+            element.setAttribute("aria-invalid", "true");
+            element.scrollIntoView({ behavior: "smooth", block: "center" });
+            element.focus({ preventScroll: true });
+          }
+        }
+
         async function createPlan() {
           if (!token) return redirectToLogin();
+          createFormRef.current?.querySelectorAll('[aria-invalid="true"]').forEach((element) => element.removeAttribute("aria-invalid"));
           const today = new Date().toISOString().slice(0, 10);
           if (planType === "ticket" && !selectedTicketId) {
-            setStatus("Elige un billete para crear el plan.");
+            invalidPlanField("ticket", "Elige un billete para crear el plan.");
             return;
           }
           if (planType === "free") {
             const category = freeCategory === "Otro" ? customFreeCategory.trim() : freeCategory;
             if (!category) {
-              setStatus("Escribe la categoría del plan libre.");
+              invalidPlanField("category", "Escribe la categoría del plan libre.");
               return;
             }
-            if (addFreeEventDate && (!freeEventDate || freeEventDate < today)) {
-              setStatus("Elige una fecha de hoy o posterior para el plan libre.");
+            if (addFreeEventDate && freeEventDate && freeEventDate < today) {
+              invalidPlanField("date", "Elige una fecha de hoy o posterior para el plan libre.");
               return;
             }
           }
           if (!isBusinessAccount && photoDataUrls.length < 2) {
-            setStatus("Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
+            invalidPlanField("photos", "Añade mínimo 2 fotos tuyas. Se guardarán en tu perfil y solo las verá la gente autorizada.");
             return;
           }
           const totalWanted = Math.max(Math.floor(Number(maxPeople || 0)), 0);
           const womenWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedWomen || 0)), 0);
           const menWanted = freePreference ? 0 : Math.max(Math.floor(Number(wantedMen || 0)), 0);
           const openWanted = freePreference ? totalWanted : Math.max(totalWanted - womenWanted - menWanted, 0);
-          if (totalWanted <= 0) return setStatus("Indica cuántas personas pueden apuntarse como máximo.");
-          if (totalWanted > 20) return setStatus("El máximo para un plan es de 20 personas.");
-          if (!freePreference && womenWanted + menWanted > totalWanted) return setStatus("La suma de chicas y chicos no puede superar el máximo de personas.");
+          if (totalWanted <= 0) return invalidPlanField("people", "Indica cuántas personas pueden apuntarse como máximo.");
+          if (totalWanted > 20) return invalidPlanField("people", "El máximo para un plan es de 20 personas.");
+          if (!freePreference && womenWanted + menWanted > totalWanted) return invalidPlanField("women", "La suma de chicas y chicos no puede superar el máximo de personas.");
           const ageMin = wantedAgeMin === "" ? "" : Math.floor(Number(wantedAgeMin));
           const ageMax = wantedAgeMax === "" ? "" : Math.floor(Number(wantedAgeMax));
           const ageMinValid = ageMin === "" || (ageMin >= 13 && ageMin <= 99);
           const ageMaxValid = ageMax === "" || (ageMax >= 13 && ageMax <= 99);
           if (!ageMinValid || !ageMaxValid || (ageMin !== "" && ageMax !== "" && ageMin > ageMax)) {
-            setStatus("Indica una franja de edad válida entre 13 y 99 años.");
+            invalidPlanField("age", "Indica una franja de edad válida entre 13 y 99 años.");
             return;
           }
           setIsSaving(true);
@@ -1161,7 +1174,7 @@
           try {
             const savedPhotos = isBusinessAccount ? [] : await syncPlanPhotos(photoDataUrls, { silent: true });
             if (!isBusinessAccount && savedPhotos.length < 2) {
-              setStatus("Añade mínimo 2 fotos tuyas para publicar el plan.");
+              invalidPlanField("photos", "Añade mínimo 2 fotos tuyas para publicar el plan.");
               setIsSaving(false);
               return;
             }
@@ -1646,7 +1659,7 @@
                   : status.includes("Cargando") || status.includes("Editando")
                     ? "border-white/10 bg-white/[0.055] text-slate-300"
                     : "border-coral/25 bg-coral/10 text-coral"
-              }`}>{status}</p>
+              }`}>{i18n.text(status)}</p>
             )}
 
             {mode === "discover" && (
@@ -1733,7 +1746,7 @@
                             <TicketCard ticket={selectedTicket} selected={true} onClick={() => setTicketPickerOpen(true)} />
                           </div>
                         ) : (
-                          <button className="mt-4 grid min-h-[150px] w-full place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 p-5 text-center" onClick={() => setTicketPickerOpen(true)}>
+                          <button id="plan-field-ticket" className="mt-4 grid min-h-[150px] w-full place-items-center rounded-[28px] border border-dashed border-mint/35 bg-mint/10 p-5 text-center" onClick={() => setTicketPickerOpen(true)}>
                             <span>
                               <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="ticket" /></span>
                               <span className="mt-3 block text-lg font-black text-white">Elegir billete</span>
@@ -1759,14 +1772,14 @@
                               className={`rounded-2xl border px-3 py-3 text-sm font-black ${freeCategory === category ? "border-mint/70 bg-mint/15 text-mint" : "border-white/10 bg-black/20 text-slate-300"}`}
                               onClick={() => setFreeCategory(category)}
                             >
-                              {category}
+                              {i18n.text(category)}
                             </button>
                           ))}
                         </div>
                         {freeCategory === "Otro" && (
                           <label className="mt-3 block">
                             <span className="text-sm font-black text-white">Categoría personalizada</span>
-                            <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" value={customFreeCategory} onChange={(event) => setCustomFreeCategory(event.target.value)} placeholder={isBusinessAccount ? "Ej. Casting, staff, promoción local..." : "Ej. Teatro, picnic, club de lectura..."} />
+                            <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-black/20 px-4 text-sm font-bold text-white outline-none focus:border-mint/70" id="plan-field-category" onInput={(event) => event.currentTarget.removeAttribute("aria-invalid")} value={customFreeCategory} onChange={(event) => setCustomFreeCategory(event.target.value)} placeholder={isBusinessAccount ? "Ej. Casting, staff, promoción local..." : "Ej. Teatro, picnic, club de lectura..."} />
                           </label>
                         )}
                         <label className="mt-4 block">
@@ -1787,10 +1800,11 @@
                               <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">{planCopy.addMeetDateHint}</span>
                             </span>
                           </label>
+                          <p className="mt-2 text-xs font-bold text-slate-400">{i18n.text("Sin fecha, el plan seguirá visible hasta que lo elimines.")}</p>
                           {addFreeEventDate && (
                             <label className="mt-3 block">
                               <span className="text-xs font-black uppercase tracking-[0.12em] text-slate-500">{planCopy.meetDateLabel}</span>
-                              <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" min={new Date().toISOString().slice(0, 10)} value={freeEventDate} onChange={(event) => setFreeEventDate(event.target.value)} />
+                              <input className="mt-2 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-sm font-bold text-white outline-none focus:border-mint/70" type="date" min={new Date().toISOString().slice(0, 10)} id="plan-field-date" onInput={(event) => event.currentTarget.removeAttribute("aria-invalid")} value={freeEventDate} onChange={(event) => setFreeEventDate(event.target.value)} />
                             </label>
                           )}
                         </div>
@@ -1834,7 +1848,7 @@
                     </div>
                   )}
                   {!isBusinessAccount ? (
-                    <div className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
+                    <div id="plan-field-photos" tabIndex={-1} className="mt-3 rounded-[26px] border border-white/10 bg-black/20 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-black text-white">Fotos tuyas para el plan</p>
@@ -1878,7 +1892,7 @@
                   <label className="mt-4 block rounded-[26px] border border-white/10 bg-black/20 p-4">
                     <span className="text-sm font-black text-white">¿Cuántas personas máximo pueden apuntarse?</span>
                     <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">Ejemplo: si quieres ir con 5 personas, escribe 5.</span>
-                    <input className="mt-3 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-2xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="20" value={maxPeople} onChange={(event) => setMaxPeople(event.target.value)} placeholder="5" />
+                    <input className="mt-3 h-12 w-full rounded-2xl border border-line bg-white/[0.04] px-4 text-2xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="20" id="plan-field-people" onInput={(event) => event.currentTarget.removeAttribute("aria-invalid")} value={maxPeople} onChange={(event) => setMaxPeople(event.target.value)} placeholder="5" />
                   </label>
 
                   {Number(maxPeople || 0) > 0 && (
@@ -1896,11 +1910,11 @@
                         <>
                           <p className="mt-4 text-xs font-bold leading-5 text-slate-500">Opcional: indica cuántas chicas y cuántos chicos prefieres dentro del máximo. Las plazas que sobren quedan abiertas para cualquiera.</p>
                           <div className="mt-3 grid grid-cols-2 gap-2">
-                            <label className="rounded-2xl bg-white/[0.055] p-3"><span className="text-xs font-bold text-slate-500">Chicas preferidas</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedWomen} onChange={(event) => setWantedWomen(event.target.value)} /></label>
+                            <label className="rounded-2xl bg-white/[0.055] p-3"><span className="text-xs font-bold text-slate-500">Chicas preferidas</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" id="plan-field-women" onInput={(event) => event.currentTarget.removeAttribute("aria-invalid")} value={wantedWomen} onChange={(event) => setWantedWomen(event.target.value)} /></label>
                             <label className="rounded-2xl bg-white/[0.055] p-3"><span className="text-xs font-bold text-slate-500">Chicos preferidos</span><input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="0" max="20" value={wantedMen} onChange={(event) => setWantedMen(event.target.value)} /></label>
                           </div>
                           <p className="mt-3 rounded-2xl bg-mint/10 px-3 py-2 text-xs font-black text-mint">
-                            {Math.max(Number(maxPeople || 0) - Number(wantedWomen || 0) - Number(wantedMen || 0), 0)} plaza(s) sin preferencia.
+                            {Math.max(Number(maxPeople || 0) - Number(wantedWomen || 0) - Number(wantedMen || 0), 0)} {i18n.getLocale?.() === "fr" ? "place(s) sans préférence." : "plaza(s) sin preferencia."}
                           </p>
                         </>
                       )}
@@ -1910,7 +1924,7 @@
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           <label className="rounded-2xl bg-black/20 p-3">
                             <span className="text-xs font-bold text-slate-500">Edad mínima</span>
-                            <input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="13" max="99" inputMode="numeric" value={wantedAgeMin} onChange={(event) => setWantedAgeMin(event.target.value)} placeholder="18" />
+                            <input className="mt-2 w-full bg-transparent text-2xl font-black text-white outline-none" type="number" min="13" max="99" inputMode="numeric" id="plan-field-age" onInput={(event) => event.currentTarget.removeAttribute("aria-invalid")} value={wantedAgeMin} onChange={(event) => setWantedAgeMin(event.target.value)} placeholder="18" />
                           </label>
                           <label className="rounded-2xl bg-black/20 p-3">
                             <span className="text-xs font-bold text-slate-500">Edad máxima</span>
@@ -1923,7 +1937,7 @@
                   <p className="mt-3 text-xs font-bold leading-5 text-slate-500">Cuando alguien se apunta, Donoss lo acepta automáticamente si aún queda sitio. Si el grupo ya está completo, esa persona entra en lista de espera y tú puedes decidir después.</p>
                   {status && mode === "create" && !status.includes("correctamente") && !status.includes("Editando") && (
                     <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
-                      {status}
+                      {i18n.text(status)}
                     </p>
                   )}
                   <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={isSaving} onClick={createPlan}>{isSaving ? "Guardando..." : editingPlanId ? "Guardar cambios" : planType === "free" ? "Publicar plan libre" : "Publicar plan"}</button>
@@ -2066,7 +2080,7 @@
                   </div>
                   {status && (status.includes("foto") || status.includes("Fotos") || status.includes("SQL")) && (
                     <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
-                      {status}
+                      {i18n.text(status)}
                     </p>
                   )}
 
