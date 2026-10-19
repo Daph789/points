@@ -1088,6 +1088,31 @@
   "Sin fecha, el plan seguirá visible hasta que lo elimines.": "Sans date, le plan restera visible jusqu’à sa suppression."
 });
 
+  Object.assign(phraseCopy.fr, {
+  "Tus fotos de planes se compartirán solo con la persona que creó este plan y participantes autorizados.": "Tes photos seront partagées uniquement avec la personne qui a créé ce plan et les participants autorisés.",
+  "¿Cómo te calificas?": "Comment te définis-tu ?",
+  "Lo guardaremos para que la próxima participación sea más rápida. Puedes cambiarlo luego en Perfil.": "Nous enregistrerons ton choix pour faciliter tes prochaines inscriptions. Tu pourras le modifier dans ton profil.",
+  "Chica": "Fille",
+  "Chico": "Garçon",
+  "Mensaje opcional...": "Message facultatif…",
+  "Fecha necesaria": "Date nécessaire",
+  "Indica tu fecha de nacimiento": "Indique ta date de naissance",
+  "Donoss calculará tu edad real para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.": "Donoss calculera ton âge pour vérifier si tu peux rejoindre ce groupe. La tranche d’âge demandée n’est pas affichée publiquement.",
+  "Fotos necesarias": "Photos nécessaires",
+  "Para participar, enseña quién eres": "Pour participer, montre qui tu es",
+  "Añade mínimo 2 fotos tuyas. Solo las verá la persona que creó el plan y la gente autorizada del mismo grupo.": "Ajoute au moins 2 photos de toi. Seuls le créateur du plan et les membres autorisés du groupe pourront les voir.",
+  "Añadir foto": "Ajouter une photo",
+  "Listo para participar": "Prêt à participer",
+  "Si cancelas, no se enviará tu solicitud porque la otra persona no podrá reconocerte.": "Si tu annules, ta demande ne sera pas envoyée, car l’autre personne ne pourra pas te reconnaître.",
+  "Guardar y participar": "Enregistrer et participer",
+  "Tu solicitud está en espera. Cuando te acepten, podrás ver mejor a la gente del grupo y chatear.": "Ta demande est en attente. Une fois accepté, tu pourras voir les participants et discuter avec le groupe.",
+  "El administrador te ha retirado de este plan. Ya no puedes ver el grupo completo ni chatear.": "L’administrateur t’a retiré de ce plan. Tu ne peux plus voir tous les participants ni discuter avec le groupe.",
+  "Aún no participas en este plan. Para ver los participantes y saber a qué se parecen, tienes que participar.": "Tu ne participes pas encore à ce plan. Rejoins-le pour voir les participants et leurs photos.",
+  "Participantes y solicitudes": "Participants et demandes",
+  "Para apuntarte necesitas mínimo 2 fotos tuyas. Solo las verá la gente autorizada del plan.": "Ajoute au moins 2 photos de toi pour t’inscrire. Seules les personnes autorisées du plan pourront les voir.",
+  "No se ha podido guardar tu edad.": "Impossible d’enregistrer ta date de naissance."
+});
+
   function text(value) {
     const source = String(value ?? "");
     const locale = getLocale();

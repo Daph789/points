@@ -2008,17 +2008,17 @@
                 <section className="mx-auto w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{i18n.text("Voy contigo")}</p>
                   <h2 className="mt-2 text-2xl font-black text-white">{planTitle(joinPlan)}</h2>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Tus fotos de planes se compartirán solo con la persona que creó este plan y participantes autorizados.</p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">{i18n.text("Tus fotos de planes se compartirán solo con la persona que creó este plan y participantes autorizados.")}</p>
                   <div className="mt-4 rounded-[26px] border border-white/10 bg-black/20 p-4">
-                    <p className="text-sm font-black text-white">¿Cómo te calificas?</p>
-                    <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Lo guardaremos para que la próxima participación sea más rápida. Puedes cambiarlo luego en Perfil.</p>
+                    <p className="text-sm font-black text-white">{i18n.text("¿Cómo te calificas?")}</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{i18n.text("Lo guardaremos para que la próxima participación sea más rápida. Puedes cambiarlo luego en Perfil.")}</p>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                     {[["woman", "Chica"], ["man", "Chico"]].map(([value, label]) => (
-                      <button key={value} className={`h-11 rounded-2xl text-sm font-black ${joinGender === value ? "bg-mint text-ink" : "bg-white/[0.06] text-slate-300 ring-1 ring-white/10"}`} onClick={() => setJoinGender(value)}>{label}</button>
+                      <button key={value} className={`h-11 rounded-2xl text-sm font-black ${joinGender === value ? "bg-mint text-ink" : "bg-white/[0.06] text-slate-300 ring-1 ring-white/10"}`} onClick={() => setJoinGender(value)}>{i18n.text(label)}</button>
                     ))}
                     </div>
                   </div>
-                  <textarea className="mt-3 min-h-24 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={joinNote} onChange={(event) => setJoinNote(event.target.value)} placeholder="Mensaje opcional..." />
+                  <textarea className="mt-3 min-h-24 w-full rounded-2xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/70" value={joinNote} onChange={(event) => setJoinNote(event.target.value)} placeholder={i18n.text("Mensaje opcional...")} />
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setJoinPlan(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" disabled={isSaving} onClick={submitJoin}>Enviar</button>
@@ -2030,9 +2030,9 @@
             {ageGatePlan && (
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 px-4 py-6 pb-36 backdrop-blur-xl">
                 <section className="mx-auto w-full max-w-md rounded-[34px] border border-mint/20 bg-[#0D111D] p-5 shadow-2xl">
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Fecha necesaria</p>
-                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">Indica tu fecha de nacimiento</h2>
-                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">Donoss calculará tu edad real para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.</p>
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{i18n.text("Fecha necesaria")}</p>
+                  <h2 className="mt-2 text-3xl font-black leading-tight text-white">{i18n.text("Indica tu fecha de nacimiento")}</h2>
+                  <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">{i18n.text("Donoss calculará tu edad real para comprobar si puedes entrar en este grupo. La franja buscada no se muestra públicamente.")}</p>
                   <div className="mt-4 grid grid-cols-[0.75fr_0.75fr_1fr] gap-2">
                     <input className="h-14 rounded-2xl border border-line bg-black/20 px-4 text-xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="31" inputMode="numeric" value={joinBirthDay} onChange={(event) => setJoinBirthDay(event.target.value)} placeholder="JJ" />
                     <input className="h-14 rounded-2xl border border-line bg-black/20 px-4 text-xl font-black text-white outline-none focus:border-mint/70" type="number" min="1" max="12" inputMode="numeric" value={joinBirthMonth} onChange={(event) => setJoinBirthMonth(event.target.value)} placeholder="MM" />
@@ -2051,13 +2051,13 @@
                 <section className="mx-auto w-full max-w-lg rounded-[36px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Fotos necesarias</p>
-                      <h2 className="mt-2 text-3xl font-black leading-tight text-white">Para participar, enseña quién eres</h2>
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{i18n.text("Fotos necesarias")}</p>
+                      <h2 className="mt-2 text-3xl font-black leading-tight text-white">{i18n.text("Para participar, enseña quién eres")}</h2>
                     </div>
                     <button className="grid h-11 w-11 place-items-center rounded-full bg-white/10 text-2xl font-black text-white" onClick={() => setPhotoGatePlan(null)}>×</button>
                   </div>
                   <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
-                    Añade mínimo 2 fotos tuyas. Solo las verá la persona que creó el plan y la gente autorizada del mismo grupo.
+                    {i18n.text("Añade mínimo 2 fotos tuyas. Solo las verá la persona que creó el plan y la gente autorizada del mismo grupo.")}
                   </p>
 
                   <div className="mt-5 flex gap-3 overflow-x-auto pb-2">
@@ -2071,7 +2071,7 @@
                       <label className="grid h-48 w-36 shrink-0 cursor-pointer place-items-center rounded-[30px] border border-dashed border-mint/35 bg-mint/10 text-center">
                         <span>
                           <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-mint text-ink"><NavIcon name="plus" /></span>
-                          <span className="mt-2 block text-xs font-black text-mint">Añadir foto</span>
+                          <span className="mt-2 block text-xs font-black text-mint">{i18n.text("Añadir foto")}</span>
                         </span>
                         <input className="hidden" type="file" accept="image/*" multiple onChange={handlePlanProfilePhotoUpload} />
                       </label>
@@ -2080,9 +2080,9 @@
 
                   <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4">
                     <p className={`text-sm font-black ${planProfilePhotos.length >= 2 ? "text-mint" : "text-coral"}`}>
-                      {planProfilePhotos.length >= 2 ? "Listo para participar" : `Faltan ${2 - planProfilePhotos.length} foto${2 - planProfilePhotos.length === 1 ? "" : "s"}`}
+                      {planProfilePhotos.length >= 2 ? i18n.text("Listo para participar") : i18n.getLocale?.() === "fr" ? `Il manque ${2 - planProfilePhotos.length} photo${2 - planProfilePhotos.length === 1 ? "" : "s"}` : `Faltan ${2 - planProfilePhotos.length} foto${2 - planProfilePhotos.length === 1 ? "" : "s"}`}
                     </p>
-                    <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Si cancelas, no se enviará tu solicitud porque la otra persona no podrá reconocerte.</p>
+                    <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{i18n.text("Si cancelas, no se enviará tu solicitud porque la otra persona no podrá reconocerte.")}</p>
                   </div>
                   {status && (status.includes("foto") || status.includes("Fotos") || status.includes("SQL")) && (
                     <p className="mt-4 rounded-2xl border border-coral/25 bg-coral/10 p-3 text-sm font-black leading-6 text-coral">
@@ -2092,7 +2092,7 @@
 
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => setPhotoGatePlan(null)}>Cancelar</button>
-                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-50" disabled={isSaving || planProfilePhotos.length < 2} onClick={savePhotosAndJoin}>Guardar y participar</button>
+                    <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-50" disabled={isSaving || planProfilePhotos.length < 2} onClick={savePhotosAndJoin}>{i18n.text("Guardar y participar")}</button>
                   </div>
                 </section>
               </div>
@@ -2257,7 +2257,7 @@
                           <div className="mb-3 flex items-end justify-between gap-3">
                             <div>
                               <p className="text-xs font-black uppercase tracking-[0.14em] text-mint">Gente del plan</p>
-                              <h3 className="mt-1 text-xl font-black text-white">Participantes y solicitudes</h3>
+                              <h3 className="mt-1 text-xl font-black text-white">{i18n.text("Participantes y solicitudes")}</h3>
                             </div>
                             <span className="rounded-full bg-white/[0.07] px-3 py-1 text-xs font-black text-slate-300 ring-1 ring-white/10">{members.length} personas</span>
                           </div>
@@ -2292,7 +2292,7 @@
                           ) : (
                             <div className="mb-4 rounded-[28px] border border-white/10 bg-white/[0.055] p-4">
                               <p className="text-sm font-black text-white">Participantes protegidos</p>
-                              <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{protectionDetail}</p>
+                              <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{i18n.text(protectionDetail)}</p>
                               {viewerStatus && <p className="mt-3 inline-flex rounded-full bg-black/25 px-3 py-2 text-xs font-black text-slate-200 ring-1 ring-white/10">Tu estado: {statusLabel(viewerStatus)}</p>}
                             </div>
                           )}
