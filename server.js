@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { validateChatMedia, registerChatMediaRoutes } from "./chat-media-server.js";
 import { registerOfficialLinkRoutes } from "./admin-official-links.js";
 import dotenv from "dotenv";
 import express from "express";
@@ -5966,9 +5967,9 @@ function canEditChatMessage(message) {
   return Date.now() - new Date(message.created_at).getTime() <= 15 * 60 * 1000;
 }
 
-const socialPlanMessageSelect = "id, plan_id, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
+const socialPlanMessageSelect = "id, plan_id, sender_id, body, media_type, reply_to_message_id, edited_at, deleted_at, created_at";
 const socialPlanMessageSelectLegacy = "id, plan_id, sender_id, body, edited_at, deleted_at, created_at";
-const sideGroupMessageSelect = "id, plan_id, group_status, sender_id, body, reply_to_message_id, edited_at, deleted_at, created_at";
+const sideGroupMessageSelect = "id, plan_id, group_status, sender_id, body, media_type, reply_to_message_id, edited_at, deleted_at, created_at";
 const sideGroupMessageSelectLegacy = "id, plan_id, group_status, sender_id, body, edited_at, deleted_at, created_at";
 const chatPageSize = 10;
 const chatUnreadContextSize = 4;
@@ -7667,7 +7668,9 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
     const access = await getSocialPlanChatAccess(request.params.id, profile);
     if (!access.allowed) return response.status(access.reason === "plan_not_found" ? 404 : 403).json({ error: access.reason });
 
-    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    let media;
+    try { media = validateChatMedia(request.body?.media_data_url); } catch (error) { return response.status(error.status).json({error: error.message}); }
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800) || (media ? " " : "");
     if (!body) return response.status(400).json({ error: "empty_message" });
     const replyToMessageId = normalizeMessageReplyId(request.body?.reply_to_message_id);
     let validReplyToMessageId = "";
@@ -7683,12 +7686,14 @@ app.post("/api/social-plans/:id/chat", async (request, response) => {
     }
 
     let insertPayload = { plan_id: access.plan.id, sender_id: profile.id, body };
+    if (media) Object.assign(insertPayload, media);
     if (validReplyToMessageId) insertPayload.reply_to_message_id = validReplyToMessageId;
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
       .insert(insertPayload)
       .select(socialPlanMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703" && media) return response.status(503).json({error: "chat_media_sql_missing"});
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_messages")
@@ -7795,7 +7800,7 @@ app.delete("/api/social-plans/:id/chat/:messageId", async (request, response) =>
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_messages")
-      .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: " ", media_type: null, media_data_url: null, deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(socialPlanMessageSelect)
       .maybeSingle();
@@ -8014,7 +8019,9 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
     const profile = await ensureProfileForUser(auth.user);
     const access = await getSideGroupAccess(request.params.id, profile, request.params.status);
     if (!access.allowed) return response.status(403).json({ error: access.reason });
-    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800);
+    let media;
+    try { media = validateChatMedia(request.body?.media_data_url); } catch (error) { return response.status(error.status).json({error: error.message}); }
+    const body = String(request.body?.body || "").replace(/\s+/g, " ").trim().slice(0, 800) || (media ? " " : "");
     if (!body) return response.status(400).json({ error: "empty_message" });
     const merge = await getAcceptedSideMerge(access.plan.id);
     const groupStatus = merge ? "merged" : access.status;
@@ -8034,12 +8041,14 @@ app.post("/api/social-plans/:id/side-group/:status/messages", async (request, re
     }
 
     let insertPayload = { plan_id: access.plan.id, group_status: groupStatus, sender_id: profile.id, body };
+    if (media) Object.assign(insertPayload, media);
     if (validReplyToMessageId) insertPayload.reply_to_message_id = validReplyToMessageId;
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
       .insert(insertPayload)
       .select(sideGroupMessageSelect)
       .maybeSingle();
+    if (error?.code === "42703" && media) return response.status(503).json({error: "chat_media_sql_missing"});
     if (error?.code === "42703") {
       const fallback = await supabaseAdmin
         .from("social_plan_side_group_messages")
@@ -8141,7 +8150,7 @@ app.delete("/api/social-plans/:id/side-group/:status/messages/:messageId", async
 
     let { data: message, error } = await supabaseAdmin
       .from("social_plan_side_group_messages")
-      .update({ body: " ", deleted_at: new Date().toISOString(), edited_at: null })
+      .update({ body: " ", media_type: null, media_data_url: null, deleted_at: new Date().toISOString(), edited_at: null })
       .eq("id", current.id)
       .select(sideGroupMessageSelect)
       .maybeSingle();
@@ -9570,6 +9579,8 @@ app.post("/api/admin/app-update", async (request, response) => {
 
   response.json({ update: data });
 });
+
+registerChatMediaRoutes(app, { supabaseAdmin, getAuthenticatedUser, ensureProfileForUser, getSocialPlanChatAccess, getSideGroupAccess, getAcceptedSideMerge });
 
 app.use(express.static(__dirname));
 

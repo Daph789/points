@@ -18,7 +18,7 @@
         if (version !== generation) return;
         const cursor = request.result;
         if (!cursor) return;
-        try { if (JSON.parse(cursor.key)[0] === user && !memory.has(cursor.key)) memory.set(cursor.key, cursor.value); } catch (_) {}
+        try { if (JSON.parse(cursor.key)[0] === user && !String(JSON.parse(cursor.key)[1]).startsWith('media:') && !memory.has(cursor.key)) memory.set(cursor.key, cursor.value); } catch (_) {}
         cursor.continue();
       };
     } catch (_) {}
@@ -64,7 +64,7 @@
     updateMemory(key, data) {
       const parent = parentCache();
       if (parent) parent.updateMemory(key, data);
-      try { if (JSON.parse(key)[0] === activeUser) data ? memory.set(key, data) : memory.delete(key); } catch (_) {}
+      try { if (JSON.parse(key)[0] === activeUser && !String(JSON.parse(key)[1]).startsWith('media:')) data ? memory.set(key, data) : memory.delete(key); } catch (_) {}
     },
     read: key => operation('get', key),
     remove(key) { this.updateMemory(key, null); return operation('delete', key); },

@@ -35,6 +35,7 @@
   <body class="min-h-screen text-white antialiased">
     <div id="root"></div>
     <script src="chat-cache.js"></script>
+    <script src="chat-media.js"></script>
     <script type="text/babel">
       const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
       const supabaseAnonKey =
@@ -164,6 +165,7 @@
         const [mergeRequests, setMergeRequests] = React.useState([]);
         const [merged, setMerged] = React.useState(false);
         const [otherCount, setOtherCount] = React.useState(0);
+        const [attachment, setAttachment] = React.useState(null);
         const [draft, setDraft] = React.useState("");
         const [status, setStatus] = React.useState("");
         const [isSaving, setIsSaving] = React.useState(false);
@@ -302,6 +304,9 @@
             if (!response.ok) throw new Error(data.error || "side_group_failed");
             cacheMetaRef.current = data;
             cacheReadyRef.current = true;
+            for (const item of data.messages || []) {
+              if (item.deleted_at && data.profile?.id) window.donossChatCache?.remove(window.donossChatCache.key(data.profile.id, "media:" + `/api/social-plans/${planId}/side-group/${sideStatus}/messages/${item.id}/media`));
+            }
             setProfile(data.profile || null);
             setPlan(data.plan || null);
             setMembers(data.members || []);
@@ -488,7 +493,8 @@
         async function sendMessage(event) {
           event.preventDefault();
           const body = draft.trim();
-          if (!body || isSaving) return;
+          if ((!body && !attachment) || isSaving) return;
+          const sendingAttachment = attachment;
           const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.pending ? replyingTo : null;
           const tempId = `tmp-${Date.now()}`;
           const temp = {
@@ -496,6 +502,8 @@
             local_key: tempId,
             sender_id: profile?.id,
             body,
+            media_type: sendingAttachment?.type || null,
+            local_media_url: sendingAttachment?.url || null,
             reply_to_message_id: replyTarget?.id || null,
             reply_to: replyTarget ? {
               id: replyTarget.id,
@@ -510,6 +518,7 @@
             read_by: [],
           };
           setDraft("");
+          setAttachment(null);
           setReplyingTo(null);
           forceScrollRef.current = true;
           setMessages((current) => [...current, temp]);
@@ -518,7 +527,7 @@
             const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/messages`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ body, reply_to_message_id: replyTarget?.id || null }),
+              body: JSON.stringify({ body, media_data_url: sendingAttachment?.url || null, reply_to_message_id: replyTarget?.id || null }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "side_message_failed");
@@ -530,7 +539,7 @@
             setMessages((current) => current.filter((item) => item.id !== temp.id));
             setDraft(body);
             setReplyingTo(replyTarget);
-            setStatus("No se ha podido enviar el mensaje.");
+            setStatus(error.message.startsWith("chat_media") || error.message === "invalid_chat_media" ? window.donossChatMedia.errorText(error.message) : "No se ha podido enviar el mensaje.");
           } finally {
             setIsSaving(false);
           }
@@ -571,6 +580,10 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "delete_message_failed");
             setMessages((current) => current.map((item) => item.id === data.message.id ? data.message : item));
+            if (profile?.id) {
+              const item = messageToDelete;
+              window.donossChatCache?.remove(window.donossChatCache.key(profile.id, "media:" + `/api/social-plans/${planId}/side-group/${sideStatus}/messages/${item.id}/media`));
+            }
             setMessageToDelete(null);
             setSelectedMessage(null);
           } catch (_error) {
@@ -786,6 +799,7 @@
                         >
                           {!mine && <p className="mb-1 text-xs font-black text-sun">{message.sender?.display_name || "Usuario Donoss"}</p>}
                           <ReplySnippet reply={message.reply_to} mine={mine} />
+                          {message.media_type && !message.deleted_at && <window.donossChatMedia.Message message={message} endpoint={`/api/social-plans/${planId}/side-group/${sideStatus}/messages/${message.id}/media`} token={token} userId={profile?.id} />}
                           <p className={`break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                           <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
                             <span>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
@@ -842,6 +856,7 @@
             </section>
 
             <form className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#080C16]/90 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6" onSubmit={sendMessage}>
+              <window.donossChatMedia.Picker value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSaving} />
               {replyingTo && (
                 <div className="mb-2 flex items-center gap-3 rounded-[24px] border border-sun/20 bg-sun/10 px-4 py-3">
                   <div className="min-w-0 flex-1 border-l-4 border-sun pl-3">
@@ -853,7 +868,7 @@
               )}
               <div className="flex items-end gap-2 rounded-[28px] border border-white/10 bg-white/[0.055] p-2">
                 <textarea className="max-h-32 min-h-12 flex-1 resize-none bg-transparent px-3 py-3 text-sm font-bold text-white outline-none placeholder:text-slate-500" value={draft} rows="1" onChange={(event) => setDraft(event.target.value)} placeholder="Escribe al grupo..." />
-                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sun text-xl font-black text-ink disabled:opacity-50" disabled={isSaving || !draft.trim()} type="submit">↑</button>
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sun text-xl font-black text-ink disabled:opacity-50" disabled={isSaving || (!draft.trim() && !attachment)} type="submit">↑</button>
               </div>
             </form>
 

@@ -39,6 +39,7 @@
     <div id="root"></div>
 
     <script src="chat-cache.js"></script>
+    <script src="chat-media.js"></script>
     <script type="text/babel">
       const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
       const supabaseAnonKey =
@@ -177,6 +178,7 @@
         const [profile, setProfile] = React.useState(initialCache?.profile || null);
         const [plan, setPlan] = React.useState(initialCache?.plan || null);
         const [messages, setMessages] = React.useState(initialCache?.messages || []);
+        const [attachment, setAttachment] = React.useState(null);
         const [draft, setDraft] = React.useState("");
         const [status, setStatus] = React.useState("");
         const [isSending, setIsSending] = React.useState(false);
@@ -327,6 +329,9 @@
             if (!response.ok) throw new Error(data.error || "plan_chat_failed");
             cacheMetaRef.current = data;
             cacheReadyRef.current = true;
+            for (const item of data.messages || []) {
+              if (item.deleted_at && data.profile?.id) window.donossChatCache?.remove(window.donossChatCache.key(data.profile.id, "media:" + `/api/social-plans/${planId}/chat/${item.id}/media`));
+            }
             setProfile(data.profile || null);
             setPlan(data.plan || null);
             setMessages((current) => applyPendingReactions(options.prepend ? prependOlderMessages(data.messages || [], current) : mergeMessagesWithPending(data.messages || [], current)));
@@ -509,7 +514,8 @@
         async function sendMessage(event) {
           event.preventDefault();
           const body = draft.trim();
-          if (!body || isSending) return;
+          if ((!body && !attachment) || isSending) return;
+          const sendingAttachment = attachment;
           const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.pending ? replyingTo : null;
           const temporaryId = `temp-${Date.now()}`;
           const optimisticMessage = {
@@ -518,6 +524,8 @@
             plan_id: planId,
             sender_id: profile?.id,
             body,
+            media_type: sendingAttachment?.type || null,
+            local_media_url: sendingAttachment?.url || null,
             reply_to_message_id: replyTarget?.id || null,
             reply_to: replyTarget ? {
               id: replyTarget.id,
@@ -533,6 +541,7 @@
           };
           setIsSending(true);
           setDraft("");
+          setAttachment(null);
           setReplyingTo(null);
           forceScrollRef.current = true;
           setMessages((current) => [...current, optimisticMessage]);
@@ -540,7 +549,7 @@
             const response = await fetch(`/api/social-plans/${planId}/chat`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ body, reply_to_message_id: replyTarget?.id || null }),
+              body: JSON.stringify({ body, media_data_url: sendingAttachment?.url || null, reply_to_message_id: replyTarget?.id || null }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "send_message_failed");
@@ -550,10 +559,11 @@
             window.setTimeout(() => loadChat(token, true), 450);
             window.setTimeout(() => scrollChatToBottom("smooth"), 80);
           } catch (error) {
+            setAttachment(sendingAttachment);
             setMessages((current) => current.filter((item) => item.id !== temporaryId));
             setDraft(body);
             setReplyingTo(replyTarget);
-            setStatus(friendlyChatError(error.message));
+            setStatus(error.message.startsWith("chat_media") || error.message === "invalid_chat_media" ? window.donossChatMedia.errorText(error.message) : friendlyChatError(error.message));
           } finally {
             setIsSending(false);
           }
@@ -595,6 +605,10 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "delete_message_failed");
             setMessages((current) => current.map((item) => item.id === data.message.id ? data.message : item));
+            if (profile?.id) {
+              const item = messageToDelete;
+              window.donossChatCache?.remove(window.donossChatCache.key(profile.id, "media:" + `/api/social-plans/${planId}/chat/${item.id}/media`));
+            }
             setMessageToDelete(null);
             setSelectedMessage(null);
             setStatus("");
@@ -771,6 +785,7 @@
                             </div>
                           )}
                           <ReplySnippet reply={message.reply_to} mine={mine} />
+                          {message.media_type && !message.deleted_at && <window.donossChatMedia.Message message={message} endpoint={`/api/social-plans/${planId}/chat/${message.id}/media`} token={token} userId={profile?.id} />}
                           <p className={`whitespace-pre-wrap break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                           <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
                             <span>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
@@ -833,6 +848,7 @@
             </section>
 
             <form className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#080C16]/90 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6" onSubmit={sendMessage}>
+              <window.donossChatMedia.Picker value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSending} />
               {replyingTo && (
                 <div className="mb-2 flex items-center gap-3 rounded-[24px] border border-mint/20 bg-mint/[0.08] px-4 py-3 shadow-glow">
                   <div className="min-w-0 flex-1 border-l-4 border-mint pl-3">
@@ -850,7 +866,7 @@
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder="Escribe un mensaje..."
                 />
-                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || !draft.trim()} type="submit">
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || (!draft.trim() && !attachment)} type="submit">
                   ↑
                 </button>
               </div>

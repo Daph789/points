@@ -20,3 +20,18 @@ test('undated free plans do not expire, dated plans still expire',()=>{
  assert.equal(context.isSocialPlanExpired({plan_type:'free',event_date:'2026-10-08'}),true);
  assert.equal(context.isSocialPlanExpired({plan_type:'free',event_date:'2026-10-10'}),false);
 });
+
+test('hashtag suggestions follow the selected country', () => {
+ const source=read('plans.html');
+ const start=source.indexOf('      function planHashtagsForCountry(');
+ const end=source.indexOf('      function readPlanDraft()',start);
+ const context=vm.createContext({});vm.runInContext(source.slice(start,end),context);
+ for(const country of ['FR','BE']){
+  const tags=context.planHashtagsForCountry(country);
+  assert.ok(tags.includes('#etudier'));assert.ok(tags.includes('#photos'));
+  assert.ok(!tags.includes('#estudiar'));assert.ok(!tags.includes('#donostia'));
+  assert.ok(tags.includes(country==='FR'?'#lille':'#tournai'));
+ }
+ const tags=context.planHashtagsForCountry('ES');
+ assert.ok(tags.includes('#estudiar'));assert.ok(!tags.includes('#lille'));assert.ok(!tags.includes('#tournai'));
+});

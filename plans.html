@@ -143,7 +143,12 @@
       const USER_FREE_PLAN_CATEGORIES = ["Estudiar", "Pasear", "Tomar algo", "Deporte", "Idiomas", "Fotos", "Meditar", "Otro"];
       const BUSINESS_FREE_PLAN_CATEGORIES = ["Evento", "Moda", "Trabajo", "Ayuda puntual", "Promoción", "Fotos", "Otro"];
       const planDraftKey = "donossQuedarPlanDraftV2";
-      const defaultPlanHashtags = ["#estudiar", "#deporte", "#fotos", "#idiomas", "#moda", "#trabajo", "#evento", "#biblioteca", "#parque", "#tournai", "#donostia", "#lille"];
+      function planHashtagsForCountry(country) {
+        const french = ["#etudier", "#sport", "#photos", "#langues", "#mode", "#travail", "#evenement", "#bibliotheque", "#parc", "#balade", "#sortie"];
+        if (country === "FR") return [...french, "#lille"];
+        if (country === "BE") return [...french, "#tournai"];
+        return ["#estudiar", "#deporte", "#fotos", "#idiomas", "#moda", "#trabajo", "#evento", "#biblioteca", "#parque", "#paseo", "#salir", "#donostia"];
+      }
 
       function readPlanDraft() {
         try {
@@ -504,7 +509,7 @@
               {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
                 <div className="mt-4 rounded-[26px] border border-white/10 bg-black/20 p-3">
-                  <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">{i18n.text("Gente que se ha apuntado")}</p>
+                  <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">{i18n.getLocale?.() === "fr" ? "Personnes inscrites" : "Gente que se ha apuntado"}</p>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">{i18n.text("Chicas")}</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
                     <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">{i18n.text("Chicos")}</p><p className="text-lg font-black text-white">{counts.men || 0}/{plan.wanted_men || 0}</p></div>
@@ -513,7 +518,7 @@
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl bg-black/20 p-3">
-                  <p className="text-xs font-bold text-slate-500">{i18n.text("Gente que se ha apuntado")}</p>
+                  <p className="text-xs font-bold text-slate-500">{i18n.getLocale?.() === "fr" ? "Personnes inscrites" : "Gente que se ha apuntado"}</p>
                   <p className="mt-1 text-2xl font-black text-white">{accepted}/{full}</p>
                 </div>
               )}
@@ -563,7 +568,7 @@
               meetDateLabel: "Jour de la rencontre",
               coverOptional: "Image de couverture optionnelle",
               descriptionHint: "Description (tu peux ajouter des hashtags à la fin, ex. #sport #bibliotheque)",
-              hashtagTitle: "Hashtags déjà utilisés",
+              hashtagTitle: "Suggestions de hashtags",
               draftRestored: "Brouillon récupéré automatiquement.",
             }
           : {
@@ -576,7 +581,7 @@
               meetDateLabel: "Día de la quedada",
               coverOptional: "Imagen de portada opcional",
               descriptionHint: "Descripción (puedes añadir hashtags al final, ej. #deporte #biblioteca)",
-              hashtagTitle: "Hashtags ya usados",
+              hashtagTitle: "Hashtags sugeridos",
               draftRestored: "Borrador recuperado automáticamente.",
             };
         const [profile, setProfile] = React.useState(null);
@@ -1563,11 +1568,12 @@
           ? plans.filter((plan) => !plan.is_owner && !planMatchesQuery(plan, planQuery)).slice(0, 6)
           : [];
         const editingPlan = ownedPlans.find((plan) => plan.id === editingPlanId);
+        const hashtagCountry = String(localStorage.getItem("donossCountryCode") || profile?.country_code || "ES").toUpperCase();
         const hashtagQuery = currentHashtagQuery(message);
         const hashtagSuggestions = hashtagQuery
           ? [...new Set([
-              ...extractHashtags(defaultPlanHashtags),
-              ...extractHashtags([...plans, ...ownedPlans, ...joinedPlans].flatMap((plan) => [plan.title, plan.message, plan.free_category, plan.location])),
+              ...planHashtagsForCountry(hashtagCountry),
+              ...extractHashtags([...plans, ...ownedPlans, ...joinedPlans].filter((plan) => String(plan.country_code || "").toUpperCase() === hashtagCountry).flatMap((plan) => [plan.title, plan.message, plan.free_category, plan.location])),
             ])]
               .filter((tag) => tag.startsWith(hashtagQuery) && tag !== hashtagQuery)
               .slice(0, 8)
