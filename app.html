@@ -9,6 +9,7 @@
     <script src="theme.js"></script>
     <script src="country-guard.js?v=20261008"></script>
     <script src="donoss-i18n.js"></script>
+    <script src="chat-cache.js"></script>
     <script defer src="region-launch-lock.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="activity-tracker.js"></script>
@@ -518,6 +519,15 @@
           } catch (_error) {}
           return false;
         }
+
+        function prepareChatCache() {
+          if (!window.supabase?.createClient) {
+            window.setTimeout(prepareChatCache, 80);
+            return;
+          }
+          window.donossChatCache?.attach(window.supabase.createClient(supabaseUrl, supabaseAnonKey));
+        }
+        prepareChatCache();
 
         function confirmSession() {
           if (sessionCheckPromise) return sessionCheckPromise;

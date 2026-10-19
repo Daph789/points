@@ -152,19 +152,20 @@
       const reactionEmojis = ["❤️", "😂", "🔥", "👏", "😮", "😢"];
 
       function App() {
+        const [initialCache] = React.useState(() => window.donossChatCache?.peek(`side:${planId}:${sideStatus}`));
         const cacheKeyRef = React.useRef(null);
         const cacheReadyRef = React.useRef(false);
         const cacheMetaRef = React.useRef({});
         const [token, setToken] = React.useState("");
-        const [profile, setProfile] = React.useState(null);
-        const [plan, setPlan] = React.useState(null);
-        const [members, setMembers] = React.useState([]);
-        const [messages, setMessages] = React.useState([]);
+        const [profile, setProfile] = React.useState(initialCache?.profile || null);
+        const [plan, setPlan] = React.useState(initialCache?.plan || null);
+        const [members, setMembers] = React.useState(initialCache?.members || []);
+        const [messages, setMessages] = React.useState(initialCache?.messages || []);
         const [mergeRequests, setMergeRequests] = React.useState([]);
         const [merged, setMerged] = React.useState(false);
         const [otherCount, setOtherCount] = React.useState(0);
         const [draft, setDraft] = React.useState("");
-        const [status, setStatus] = React.useState("Cargando grupo...");
+        const [status, setStatus] = React.useState("");
         const [isSaving, setIsSaving] = React.useState(false);
         const [showMembers, setShowMembers] = React.useState(false);
         const [selectedMessage, setSelectedMessage] = React.useState(null);
@@ -179,7 +180,7 @@
         const [reactionList, setReactionList] = React.useState(null);
         const [swipeState, setSwipeState] = React.useState({ id: "", x: 0, ready: false });
         const [unreadDividerId, setUnreadDividerId] = React.useState("");
-        const [hasMoreMessages, setHasMoreMessages] = React.useState(false);
+        const [hasMoreMessages, setHasMoreMessages] = React.useState(Boolean(initialCache?.has_more));
         const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
         const [showIntro, setShowIntro] = React.useState(false);
         const [isActiveGroup, setIsActiveGroup] = React.useState(!startsPrefetched);
@@ -259,9 +260,10 @@
         async function bootstrap() {
           const { data } = await supabaseClient.auth.getSession();
           const accessToken = data.session?.access_token;
-          if (!accessToken) return redirectToLogin();
+          if (!accessToken) { setMessages([]); setPlan(null); return redirectToLogin(); }
           setToken(accessToken);
           const userId = data.session?.user?.id;
+          if (initialCache && initialCache.profile?.id !== userId) { setMessages([]); setPlan(null); setProfile(null); }
           if (userId && window.donossChatCache) {
             cacheKeyRef.current = window.donossChatCache.key(userId, `side:${planId}:${sideStatus}`);
             const cached = await window.donossChatCache.read(cacheKeyRef.current);
