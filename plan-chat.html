@@ -694,7 +694,7 @@
               <div className="flex items-center gap-3">
                 <a className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-2xl font-black text-white ring-1 ring-white/10" href="plans.html" onClick={goBackToQuedar}>‹</a>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">Chat del grupo</p>
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-mint">{window.donossI18n.text("Chat del grupo")}</p>
                   <h1 className="truncate text-xl font-black text-white">{plan ? planTitle(plan) : "Quedar"}</h1>
                 </div>
                 <button className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/[0.07] text-white ring-1 ring-white/10" onClick={() => setShowParticipants(true)} aria-label="Ver participantes">
@@ -709,7 +709,7 @@
               {plan?.creator && (
                 <div className="mt-3 flex items-center gap-2 overflow-hidden rounded-2xl bg-white/[0.055] px-3 py-2">
                   <Avatar user={plan.creator} mine />
-                  <p className="truncate text-xs font-bold text-slate-300">Creado por <span className="text-white">{plan.creator.display_name || "Usuario Donoss"}</span></p>
+                  <p className="truncate text-xs font-bold text-slate-300">{window.donossI18n.text("Creado por")} <span className="text-white">{plan.creator.display_name || "Usuario Donoss"}</span></p>
                   {plan.creator.is_verified && verifiedBadge()}
                 </div>
               )}
@@ -839,8 +839,8 @@
                 })}
                 {!status && visibleMessages.length === 0 && (
                   <div className="rounded-[30px] border border-white/10 bg-white/[0.055] p-6 text-center">
-                    <p className="text-lg font-black text-white">Todavía no hay mensajes</p>
-                    <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Sé la primera persona en escribir al grupo.</p>
+                    <p className="text-lg font-black text-white">{window.donossI18n.text("Todavía no hay mensajes")}</p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{window.donossI18n.text("Sé la primera persona en escribir al grupo.")}</p>
                   </div>
                 )}
                 <div ref={bottomRef} className="h-1" />
@@ -848,11 +848,11 @@
             </section>
 
             <form className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#080C16]/90 px-4 py-3 backdrop-blur-2xl sm:-mx-6 sm:px-6" onSubmit={sendMessage}>
-              <window.donossChatMedia.Picker value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSending} />
+              <window.donossChatMedia.Preview value={attachment} onChange={setAttachment} disabled={isSending} />
               {replyingTo && (
                 <div className="mb-2 flex items-center gap-3 rounded-[24px] border border-mint/20 bg-mint/[0.08] px-4 py-3 shadow-glow">
                   <div className="min-w-0 flex-1 border-l-4 border-mint pl-3">
-                    <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">Respuesta a {replyingTo.sender?.display_name || "Usuario Donoss"}</p>
+                    <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">{window.donossI18n.text("Respuesta a")} {replyingTo.sender?.display_name || "Usuario Donoss"}</p>
                     <p className="truncate text-sm font-bold text-slate-200">{messageExcerpt(replyingTo)}</p>
                   </div>
                   <button className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white ring-1 ring-white/10" type="button" onClick={() => setReplyingTo(null)}>×</button>
@@ -864,8 +864,9 @@
                   value={draft}
                   rows="1"
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="Escribe un mensaje..."
+                  placeholder={window.donossI18n.text("Escribe un mensaje...")}
                 />
+                <window.donossChatMedia.Picker value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSending} />
                 <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || (!draft.trim() && !attachment)} type="submit">
                   ↑
                 </button>
@@ -877,7 +878,7 @@
                 <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black text-white">Personas que reaccionaron</p>
+                      <p className="text-sm font-black text-white">{window.donossI18n.text("Personas que reaccionaron")}</p>
                       <p className="mt-1 text-xs font-bold text-slate-500">{reactionList.reaction.emoji} {reactionList.reaction.count || 0} reacción(es)</p>
                     </div>
                     <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setReactionList(null)}>×</button>
@@ -947,8 +948,8 @@
                 <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Lecturas</p>
-                      <h2 className="mt-1 text-2xl font-black text-white">Visto por</h2>
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{window.donossI18n.text("Lecturas")}</p>
+                      <h2 className="mt-1 text-2xl font-black text-white">{window.donossI18n.text("Visto por")}</h2>
                     </div>
                     <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setReadListMessage(null)}>×</button>
                   </div>
@@ -969,8 +970,8 @@
                     ))}
                     {messageReadCount(readListMessage) === 0 && (
                       <div className="rounded-3xl border border-white/10 bg-white/[0.045] p-5 text-center">
-                        <p className="text-sm font-black text-white">Todavía nadie lo ha leído</p>
-                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">Cuando alguien del grupo abra el chat, aparecerá aquí.</p>
+                        <p className="text-sm font-black text-white">{window.donossI18n.text("Todavía nadie lo ha leído")}</p>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">{window.donossI18n.text("Cuando alguien del grupo abra el chat, aparecerá aquí.")}</p>
                       </div>
                     )}
                   </div>
@@ -983,8 +984,8 @@
                 <section className="w-full max-w-md rounded-[32px] border border-white/10 bg-[#0D111D] p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Participantes</p>
-                      <h2 className="mt-1 text-2xl font-black text-white">Miembros del chat</h2>
+                      <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{window.donossI18n.text("Participantes")}</p>
+                      <h2 className="mt-1 text-2xl font-black text-white">{window.donossI18n.text("Miembros del chat")}</h2>
                     </div>
                     <button className="grid h-10 w-10 place-items-center rounded-2xl bg-white/[0.07] text-xl font-black text-white ring-1 ring-white/10" onClick={() => setShowParticipants(false)}>×</button>
                   </div>
@@ -997,7 +998,7 @@
                             <p className="truncate text-sm font-black text-white">{user.display_name || "Usuario Donoss"}</p>
                             {user.is_verified && verifiedBadge()}
                           </div>
-                          <p className="truncate text-xs font-bold text-slate-500">{index === 0 ? "Creador/a del plan" : user.transaction_id || "Participante aceptado"}</p>
+                          <p className="truncate text-xs font-bold text-slate-500">{index === 0 ? window.donossI18n.text("Creador/a del plan") : user.transaction_id || window.donossI18n.text("Participante aceptado")}</p>
                         </div>
                       </div>
                     ))}
@@ -1009,7 +1010,7 @@
             {editingMessage && (
               <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm">
                 <form className="w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl" onSubmit={saveEditedMessage}>
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Modificar mensaje</p>
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{window.donossI18n.text("Modificar mensaje")}</p>
                   <textarea className="mt-4 min-h-32 w-full rounded-3xl border border-line bg-black/20 px-4 py-3 text-sm font-bold text-white outline-none focus:border-mint/60" value={editDraft} onChange={(event) => setEditDraft(event.target.value)} />
                   <div className="mt-4 grid grid-cols-2 gap-3">
                     <button type="button" className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setEditingMessage(null)}>Cancelar</button>
@@ -1023,9 +1024,9 @@
               <div className="fixed inset-0 z-50 grid place-items-center bg-black/55 px-4 backdrop-blur-sm">
                 <section className="w-full max-w-md rounded-[34px] border border-coral/20 bg-[#0D111D] p-5 text-center shadow-2xl">
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-coral/10 text-2xl font-black text-coral ring-1 ring-coral/25">!</div>
-                  <h2 className="mt-4 text-2xl font-black text-white">¿Eliminar mensaje?</h2>
+                  <h2 className="mt-4 text-2xl font-black text-white">{window.donossI18n.text("¿Eliminar mensaje?")}</h2>
                   {status && <p role="alert" className="mt-3 rounded-2xl bg-coral/10 p-3 text-sm font-bold text-coral">{status}</p>}
-                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">El mensaje desaparecerá del chat para mantener la conversación limpia.</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{window.donossI18n.text("El mensaje desaparecerá del chat para mantener la conversación limpia.")}</p>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     <button className="h-12 rounded-2xl bg-white/[0.07] text-sm font-black text-white ring-1 ring-white/10" onClick={() => setMessageToDelete(null)}>Cancelar</button>
                     <button className="h-12 rounded-2xl bg-coral text-sm font-black text-white" disabled={isSending} onClick={deleteMessage}>Eliminar</button>
@@ -1038,9 +1039,9 @@
               <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 px-4 backdrop-blur-sm">
                 <section className="w-full max-w-md rounded-[34px] border border-mint/20 bg-[#0D111D] p-5 text-center shadow-2xl">
                   <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-mint text-2xl font-black text-ink">i</div>
-                  <h2 className="mt-4 text-2xl font-black text-white">Chat del grupo</h2>
-                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">Aquí solo hablan las personas aceptadas y el creador del plan. Puedes ver participantes desde el icono superior.</p>
-                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => setShowIntro(false)}>Entendido</button>
+                  <h2 className="mt-4 text-2xl font-black text-white">{window.donossI18n.text("Chat del grupo")}</h2>
+                  <p className="mt-2 text-sm font-bold leading-6 text-slate-400">{window.donossI18n.text("Aquí solo hablan las personas aceptadas y el creador del plan. Puedes ver participantes desde el icono superior.")}</p>
+                  <button className="mt-5 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => setShowIntro(false)}>{window.donossI18n.text("Entendido")}</button>
                 </section>
               </div>
             )}

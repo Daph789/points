@@ -1113,6 +1113,44 @@
   "No se ha podido guardar tu edad.": "Impossible d’enregistrer ta date de naissance."
 });
 
+  Object.assign(phraseCopy.fr, {
+  "Te aceptaron en un plan": "Tu as été accepté dans un plan",
+  "Sigues en lista de espera": "Tu es toujours sur la liste d’attente",
+  "Ya no estás en este plan": "Tu ne fais plus partie de ce plan",
+  "Actualización de plan": "Mise à jour du plan",
+  "Aquí solo hablan las personas aceptadas y el creador del plan. Puedes ver participantes desde el icono superior.": "Seuls les participants acceptés et le créateur du plan peuvent discuter ici. L’icône en haut permet de voir les participants.",
+  "Todavía no hay mensajes": "Pas encore de messages",
+  "Sé la primera persona en escribir al grupo.": "Sois la première personne à écrire au groupe.",
+  "Creado por": "Créé par",
+  "Miembro": "Membre",
+  "Miembros": "Membres",
+  "Miembros del chat": "Membres du chat",
+  "Participantes": "Participants",
+  "Creador/a del plan": "Créateur du plan",
+  "Participante aceptado": "Participant accepté",
+  "Chat del grupo": "Discussion du groupe",
+  "Entendido": "Compris",
+  "Escribe un mensaje...": "Écris un message…",
+  "Respuesta a": "Réponse à",
+  "Personas que reaccionaron": "Personnes ayant réagi",
+  "Lecturas": "Lectures",
+  "Visto por": "Vu par",
+  "Todavía nadie lo ha leído": "Personne ne l’a encore lu",
+  "Cuando alguien del grupo abra el chat, aparecerá aquí.": "Les membres qui lisent ce message apparaîtront ici.",
+  "Modificar mensaje": "Modifier le message",
+  "¿Eliminar mensaje?": "Supprimer le message ?",
+  "El mensaje desaparecerá del chat para mantener la conversación limpia.": "Le message disparaîtra de la conversation.",
+  "Puedes modificarlo solo durante 15 minutos.": "Tu peux le modifier pendant 15 minutes après son envoi.",
+  "Modo Donoss: puedes moderar este mensaje sin aparecer como miembro.": "Mode Donoss : tu peux modérer ce message sans apparaître comme membre.",
+  "Aquí ves la gente de tu mismo estado. Puedes chatear y, si hay otro grupo disponible, proponer unirlos.": "Tu retrouves ici les personnes ayant le même statut que toi. Vous pouvez discuter et proposer de réunir les groupes si un autre groupe est disponible.",
+  "Podéis veros, hablar y organizaros juntos sin entrar en el grupo principal.": "Vous pouvez vous retrouver, discuter et vous organiser sans rejoindre le groupe principal.",
+  "Cargar mensajes anteriores": "Charger les messages précédents",
+  "Responder": "Répondre",
+  "Ver quién lo ha leído": "Voir qui l’a lu",
+  "Mensaje": "Message",
+  "Usuario Donoss": "Utilisateur Donoss"
+});
+
   function text(value) {
     const source = String(value ?? "");
     const locale = getLocale();

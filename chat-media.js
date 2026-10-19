@@ -26,10 +26,15 @@
       const file=event.target.files?.[0];event.target.value='';if(!file)return;
       setBusy(true);try{onChange(await prepare(file));}catch(error){onError(errorText(error.message));}finally{setBusy(false);}
     }
-    return h('div',{className:'mb-2 flex flex-wrap items-center gap-2'},
-      ...[['image/jpeg,image/png,image/webp',text('Photo','Foto')],['image/gif','GIF']].map(([accept,label])=>h('label',{key:label,className:'cursor-pointer rounded-2xl border border-white/20 bg-white/5 px-4 py-2 text-sm font-bold text-white'},label,h('input',{type:'file',accept,disabled:disabled||busy,onChange:choose,className:'sr-only','aria-label':text('Ajouter une ','Añadir una ')+label}))),
-      busy&&h('span',{className:'text-sm text-slate-400'},text('Préparation…','Preparando…')),
-      value&&h('div',{className:'flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2'},h('img',{src:value.url,alt:text('Aperçu avant envoi','Vista previa'),className:'h-24 w-24 rounded-xl object-contain'}),h('button',{type:'button',disabled,onClick:()=>onChange(null),className:'rounded-xl bg-white/10 px-4 py-2 text-sm text-white'},text('Retirer','Quitar'))));
+    const input = React.useRef(null);
+    return h(React.Fragment,null,
+      h('input',{ref:input,type:'file',accept:'image/jpeg,image/png,image/webp,image/gif',disabled:disabled||busy,onChange:choose,hidden:true}),
+      h('button',{type:'button',disabled:disabled||busy,onClick:()=>input.current?.click(),className:'grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-slate-300 hover:bg-white/10 disabled:opacity-50',title:text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-label':text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-busy':busy},
+        h('svg',{width:24,height:24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true},h('rect',{x:3,y:3,width:18,height:18,rx:4}),h('circle',{cx:8.5,cy:8.5,r:1.5}),h('path',{d:'m21 15-5-5L5 21'}))));
+  }
+  function Preview({value,onChange,disabled}) {
+    if (!value) return null;
+    return h('div',{className:'mb-2 flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2'},h('img',{src:value.url,alt:text('Aperçu avant envoi','Vista previa'),className:'h-24 w-24 rounded-xl object-contain'}),h('button',{type:'button',disabled,onClick:()=>onChange(null),className:'rounded-xl bg-white/10 px-4 py-2 text-sm text-white'},text('Retirer','Quitar')));
   }
   function Message({message,endpoint,token,userId}) {
     const [url,setUrl]=React.useState(message.local_media_url||'');const [failed,setFailed]=React.useState(false);const [expanded,setExpanded]=React.useState(false);
@@ -49,5 +54,5 @@
     if(!url)return h('div',{className:'my-2 rounded-xl bg-black/10 p-4 text-xs',role:'status'},failed?text('Image indisponible','Imagen no disponible'):text('Chargement de l’image…','Cargando imagen…'));
     return h(React.Fragment,null,h('button',{type:'button',onPointerDown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();setExpanded(true);},className:'mt-2 block', 'aria-label':text('Agrandir l’image','Ampliar imagen')},h('img',{src:url,alt:message.media_type==='image/gif'?'GIF':text('Image du message','Imagen del mensaje'),className:'max-h-72 max-w-full rounded-2xl object-contain'})),expanded&&ReactDOM.createPortal(h('div',{className:'fixed inset-0 z-[100] grid place-items-center bg-black/95 p-5',role:'dialog','aria-modal':true,'aria-label':text('Image agrandie','Imagen ampliada'),onClick:()=>setExpanded(false)},h('button',{autoFocus:true,type:'button',onClick:()=>setExpanded(false),onKeyDown:e=>{if(e.key==='Escape')setExpanded(false);},className:'absolute right-4 top-4 rounded-full bg-white/20 px-5 py-3 text-white','aria-label':text('Fermer','Cerrar')},'×'),h('img',{src:url,alt:'',className:'max-h-[85dvh] max-w-full object-contain'})),document.body));
   }
-  window.donossChatMedia={Picker,Message,errorText};
+  window.donossChatMedia={Picker,Preview,Message,errorText};
 })();
