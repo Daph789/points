@@ -996,6 +996,8 @@
     },
   };
 
+  Object.assign(phraseCopy.fr, {"Fecha abierta": "Date à définir", "Ver grupo": "Voir le groupe", "Ver grupo alternativo": "Voir le groupe alternatif", "Ver grupo aparte": "Voir le groupe séparé", "Tu plan": "Ton plan", "Voy contigo": "Je participe", "Abierto": "Ouvert", "Confirmado": "Confirmé", "Cancelado": "Annulé", "Aceptado": "Accepté", "Aceptados": "Acceptés", "Lista de espera": "Liste d’attente", "Retirado": "Retiré", "Caducado": "Expiré", "Gente que se ha apuntado": "Personnes inscrites", "Chicas": "Filles", "Chicos": "Garçons", "Sin pref.": "Sans préf.", "Fotos de la persona": "Photos de la personne", "Fotos visibles solo para personas autorizadas": "Photos visibles uniquement par les personnes autorisées", "Dentro del grupo": "Dans le groupe", "Todavía no hay personas aceptadas.": "Aucune personne acceptée pour le moment.", "Billete externo": "Billet externe", "Actualización": "Mise à jour"});
+
   Object.assign(phraseCopy.fr, {
   "La base de datos necesita la actualización para publicar sin fecha. Contacta con Donoss.": "Une mise à jour de la base est nécessaire pour publier sans date. Contacte Donoss.",
   "Estudiar": "Étudier",

@@ -267,7 +267,7 @@
 
       function statusLabel(value) {
         const labels = { open: "Abierto", confirmed: "Confirmado", cancelled: "Cancelado", accepted: "Aceptado", waiting: "Lista de espera", removed: "Retirado" };
-        return labels[value] || value || "";
+        return i18n.text(labels[value] || value || "");
       }
 
       function genderLabel(value) {
@@ -469,20 +469,20 @@
               {hasUnread && <span className={`absolute ${photos[0] ? "right-4 top-[7.25rem]" : "right-4 top-4"} z-10 rounded-full bg-coral px-3 py-1 text-xs font-black text-white shadow-2xl shadow-coral/30`}>+{Math.min(chatUnreadCount + sideUnreadCount + updateUnreadCount, 9)}</span>}
               <div className="absolute bottom-4 left-4 right-4">
                 <div className={`${photos[0] ? "pr-28" : ""} flex flex-wrap items-center gap-2`}>
-                  <span className={`rounded-full px-3 py-1 text-xs font-black ${free ? "bg-violet text-white" : plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{free ? "Plan libre" : statusLabel(plan.status)}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${free ? "bg-violet text-white" : plan.status === "confirmed" ? "bg-sun text-ink" : "bg-mint text-ink"}`}>{free ? i18n.text("Plan libre") : statusLabel(plan.status)}</span>
                   {!free && plan.status === "confirmed" && <span className="rounded-full bg-sun px-3 py-1 text-xs font-black text-ink">{statusLabel(plan.status)}</span>}
-                  {plan.is_expired && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">Caducado</span>}
-                  <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">{accepted}/{full} aceptados</span>
+                  {plan.is_expired && <span className="rounded-full bg-coral px-3 py-1 text-xs font-black text-white">{i18n.text("Caducado")}</span>}
+                  <span className="rounded-full bg-black/45 px-3 py-1 text-xs font-black text-white backdrop-blur">{accepted}/{full} {i18n.text("aceptados")}</span>
                   {plan.viewer_member && <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-black text-white">{statusLabel(plan.viewer_member.status)}</span>}
                 </div>
                 <h2 className={`${photos[0] ? "pr-16" : ""} mt-3 line-clamp-2 text-[1.38rem] font-black leading-[1.08] text-white sm:text-3xl`}>{planTitle(plan)}</h2>
-                <p className="mt-1 truncate text-sm font-bold text-slate-200">{free ? `${plan.free_category || "Plan libre"} · ${plan.event_date ? formatDate(plan.event_date) : "Fecha abierta"}` : (plan.purchase?.offer?.title || "Billete Donoss")}</p>
+                <p className="mt-1 truncate text-sm font-bold text-slate-200">{free ? `${i18n.text(plan.free_category || "Plan libre")} · ${plan.event_date ? formatDate(plan.event_date) : i18n.text("Fecha abierta")}` : (plan.purchase?.offer?.title || "Billete Donoss")}</p>
               </div>
             </div>
               <div className="p-4">
               {visibleEvent && (
                 <div className="mb-3 rounded-[24px] border border-coral/25 bg-coral/10 p-3">
-                  <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">Actualización</p>
+                  <p className="text-xs font-black uppercase tracking-[0.12em] text-coral">{i18n.text("Actualización")}</p>
                   <p className="mt-1 text-sm font-black text-white">{updateLabel}</p>
                   <p className="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-300">{updateDetail}</p>
                 </div>
@@ -504,24 +504,24 @@
               {plan.message && <p className="mt-3 overflow-hidden text-ellipsis text-sm font-semibold leading-6 text-slate-300" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{plan.message}</p>}
               {hasPreference ? (
                 <div className="mt-4 rounded-[26px] border border-white/10 bg-black/20 p-3">
-                  <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Gente que se ha apuntado</p>
+                  <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">{i18n.text("Gente que se ha apuntado")}</p>
                   <div className="grid grid-cols-3 gap-2">
-                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicas</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
-                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">Chicos</p><p className="text-lg font-black text-white">{counts.men || 0}/{plan.wanted_men || 0}</p></div>
-                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">Sin pref.</p><p className="text-lg font-black text-white">{Math.max(accepted - Math.min(counts.women || 0, plan.wanted_women || 0) - Math.min(counts.men || 0, plan.wanted_men || 0), 0)}/{plan.wanted_open || 0}</p></div>
+                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">{i18n.text("Chicas")}</p><p className="text-lg font-black text-white">{counts.women || 0}/{plan.wanted_women || 0}</p></div>
+                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">{i18n.text("Chicos")}</p><p className="text-lg font-black text-white">{counts.men || 0}/{plan.wanted_men || 0}</p></div>
+                    <div className="rounded-2xl bg-white/[0.055] p-3 text-center"><p className="text-xs font-bold text-slate-500">{i18n.text("Sin pref.")}</p><p className="text-lg font-black text-white">{Math.max(accepted - Math.min(counts.women || 0, plan.wanted_women || 0) - Math.min(counts.men || 0, plan.wanted_men || 0), 0)}/{plan.wanted_open || 0}</p></div>
                   </div>
                 </div>
               ) : (
                 <div className="mt-4 rounded-2xl bg-black/20 p-3">
-                  <p className="text-xs font-bold text-slate-500">Gente que se ha apuntado</p>
+                  <p className="text-xs font-bold text-slate-500">{i18n.text("Gente que se ha apuntado")}</p>
                   <p className="mt-1 text-2xl font-black text-white">{accepted}/{full}</p>
                 </div>
               )}
               <div className={`mt-4 grid gap-2 ${plan.is_owner && plan.status === "open" ? "grid-cols-3" : "grid-cols-2"}`}>
-                <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => onOpen(plan)}>Ver grupo</button>
-                {plan.is_owner && plan.status === "open" && <button className="h-12 rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" onClick={() => onEdit(plan)}>Editar</button>}
+                <button className="h-12 rounded-2xl border border-white/10 bg-white/[0.07] text-sm font-black text-white" onClick={() => onOpen(plan)}>{i18n.text("Ver grupo")}</button>
+                {plan.is_owner && plan.status === "open" && <button className="h-12 rounded-2xl border border-mint/25 bg-mint/10 text-sm font-black text-mint" onClick={() => onEdit(plan)}>{i18n.text("Editar")}</button>}
                 <button className="h-12 rounded-2xl bg-mint text-sm font-black text-ink shadow-glow disabled:opacity-60" disabled={plan.is_owner || plan.viewer_member || plan.status !== "open"} onClick={() => onJoin(plan)}>
-                  {plan.viewer_member ? statusLabel(plan.viewer_member.status) : plan.is_owner ? "Tu plan" : "Voy contigo"}
+                  {plan.viewer_member ? statusLabel(plan.viewer_member.status) : plan.is_owner ? i18n.text("Tu plan") : i18n.text("Voy contigo")}
                 </button>
               </div>
               {canChat && (
@@ -531,7 +531,7 @@
                   onPointerEnter={() => onWarmChat?.(plan)}
                   onTouchStart={() => onWarmChat?.(plan)}
                 >
-                  Chatear con el grupo{chatUnreadCount > 0 ? ` · +${chatUnreadCount > 9 ? "9" : chatUnreadCount}` : ""}
+                  {i18n.text("Chatear con el grupo")}{chatUnreadCount > 0 ? ` · +${chatUnreadCount > 9 ? "9" : chatUnreadCount}` : ""}
                 </button>
               )}
               {canOpenSideGroup && (
@@ -541,7 +541,7 @@
                   onPointerEnter={() => onWarmSideGroup?.(plan, sideStatus)}
                   onTouchStart={() => onWarmSideGroup?.(plan, sideStatus)}
                 >
-                  {sideStatus === "waiting" ? "Ver grupo alternativo" : "Ver grupo aparte"}{sideUnreadCount > 0 ? ` · +${sideUnreadCount > 9 ? "9" : sideUnreadCount}` : ""}
+                  {sideStatus === "waiting" ? i18n.text("Ver grupo alternativo") : i18n.text("Ver grupo aparte")}{sideUnreadCount > 0 ? ` · +${sideUnreadCount > 9 ? "9" : sideUnreadCount}` : ""}
                 </button>
               )}
             </div>
@@ -2000,7 +2000,7 @@
             {joinPlan && (
               <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 pb-36 backdrop-blur-xl">
                 <section className="mx-auto w-full max-w-md rounded-[34px] border border-white/10 bg-[#0D111D] p-5 shadow-2xl">
-                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">Voy contigo</p>
+                  <p className="text-sm font-black uppercase tracking-[0.14em] text-mint">{i18n.text("Voy contigo")}</p>
                   <h2 className="mt-2 text-2xl font-black text-white">{planTitle(joinPlan)}</h2>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">Tus fotos de planes se compartirán solo con la persona que creó este plan y participantes autorizados.</p>
                   <div className="mt-4 rounded-[26px] border border-white/10 bg-black/20 p-4">
@@ -2150,7 +2150,7 @@
 
                   {photos.length > 0 && (
                     <div className="mt-5">
-                      <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">Fotos de la persona</p>
+                      <p className="mb-3 text-xs font-black uppercase tracking-[0.14em] text-slate-500">{i18n.text("Fotos de la persona")}</p>
                       <div className="flex snap-x snap-mandatory justify-start gap-3 overflow-x-auto scroll-smooth pb-2 sm:justify-center">
                         {photos.map((photo, index) => (
                           <div key={`${photo.slice(0, 30)}-${index}`} className="relative h-72 w-[86%] max-w-sm shrink-0 snap-center overflow-hidden rounded-[32px] border border-white/10 bg-black/20 sm:w-72">
@@ -2281,7 +2281,7 @@
 
                           {canChat ? (
                             <button className="mb-4 h-12 w-full rounded-2xl bg-mint text-sm font-black text-ink shadow-glow" onClick={() => openPlanChat(detailPlan)}>
-                              Chatear con el grupo{chatUnreadCountForPlan(detailPlan.id) > 0 ? ` · +${chatUnreadCountForPlan(detailPlan.id) > 9 ? "9" : chatUnreadCountForPlan(detailPlan.id)}` : ""}
+                              {i18n.text("Chatear con el grupo")}{chatUnreadCountForPlan(detailPlan.id) > 0 ? ` · +${chatUnreadCountForPlan(detailPlan.id) > 9 ? "9" : chatUnreadCountForPlan(detailPlan.id)}` : ""}
                             </button>
                           ) : (
                             <div className="mb-4 rounded-[28px] border border-white/10 bg-white/[0.055] p-4">
@@ -2301,7 +2301,7 @@
                                     ))
                                   ) : (
                                     <div className="grid h-36 w-full place-items-center rounded-[24px] bg-white/[0.055] text-center">
-                                      <span className="px-4 text-xs font-bold leading-5 text-slate-500">Fotos visibles solo para personas autorizadas</span>
+                                      <span className="px-4 text-xs font-bold leading-5 text-slate-500">{i18n.text("Fotos visibles solo para personas autorizadas")}</span>
                                     </div>
                                   )}
                                 </div>
