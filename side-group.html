@@ -34,6 +34,7 @@
   </head>
   <body class="min-h-screen text-white antialiased">
     <div id="root"></div>
+    <script src="chat-cache.js"></script>
     <script type="text/babel">
       const supabaseUrl = "https://pwpvdpajkaljibytboka.supabase.co";
       const supabaseAnonKey =
@@ -151,6 +152,9 @@
       const reactionEmojis = ["❤️", "😂", "🔥", "👏", "😮", "😢"];
 
       function App() {
+        const cacheKeyRef = React.useRef(null);
+        const cacheReadyRef = React.useRef(false);
+        const cacheMetaRef = React.useRef({});
         const [token, setToken] = React.useState("");
         const [profile, setProfile] = React.useState(null);
         const [plan, setPlan] = React.useState(null);
@@ -179,6 +183,10 @@
         const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
         const [showIntro, setShowIntro] = React.useState(false);
         const [isActiveGroup, setIsActiveGroup] = React.useState(!startsPrefetched);
+        React.useEffect(() => {
+          if (!cacheReadyRef.current || !cacheKeyRef.current || !profile || !plan) return;
+          window.donossChatCache?.write(cacheKeyRef.current, { ...cacheMetaRef.current, profile, plan, messages, has_more: hasMoreMessages });
+        }, [messages, profile, plan, hasMoreMessages]);
         const listRef = React.useRef(null);
         const bottomRef = React.useRef(null);
         const forceScrollRef = React.useRef(false);
@@ -253,6 +261,22 @@
           const accessToken = data.session?.access_token;
           if (!accessToken) return redirectToLogin();
           setToken(accessToken);
+          const userId = data.session?.user?.id;
+          if (userId && window.donossChatCache) {
+            cacheKeyRef.current = window.donossChatCache.key(userId, `side:${planId}:${sideStatus}`);
+            const cached = await window.donossChatCache.read(cacheKeyRef.current);
+            if (cached?.profile?.id === userId && cached.plan && Array.isArray(cached.messages)) {
+              setProfile(cached.profile);
+              setPlan(cached.plan);
+              setMessages(cached.messages);
+              setHasMoreMessages(Boolean(cached.has_more));
+              setStatus("");
+              cacheMetaRef.current = cached;
+              setMembers(cached.members || []);
+              window.setTimeout(() => scrollChatToBottom("auto"), 0);
+            }
+          }
+
           if (startsPrefetched) {
             setStatus("");
             return;
@@ -267,7 +291,15 @@
             const query = options.before ? `?before=${encodeURIComponent(options.before)}` : "";
             const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}${query}`, { headers: { Authorization: `Bearer ${accessToken}` } });
             const data = await response.json().catch(() => ({}));
+            if ([401, 403, 404].includes(response.status)) {
+              cacheReadyRef.current = false;
+              if (cacheKeyRef.current) window.donossChatCache?.remove(cacheKeyRef.current);
+              setMessages([]);
+              setPlan(null);
+            }
             if (!response.ok) throw new Error(data.error || "side_group_failed");
+            cacheMetaRef.current = data;
+            cacheReadyRef.current = true;
             setProfile(data.profile || null);
             setPlan(data.plan || null);
             setMembers(data.members || []);
