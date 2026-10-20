@@ -151,7 +151,10 @@
         const confirmedIds = new Set(confirmed.map((message) => message.id).filter(Boolean));
         const hydratedConfirmed = confirmed.map((message) => {
           const local = currentById.get(message.id);
-          return local?.local_key ? { ...message, local_key: local.local_key } : message;
+          return local ? { ...message,
+            local_key: local.local_key,
+            local_media_url: !message.deleted_at && message.media_type ? local.local_media_url : null,
+          } : message;
         });
         const localStillNeeded = current.filter((message) => {
           if (message.pending) return Date.now() - new Date(message.created_at).getTime() < 30000;
@@ -557,7 +560,7 @@
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "send_message_failed");
             forceScrollRef.current = true;
-            setMessages((current) => current.map((item) => item.id === temporaryId ? { ...data.message, local_key: temporaryId, local_confirmed_at: new Date().toISOString() } : item).filter(Boolean));
+            setMessages((current) => current.map((item) => item.id === temporaryId ? { ...data.message, local_media_url: item.local_media_url, local_key: temporaryId, local_confirmed_at: new Date().toISOString() } : item).filter(Boolean));
             setStatus("");
             window.setTimeout(() => loadChat(token, true), 450);
             window.setTimeout(() => scrollChatToBottom("smooth"), 80);

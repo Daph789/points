@@ -8,10 +8,20 @@
   }
   function readFile(file) { return new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); }); }
   async function prepare(file) {
-    if (!file || !['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)) throw Error('invalid_chat_media');
-    if (file.size > (file.type === 'image/gif' ? 3 : 20) * 1024 * 1024) throw Error('chat_media_too_large');
-    const url=await readFile(file);
-    if (file.type === 'image/gif') return {url, type:file.type};
+    if (!file) throw Error('invalid_chat_media');
+    // Mobile file providers can omit or mislabel the MIME type. Inspect the bytes.
+    const bytes=new Uint8Array(await file.slice(0,12).arrayBuffer());
+    const starts=(signature)=>signature.every((byte,index)=>bytes[index]===byte);
+    const ascii=String.fromCharCode(...bytes);
+    const type=/^GIF8[79]a/.test(ascii)?'image/gif'
+      :starts([255,216,255])?'image/jpeg'
+      :starts([137,80,78,71,13,10,26,10])?'image/png'
+      :ascii.startsWith('RIFF')&&ascii.slice(8,12)==='WEBP'?'image/webp':'';
+    if (!type) throw Error('invalid_chat_media');
+    if (file.size > (type === 'image/gif' ? 3 : 20) * 1024 * 1024) throw Error('chat_media_too_large');
+    const raw=await readFile(file);
+    const url=`data:${type};base64,${raw.slice(raw.indexOf(',')+1)}`;
+    if (type === 'image/gif') return {url, type};
     const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=url;});
     const scale=Math.min(1,1600/Math.max(image.width,image.height));
     const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(image.width*scale));canvas.height=Math.max(1,Math.round(image.height*scale));
@@ -22,13 +32,15 @@
   }
   function Picker({value,onChange,onError,disabled}) {
     const [busy,setBusy]=React.useState(false);
+    const [error,setError]=React.useState('');
     async function choose(event) {
       const file=event.target.files?.[0];event.target.value='';if(!file)return;
-      setBusy(true);try{onChange(await prepare(file));}catch(error){onError(errorText(error.message));}finally{setBusy(false);}
+      setBusy(true);setError('');try{onChange(await prepare(file));}catch(error){const message=errorText(error.message);setError(message);onError?.(message);}finally{setBusy(false);}
     }
     const input = React.useRef(null);
-    return h(React.Fragment,null,
-      h('input',{ref:input,type:'file',accept:'image/jpeg,image/png,image/webp,image/gif',disabled:disabled||busy,onChange:choose,hidden:true}),
+    return h('div',{className:'relative shrink-0'},
+      error&&h('div',{role:'alert',className:'absolute bottom-full right-0 z-50 mb-3 w-64 rounded-2xl border border-red-400/30 bg-slate-900 p-3 text-sm text-red-300 shadow-xl'},error),
+      h('input',{ref:input,type:'file',accept:'image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif',disabled:disabled||busy,onChange:choose,hidden:true}),
       h('button',{type:'button',disabled:disabled||busy,onClick:()=>input.current?.click(),className:'grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-slate-300 hover:bg-white/10 disabled:opacity-50',title:text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-label':text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-busy':busy},
         h('svg',{width:24,height:24,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.8,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true},h('rect',{x:3,y:3,width:18,height:18,rx:4}),h('circle',{cx:8.5,cy:8.5,r:1.5}),h('path',{d:'m21 15-5-5L5 21'}))));
   }
