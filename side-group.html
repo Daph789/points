@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Donoss | Grupo alternativo</title>
+    <script src="donoss-i18n.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -33,7 +34,7 @@
     </style>
   </head>
   <body class="min-h-screen text-white antialiased">
-    <div id="root"></div>
+    <div id="root"><div aria-busy="true" aria-label="Chat" style="max-width:768px;margin:24px auto;padding:24px"><div style="height:48px;width:60%;background:#182331;border-radius:18px"></div><div style="height:80px;width:72%;margin-top:32px;background:#182331;border-radius:22px"></div><div style="height:60px;width:58%;margin:16px 0 0 auto;background:#182331;border-radius:22px"></div></div></div>
     <script src="chat-cache.js"></script>
     <script src="chat-media.js"></script>
     <script type="text/babel">
@@ -714,6 +715,7 @@
               </div>
             </header>
 
+            {!plan && !status && <div role="status" aria-busy="true" className="my-5 space-y-3"><span className="sr-only">{window.donossI18n.getLocale() === "fr" ? "Ouverture de la conversation…" : "Abriendo conversación…"}</span><div className="h-20 w-3/4 rounded-3xl bg-white/[0.055] motion-safe:animate-pulse" /><div className="ml-auto h-16 w-2/3 rounded-3xl bg-white/[0.055] motion-safe:animate-pulse" /></div>}
             {status && <p className="mt-4 rounded-3xl border border-white/10 bg-white/[0.055] p-4 text-sm font-black leading-6 text-slate-300">{status}</p>}
 
             <section className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
