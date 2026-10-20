@@ -222,12 +222,13 @@
         }, []);
 
         React.useEffect(() => {
+          if (!isActiveChat) return;
           const introKey = `donos-plan-chat-intro-${planId}`;
           if (!window.localStorage.getItem(introKey)) {
             setShowIntro(true);
             window.localStorage.setItem(introKey, "1");
           }
-        }, []);
+        }, [isActiveChat]);
 
         React.useEffect(() => {
           function handleMessage(event) {
@@ -240,7 +241,7 @@
             if (event.data?.type === "donos:activate-chat") {
               isActiveRef.current = true;
               setIsActiveChat(true);
-              loadChat(token, true, { markRead: true });
+              if (token) loadChat(token, true, { markRead: true });
               return;
             }
             if (event.data?.type === "donos:refresh-chat") loadChat(token, true);
@@ -254,6 +255,10 @@
           const interval = window.setInterval(() => loadChat(token, true), 6000);
           return () => window.clearInterval(interval);
         }, [token, planId, isActiveChat]);
+
+        React.useEffect(() => {
+          if (token && isActiveChat && !loadingChatRef.current) loadChat(token, true, { markRead: true });
+        }, [token, isActiveChat]);
 
         function scrollChatToBottom(behavior = "smooth") {
           window.requestAnimationFrame(() => {
@@ -287,12 +292,12 @@
           const { data: sessionData } = await supabaseClient.auth.getSession();
           const accessToken = sessionData.session?.access_token;
           if (!accessToken) { setMessages([]); setPlan(null); return redirectToLogin(); }
-          setToken(accessToken);
           const userId = sessionData.session?.user?.id;
           if (initialCache && initialCache.profile?.id !== userId) { setMessages([]); setPlan(null); setProfile(null); }
           if (userId && window.donossChatCache) {
             cacheKeyRef.current = window.donossChatCache.key(userId, `plan:${planId}`);
-            const cached = await window.donossChatCache.read(cacheKeyRef.current);
+            const memorySnapshot = window.donossChatCache.peek(`plan:${planId}`);
+            const cached = memorySnapshot?.profile?.id === userId ? memorySnapshot : await window.donossChatCache.read(cacheKeyRef.current);
             if (cached?.profile?.id === userId && cached.plan && Array.isArray(cached.messages)) {
               setProfile(cached.profile);
               setPlan(cached.plan);
@@ -305,10 +310,7 @@
             }
           }
 
-          if (startsPrefetched) {
-            setStatus("");
-            return;
-          }
+          setToken(accessToken);
           await loadChat(accessToken, startsPrefetched, { markRead: !startsPrefetched });
         }
 

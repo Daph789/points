@@ -206,17 +206,22 @@
 
         React.useEffect(() => { bootstrap(); }, []);
         React.useEffect(() => {
+          if (!isActiveGroup) return;
           const introKey = `donos-side-group-intro-${planId}-${sideStatus}`;
           if (!window.localStorage.getItem(introKey)) {
             setShowIntro(true);
             window.localStorage.setItem(introKey, "1");
           }
-        }, []);
+        }, [isActiveGroup]);
         React.useEffect(() => {
           if (!token || !isActiveGroup) return undefined;
           const timer = window.setInterval(() => loadGroup(token, true), 6000);
           return () => window.clearInterval(timer);
         }, [token, isActiveGroup]);
+        React.useEffect(() => {
+          if (token && isActiveGroup && !loadingGroupRef.current) loadGroup(token, true, { markRead: true });
+        }, [token, isActiveGroup]);
+
         function scrollChatToBottom(behavior = "smooth") {
           window.requestAnimationFrame(() => {
             bottomRef.current?.scrollIntoView({ behavior, block: "end" });
@@ -251,7 +256,7 @@
             if (event.data?.type === "donos:activate-side-group") {
               isActiveRef.current = true;
               setIsActiveGroup(true);
-              loadGroup(token, true, { markRead: true });
+              if (token) loadGroup(token, true, { markRead: true });
               return;
             }
             if (event.data?.type === "donos:refresh-side-group") loadGroup(token, true);
@@ -264,12 +269,12 @@
           const { data } = await supabaseClient.auth.getSession();
           const accessToken = data.session?.access_token;
           if (!accessToken) { setMessages([]); setPlan(null); return redirectToLogin(); }
-          setToken(accessToken);
           const userId = data.session?.user?.id;
           if (initialCache && initialCache.profile?.id !== userId) { setMessages([]); setPlan(null); setProfile(null); }
           if (userId && window.donossChatCache) {
             cacheKeyRef.current = window.donossChatCache.key(userId, `side:${planId}:${sideStatus}`);
-            const cached = await window.donossChatCache.read(cacheKeyRef.current);
+            const memorySnapshot = window.donossChatCache.peek(`side:${planId}:${sideStatus}`);
+            const cached = memorySnapshot?.profile?.id === userId ? memorySnapshot : await window.donossChatCache.read(cacheKeyRef.current);
             if (cached?.profile?.id === userId && cached.plan && Array.isArray(cached.messages)) {
               setProfile(cached.profile);
               setPlan(cached.plan);
@@ -282,10 +287,7 @@
             }
           }
 
-          if (startsPrefetched) {
-            setStatus("");
-            return;
-          }
+          setToken(accessToken);
           await loadGroup(accessToken, startsPrefetched, { markRead: !startsPrefetched });
         }
 
@@ -853,6 +855,7 @@
                     </React.Fragment>
                   );
                 })}
+                {plan && !status && visibleMessages.length === 0 && <div className="rounded-[30px] border border-white/10 bg-white/[0.055] p-6 text-center"><p className="text-lg font-black text-white">{window.donossI18n.text("Todavía no hay mensajes")}</p><p className="mt-2 text-sm font-bold text-slate-400">{window.donossI18n.text("Sé la primera persona en escribir al grupo.")}</p></div>}
                 <div ref={bottomRef} className="h-1" />
               </div>
             </section>

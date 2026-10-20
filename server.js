@@ -7559,11 +7559,15 @@ app.get("/api/social-plans/:id/chat", async (request, response) => {
       console.error("Social plan chat list error:", error);
       return response.status(500).json({ error: ["42P01", "42703"].includes(error.code) ? "plan_chat_table_missing" : "plan_chat_failed" });
     }
+    const [enrichedPlans, enrichedMessages] = await Promise.all([
+      enrichSocialPlans([access.plan], profile.id),
+      enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
+    ]);
     response.json({
       profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
       role: access.role,
-      plan: (await enrichSocialPlans([access.plan], profile.id))[0],
-      messages: await enrichPlanChatMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
+      plan: enrichedPlans[0],
+      messages: enrichedMessages,
       has_more: (messages || []).length >= messageLimit,
     });
   } catch (error) {
@@ -7900,16 +7904,20 @@ app.get("/api/social-plans/:id/side-group/:status", async (request, response) =>
       .order("created_at", { ascending: false });
     if (mergeError) return response.status(500).json({ error: ["42P01", "42703"].includes(mergeError.code) ? "side_groups_sql_missing" : "side_group_failed" });
 
+    const [enrichedPlans, enrichedMessages] = await Promise.all([
+      enrichSocialPlans([access.plan], profile.id),
+      enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
+    ]);
     response.json({
       profile: { ...privatePlanProfile(profile), is_donoss_admin: access.role === "donoss_admin" },
       role: access.role,
-      plan: (await enrichSocialPlans([access.plan], profile.id))[0],
+      plan: enrichedPlans[0],
       status: access.status,
       other_status: otherStatus,
       other_count: Number(otherCount || 0),
       merged: isMerged,
       members: (members || []).map((member) => ({ ...member, user: privatePlanProfile(usersById[member.user_id]) })),
-      messages: await enrichSideMessages([...(messages || [])].reverse(), { includeReadProfiles: false, viewerId: profile.id }),
+      messages: enrichedMessages,
       has_more: (messages || []).length >= messageLimit,
       merge_requests: mergeRequests || [],
     });
