@@ -131,14 +131,15 @@
 
       function messageExcerpt(message) {
         const text = String(message?.body || "").replace(/\s+/g, " ").trim();
-        return text.length > 92 ? `${text.slice(0, 92)}...` : text || "Mensaje";
+        return text.length > 92 ? `${text.slice(0, 92)}...` : text || (message?.media_type ? (message.media_type === "image/gif" || message.media_type === "video/mp4" ? "GIF" : (window.donossI18n.getLocale() === "fr" ? "Photo" : "Foto")) : window.donossI18n.text("Mensaje"));
       }
 
-      function ReplySnippet({ reply, mine = false }) {
+      function ReplySnippet({ reply, mine = false, token, userId }) {
         if (!reply) return null;
         return (
           <div className={`mb-2 rounded-2xl border-l-4 border-mint/70 px-3 py-2 ${mine ? "bg-ink/10 text-ink" : "bg-black/20 text-white"}`}>
             <p className={`truncate text-[11px] font-black ${mine ? "text-ink/70" : "text-mint"}`}>{reply.sender?.display_name || "Usuario Donoss"}</p>
+            {reply.media_type && !reply.deleted_at && <window.donossChatMedia.Message compact message={reply} endpoint={`/api/social-plans/${planId}/chat/${reply.id}/media`} token={token} userId={userId} />}
             <p className={`truncate text-xs font-bold ${mine ? "text-ink/60" : "text-slate-300"}`}>{messageExcerpt(reply)}</p>
           </div>
         );
@@ -540,6 +541,8 @@
               id: replyTarget.id,
               sender_id: replyTarget.sender_id,
               body: replyTarget.body,
+              media_type: replyTarget.media_type,
+              local_media_url: replyTarget.local_media_url,
               deleted_at: replyTarget.deleted_at,
               sender: replyTarget.sender,
             } : null,
@@ -796,7 +799,7 @@
                               {message.sender?.is_verified && verifiedBadge()}
                             </div>
                           )}
-                          <ReplySnippet reply={message.reply_to} mine={mine} />
+                          <ReplySnippet reply={message.reply_to} mine={mine} token={token} userId={profile?.id} />
                           {message.media_type && !message.deleted_at && <window.donossChatMedia.Message message={message} endpoint={`/api/social-plans/${planId}/chat/${message.id}/media`} token={token} userId={profile?.id} />}
                           <p className={`whitespace-pre-wrap break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                           <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
@@ -865,7 +868,7 @@
                 <div className="mb-2 flex items-center gap-3 rounded-[24px] border border-mint/20 bg-mint/[0.08] px-4 py-3 shadow-glow">
                   <div className="min-w-0 flex-1 border-l-4 border-mint pl-3">
                     <p className="text-xs font-black uppercase tracking-[0.12em] text-mint">{window.donossI18n.text("Respuesta a")} {replyingTo.sender?.display_name || "Usuario Donoss"}</p>
-                    <p className="truncate text-sm font-bold text-slate-200">{messageExcerpt(replyingTo)}</p>
+                    <ReplySnippet reply={replyingTo} token={token} userId={profile?.id} />
                   </div>
                   <button className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white/[0.08] text-xl font-black text-white ring-1 ring-white/10" type="button" onClick={() => setReplyingTo(null)}>×</button>
                 </div>

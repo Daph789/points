@@ -5949,6 +5949,7 @@ async function enrichPlanChatMessages(messages = [], options = {}) {
         id: reply.id,
         sender_id: reply.sender_id,
         body: reply.deleted_at ? "" : reply.body,
+        media_type: reply.deleted_at ? null : reply.media_type,
         deleted_at: reply.deleted_at,
         sender: sendersById[reply.sender_id] || null,
       }]));
@@ -6303,6 +6304,7 @@ async function enrichSideMessages(messages = [], options = {}) {
         id: reply.id,
         sender_id: reply.sender_id,
         body: reply.deleted_at ? "" : reply.body,
+        media_type: reply.deleted_at ? null : reply.media_type,
         deleted_at: reply.deleted_at,
         sender: sendersById[reply.sender_id] || null,
       }]));

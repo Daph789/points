@@ -87,8 +87,8 @@
     if (!value) return null;
     return h('div',{className:'mb-2 flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2'},visual(value.url,{alt:text('Aperçu avant envoi','Vista previa'),className:'h-24 w-24 rounded-xl object-contain'}),value.preparing&&h('span',{role:'status',className:'text-sm text-slate-300'},text('Préparation en cours… Tu peux écrire ton message.','Preparando… Puedes escribir tu mensaje.')),h('button',{type:'button',disabled:disabled||value.preparing,onClick:()=>onChange(null),className:'rounded-xl bg-white/10 px-4 py-2 text-sm text-white'},text('Retirer','Quitar')));
   }
-  function Message({message,endpoint,token,userId}) {
-    const [url,setUrl]=React.useState(message.local_media_url||'');const [failed,setFailed]=React.useState(false);const [expanded,setExpanded]=React.useState(false);
+  function Message({message,endpoint,token,userId,compact=false}) {
+    const [url,setUrl]=React.useState(message.local_media_url||'');const [failed,setFailed]=React.useState(false);
     React.useEffect(()=>{
       let alive=true;setFailed(false);
       if(message.local_media_url){setUrl(message.local_media_url);return;}
@@ -102,8 +102,11 @@
         if(alive)setUrl(data.data_url);if(key)cache.write(key,{data_url:data.data_url});
       }catch(_){if(alive)setFailed(true);}})();return()=>{alive=false;};
     },[message.id,message.local_media_url,message.deleted_at,endpoint,token,userId]);
+    if(message.deleted_at)return null;
     if(!url)return h('div',{className:'my-2 rounded-xl bg-black/10 p-4 text-xs',role:'status'},failed?text('Image indisponible','Imagen no disponible'):text('Chargement de l’image…','Cargando imagen…'));
-    return h(React.Fragment,null,h('button',{type:'button',onPointerDown:e=>e.stopPropagation(),onClick:e=>{e.stopPropagation();setExpanded(true);},className:'mt-2 block', 'aria-label':text('Agrandir l’image','Ampliar imagen')},visual(url,{alt:message.media_type==='image/gif'?'GIF':text('Image du message','Imagen del mensaje'),className:'max-h-72 max-w-full rounded-2xl object-contain'})),expanded&&ReactDOM.createPortal(h('div',{className:'fixed inset-0 z-[100] grid place-items-center bg-black/95 p-5',role:'dialog','aria-modal':true,'aria-label':text('Image agrandie','Imagen ampliada'),onClick:()=>setExpanded(false)},h('button',{autoFocus:true,type:'button',onClick:()=>setExpanded(false),onKeyDown:e=>{if(e.key==='Escape')setExpanded(false);},className:'absolute right-4 top-4 rounded-full bg-white/20 px-5 py-3 text-white','aria-label':text('Fermer','Cerrar')},'×'),visual(url,{alt:'',className:'max-h-[85dvh] max-w-full object-contain'})),document.body));
+    return h('div',{className:compact?'mt-1':'mt-2',onClick:e=>e.stopPropagation()},
+      visual(url,{alt:message.media_type==='image/gif'||message.media_type==='video/mp4'?'GIF':text('Image du message','Imagen del mensaje'),
+        className:compact?'h-14 w-14 rounded-lg object-cover':'max-h-72 max-w-full rounded-2xl object-contain'}));
   }
   window.donossChatMedia={Picker,Preview,Message,errorText};
 })();
