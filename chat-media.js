@@ -11,7 +11,7 @@
     return text('Impossible de charger cette image. Essaie un fichier JPG, PNG, WebP ou GIF.', 'No se puede cargar esta imagen. Prueba con un archivo JPG, PNG, WebP o GIF.');
   }
   function readFile(file) { return new Promise((resolve,reject) => { const reader=new FileReader(); reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); }); }
-  async function prepare(file, endpoint, token) {
+  async function prepare(file, endpoint, token, onPreview) {
     if (!file) throw Error('invalid_chat_media');
     // Mobile file providers can omit or mislabel the MIME type. Inspect the bytes.
     const bytes=new Uint8Array(await file.slice(0,12).arrayBuffer());
@@ -23,6 +23,7 @@
       :ascii.startsWith('RIFF')&&ascii.slice(8,12)==='WEBP'?'image/webp':'';
     if (!type) throw Error('invalid_chat_media');
     if (file.size > 20 * 1024 * 1024) throw Error(type === 'image/gif' ? 'chat_gif_too_large' : 'chat_media_too_large');
+    onPreview?.(type);
     if (type === 'image/gif') {
       if (!endpoint || !token) throw Error('chat_gif_conversion_failed');
       const response=await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/octet-stream',Authorization:`Bearer ${token}`},body:file});
@@ -46,11 +47,26 @@
     const [error,setError]=React.useState('');
     async function choose(event) {
       const file=event.target.files?.[0];event.target.value='';if(!file)return;
-      setBusy(true);onBusyChange?.(true);setError('');try{onChange(await prepare(file,endpoint,token));}catch(error){const message=errorText(error.message);setError(message);onError?.(message);}finally{setBusy(false);onBusyChange?.(false);}
+      let previewUrl;
+      const previous=value;
+      setBusy(true);onBusyChange?.(true);setError('');
+      try {
+        const result=await prepare(file,endpoint,token,type=>{
+          previewUrl=URL.createObjectURL(file);
+          onChange({url:previewUrl,type,preparing:true});
+        });
+        onChange(result);
+      } catch(error) {
+        onChange(previous);
+        const message=errorText(error.message);setError(message);onError?.(message);
+      } finally {
+        if(previewUrl) URL.revokeObjectURL(previewUrl);
+        setBusy(false);onBusyChange?.(false);
+      }
     }
     const input = React.useRef(null);
     return h('div',{className:'relative shrink-0'},
-      busy&&h('div',{role:'status',className:'absolute bottom-full right-0 z-50 mb-3 w-64 rounded-2xl bg-slate-900 p-3 text-sm text-white shadow-xl'},text('Préparation de l’image…','Preparando la imagen…')),
+      busy&&!value?.preparing&&h('div',{role:'status',className:'absolute bottom-full right-0 z-50 mb-3 w-64 rounded-2xl bg-slate-900 p-3 text-sm text-white shadow-xl'},text('Préparation de l’image…','Preparando la imagen…')),
       error&&h('div',{role:'alert',className:'absolute bottom-full right-0 z-50 mb-3 w-64 rounded-2xl border border-red-400/30 bg-slate-900 p-3 text-sm text-red-300 shadow-xl'},error),
       h('input',{ref:input,type:'file',accept:'image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif',disabled:disabled||busy,onChange:choose,hidden:true}),
       h('button',{type:'button',disabled:disabled||busy,onClick:()=>input.current?.click(),className:'grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-slate-300 hover:bg-white/10 disabled:opacity-50',title:text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-label':text('Ajouter une photo ou un GIF','Añadir una foto o un GIF'),'aria-busy':busy},
@@ -63,7 +79,7 @@
   }
   function Preview({value,onChange,disabled}) {
     if (!value) return null;
-    return h('div',{className:'mb-2 flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2'},visual(value.url,{alt:text('Aperçu avant envoi','Vista previa'),className:'h-24 w-24 rounded-xl object-contain'}),h('button',{type:'button',disabled,onClick:()=>onChange(null),className:'rounded-xl bg-white/10 px-4 py-2 text-sm text-white'},text('Retirer','Quitar')));
+    return h('div',{className:'mb-2 flex w-full items-center gap-3 rounded-2xl bg-white/5 p-2'},visual(value.url,{alt:text('Aperçu avant envoi','Vista previa'),className:'h-24 w-24 rounded-xl object-contain'}),value.preparing&&h('span',{role:'status',className:'text-sm text-slate-300'},text('Préparation en cours… Tu peux écrire ton message.','Preparando… Puedes escribir tu mensaje.')),h('button',{type:'button',disabled:disabled||value.preparing,onClick:()=>onChange(null),className:'rounded-xl bg-white/10 px-4 py-2 text-sm text-white'},text('Retirer','Quitar')));
   }
   function Message({message,endpoint,token,userId}) {
     const [url,setUrl]=React.useState(message.local_media_url||'');const [failed,setFailed]=React.useState(false);const [expanded,setExpanded]=React.useState(false);
