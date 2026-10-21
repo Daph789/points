@@ -183,6 +183,7 @@
         const [plan, setPlan] = React.useState(initialCache?.plan || null);
         const [messages, setMessages] = React.useState(initialCache?.messages || []);
         const [attachment, setAttachment] = React.useState(null);
+        const [mediaPreparing, setMediaPreparing] = React.useState(false);
         const [draft, setDraft] = React.useState("");
         const [status, setStatus] = React.useState("");
         const [isSending, setIsSending] = React.useState(false);
@@ -520,7 +521,7 @@
         async function sendMessage(event) {
           event.preventDefault();
           const body = draft.trim();
-          if ((!body && !attachment) || isSending) return;
+          if ((!body && !attachment) || isSending || mediaPreparing) return;
           const sendingAttachment = attachment;
           const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.pending ? replyingTo : null;
           const temporaryId = `temp-${Date.now()}`;
@@ -873,8 +874,8 @@
                   onChange={(event) => setDraft(event.target.value)}
                   placeholder={window.donossI18n.text("Escribe un mensaje...")}
                 />
-                <window.donossChatMedia.Picker value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSending} />
-                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={isSending || (!draft.trim() && !attachment)} type="submit">
+                <window.donossChatMedia.Picker onBusyChange={setMediaPreparing} token={token} endpoint={`/api/social-plans/${planId}/chat/gif`} value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSending} />
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mint text-xl font-black text-ink shadow-glow disabled:opacity-50" disabled={mediaPreparing || isSending || (!draft.trim() && !attachment)} type="submit">
                   ↑
                 </button>
               </div>

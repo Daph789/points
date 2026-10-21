@@ -1,3 +1,4 @@
+import { registerChatGifRoutes } from "./chat-gif-server.js";
 import "dotenv/config";
 import { validateChatMedia, registerChatMediaRoutes } from "./chat-media-server.js";
 import { registerOfficialLinkRoutes } from "./admin-official-links.js";
@@ -9588,6 +9589,7 @@ app.post("/api/admin/app-update", async (request, response) => {
   response.json({ update: data });
 });
 
+registerChatGifRoutes(app, { getAuthenticatedUser, ensureProfileForUser, getSocialPlanChatAccess, getSideGroupAccess }, express.raw({ type: "application/octet-stream", limit: "20mb" }));
 registerChatMediaRoutes(app, { supabaseAdmin, getAuthenticatedUser, ensureProfileForUser, getSocialPlanChatAccess, getSideGroupAccess, getAcceptedSideMerge });
 
 app.use(express.static(__dirname));

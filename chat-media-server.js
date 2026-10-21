@@ -1,17 +1,18 @@
 export function validateChatMedia(value) {
   if (value == null) return null;
-  const match = typeof value === 'string' && value.match(/^data:image\/(jpeg|png|webp|gif);base64,([A-Za-z0-9+/]+={0,2})$/);
+  const match = typeof value === 'string' && value.match(/^data:(image\/(?:jpeg|png|webp|gif)|video\/mp4);base64,([A-Za-z0-9+/]+={0,2})$/);
   if (!match) throw Object.assign(new Error('invalid_chat_media'), { status: 400 });
   const bytes = Buffer.from(match[2], 'base64');
   if (bytes.length > 3 * 1024 * 1024) throw Object.assign(new Error('chat_media_too_large'), { status: 413 });
-  const type = match[1];
+  const type = match[1].split('/')[1];
   const valid = bytes.length > 12 && (
+    (type === 'mp4' && bytes.subarray(4,8).toString() === 'ftyp') ||
     (type === 'jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) ||
     (type === 'png' && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
     (type === 'gif' && ['GIF87a','GIF89a'].includes(bytes.subarray(0,6).toString())) ||
     (type === 'webp' && bytes.subarray(0,4).toString() === 'RIFF' && bytes.subarray(8,12).toString() === 'WEBP'));
   if (!valid) throw Object.assign(new Error('invalid_chat_media'), { status: 400 });
-  return { media_data_url: value, media_type: `image/${type}` };
+  return { media_data_url: value, media_type: match[1] };
 }
 
 export function registerChatMediaRoutes(app, deps) {
