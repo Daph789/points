@@ -47,20 +47,26 @@
     const [error,setError]=React.useState('');
     async function choose(event) {
       const file=event.target.files?.[0];event.target.value='';if(!file)return;
-      let previewUrl;
+      let pendingAttachment, resolveReady, rejectReady;
+      const ready=new Promise((resolve,reject)=>{resolveReady=resolve;rejectReady=reject;});
+      ready.catch(()=>{}); // The picker handles errors until the user presses send.
       const previous=value;
       setBusy(true);onBusyChange?.(true);setError('');
       try {
         const result=await prepare(file,endpoint,token,type=>{
-          previewUrl=URL.createObjectURL(file);
-          onChange({url:previewUrl,type,preparing:true});
+          pendingAttachment={url:URL.createObjectURL(file),type,preparing:true,ready,claimed:false};
+          onChange(pendingAttachment);
         });
-        onChange(result);
+        resolveReady(result);
+        if(!pendingAttachment?.claimed) onChange(result);
       } catch(error) {
-        onChange(previous);
-        const message=errorText(error.message);setError(message);onError?.(message);
+        rejectReady(error);
+        if(!pendingAttachment?.claimed) {
+          onChange(previous);
+          const message=errorText(error.message);setError(message);onError?.(message);
+        }
       } finally {
-        if(previewUrl) URL.revokeObjectURL(previewUrl);
+        if(pendingAttachment&&!pendingAttachment.claimed) URL.revokeObjectURL(pendingAttachment.url);
         setBusy(false);onBusyChange?.(false);
       }
     }

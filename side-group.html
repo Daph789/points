@@ -140,7 +140,7 @@
           } : message;
         });
         const localStillNeeded = current.filter((message) => {
-          if (message.pending) return Date.now() - new Date(message.created_at).getTime() < 30000;
+          if (message.pending) return true;
           if (!message.local_confirmed_at || confirmedIds.has(message.id)) return false;
           return Date.now() - new Date(message.local_confirmed_at).getTime() < 30000;
         });
@@ -500,8 +500,10 @@
         async function sendMessage(event) {
           event.preventDefault();
           const body = draft.trim();
-          if ((!body && !attachment) || isSaving || mediaPreparing) return;
+          if ((!body && !attachment) || isSaving) return;
           const sendingAttachment = attachment;
+          if (sendingAttachment?.ready) sendingAttachment.claimed = true;
+          let preparedAttachment;
           const replyTarget = replyingTo && !replyingTo.deleted_at && !replyingTo.pending ? replyingTo : null;
           const tempId = `tmp-${Date.now()}`;
           const temp = {
@@ -531,23 +533,26 @@
           setMessages((current) => [...current, temp]);
           setIsSaving(true);
           try {
+            preparedAttachment = sendingAttachment?.ready ? await sendingAttachment.ready : sendingAttachment;
             const response = await fetch(`/api/social-plans/${planId}/side-group/${sideStatus}/messages`, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ body, media_data_url: sendingAttachment?.url || null, reply_to_message_id: replyTarget?.id || null }),
+              body: JSON.stringify({ body, media_data_url: preparedAttachment?.url || null, reply_to_message_id: replyTarget?.id || null }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || "side_message_failed");
             forceScrollRef.current = true;
-            setMessages((current) => current.map((item) => item.id === temp.id ? { ...data.message, local_media_url: item.local_media_url, local_key: tempId, local_confirmed_at: new Date().toISOString() } : item));
+            setMessages((current) => current.map((item) => item.id === temp.id ? { ...data.message, local_media_url: preparedAttachment?.url || null, local_key: tempId, local_confirmed_at: new Date().toISOString() } : item));
             window.setTimeout(() => loadGroup(token, true), 450);
             window.setTimeout(() => scrollChatToBottom("smooth"), 80);
-          } catch (_error) {
+          } catch (error) {
+            setAttachment(preparedAttachment || null);
             setMessages((current) => current.filter((item) => item.id !== temp.id));
             setDraft(body);
             setReplyingTo(replyTarget);
-            setStatus(error.message.startsWith("chat_media") || error.message === "invalid_chat_media" ? window.donossChatMedia.errorText(error.message) : "No se ha podido enviar el mensaje.");
+            setStatus((error.message.startsWith("chat_media") || error.message.startsWith("chat_gif")) || error.message === "invalid_chat_media" ? window.donossChatMedia.errorText(error.message) : "No se ha podido enviar el mensaje.");
           } finally {
+            if (sendingAttachment?.ready) URL.revokeObjectURL(sendingAttachment.url);
             setIsSaving(false);
           }
         }
@@ -810,7 +815,7 @@
                           {message.media_type && !message.deleted_at && <window.donossChatMedia.Message message={message} endpoint={`/api/social-plans/${planId}/side-group/${sideStatus}/messages/${message.id}/media`} token={token} userId={profile?.id} />}
                           <p className={`break-words text-sm font-semibold leading-5 ${message.deleted_at ? "italic" : ""}`}>{message.body}</p>
                           <p className={`mt-1 flex items-center justify-end gap-1 text-right text-[11px] font-black ${mine ? "text-ink/55" : "text-slate-500"}`}>
-                            <span>{message.pending ? "Enviando..." : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
+                            <span>{message.pending ? (window.donossI18n.getLocale() === "fr" ? "Envoi en cours…" : "Enviando…") : `${formatTime(message.created_at)}${message.edited_at ? " · editado" : ""}`}</span>
                             {mine && !message.deleted_at && <ReadTicks message={message} />}
                           </p>
                         </article>
@@ -878,7 +883,7 @@
               <div className="flex items-end gap-2 rounded-[28px] border border-white/10 bg-white/[0.055] p-2">
                 <textarea className="max-h-32 min-h-12 flex-1 resize-none bg-transparent px-3 py-3 text-sm font-bold text-white outline-none placeholder:text-slate-500" value={draft} rows="1" onChange={(event) => setDraft(event.target.value)} placeholder="Escribe al grupo..." />
                 <window.donossChatMedia.Picker onBusyChange={setMediaPreparing} token={token} endpoint={`/api/social-plans/${planId}/side-group/${sideStatus}/gif`} value={attachment} onChange={setAttachment} onError={setStatus} disabled={isSaving} />
-                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sun text-xl font-black text-ink disabled:opacity-50" disabled={mediaPreparing || isSaving || (!draft.trim() && !attachment)} type="submit">↑</button>
+                <button className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-sun text-xl font-black text-ink disabled:opacity-50" disabled={isSaving || (!draft.trim() && !attachment)} type="submit">↑</button>
               </div>
             </form>
 
